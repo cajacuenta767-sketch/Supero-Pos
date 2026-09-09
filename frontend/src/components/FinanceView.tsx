@@ -1,5 +1,8 @@
 import { usePersistentState } from '../store/persist';
-import React, { useState } from 'react';
+import { useAuthStore } from '../store/useAuthStore';
+import { useSalesStore } from '../store/useSalesStore';
+import { toCents, fromCents } from '../utils/money';
+import React, { useMemo, useState } from 'react';
 import {
   CreditCard,
   DollarSign,
@@ -43,7 +46,10 @@ const TABS: TabItem[] = [
 /* Los enums de base de datos no se muestran crudos al usuario. */
 const OPERATION_LABEL: Record<FinancialTransaction['operation_type'], string> = {
   DEPOSIT_CASH_TO_BANK: 'Depósito a banco',
-  POS_SALE_CREDIT: 'Venta con tarjeta',
+  /* Era «Venta con tarjeta» para todo cobro, así que un pago por QR y uno en
+     efectivo aparecían como tarjeta. La columna de origen y destino ya dice por
+     dónde entró el dinero; la etiqueta solo tiene que decir qué es. */
+  POS_SALE_CREDIT: 'Cobro de venta',
   PETTY_CASH_EXPENSE: 'Gasto de caja chica',
   FEE_COMMISSION: 'Comisión',
 };
@@ -75,7 +81,9 @@ interface PaymentAccount {
   name: string;
   type: 'CASH_DRAWER' | 'BANK_ACCOUNT' | 'QR_GATEWAY';
   account_number?: string;
-  currency: string;
+  /* No hay campo de moneda: la terminal opera en una sola, la de los ajustes.
+     Estaba declarado, sembrado a 'USD' —con la interfaz mostrando bolivianos— y
+     no lo leía nadie. */
   balance: number;
   status: 'OPEN' | 'LOCKED' | 'RECONCILIATION_PENDING';
   fee_percentage?: number;
@@ -85,7 +93,9 @@ interface PaymentAccount {
 
 interface FinancialTransaction {
   id: string; // TX-9001
-  timestamp: string;
+  /** Instante en ISO. Ordenar por el texto «14/08/2026» pone el 14 de agosto
+   *  antes que el 2 de septiembre. */
+  at: string;
   source_account: string;
   dest_account: string;
   amount: number;
@@ -102,12 +112,16 @@ export const FinanceView: React.FC = () => {
   );
 
   // Payment Accounts State
+  /* Quien mueve dinero entre cuentas queda nombrado. Estaba escrito
+     «Administrador» pasara lo que pasara. */
+  const operator = useAuthStore((state) => state.user);
+  const operatorName = operator?.name ?? operator?.username ?? 'Sin identificar';
+
   const [accounts, setAccounts] = usePersistentState<PaymentAccount[]>('cuentas', [
     {
       id: 'ACC-01',
       name: 'Caja 1 - Principal Mostrador',
       type: 'CASH_DRAWER',
-      currency: 'USD',
       balance: 1028.5,
       status: 'OPEN',
       branch: 'Sucursal Central',
@@ -116,7 +130,6 @@ export const FinanceView: React.FC = () => {
       id: 'ACC-02',
       name: 'Caja 2 - Expres Rápida',
       type: 'CASH_DRAWER',
-      currency: 'USD',
       balance: 450.0,
       status: 'OPEN',
       branch: 'Sucursal Central',
@@ -126,7 +139,6 @@ export const FinanceView: React.FC = () => {
       name: 'Banco Mercantil Santa Cruz (Cta Cte)',
       type: 'BANK_ACCOUNT',
       account_number: '4010-948201-92',
-      currency: 'USD',
       balance: 42500.0,
       status: 'OPEN',
       branch: 'Oficina Central',
@@ -136,7 +148,6 @@ export const FinanceView: React.FC = () => {
       name: 'Pasarela Digital QR BCP',
       type: 'QR_GATEWAY',
       account_number: 'QR-BCP-MERCHANT-88',
-      currency: 'USD',
       balance: 3450.0,
       fee_percentage: 1.5,
       in_transit_balance: 450.0,
@@ -148,7 +159,6 @@ export const FinanceView: React.FC = () => {
       name: 'Red Enlace Tarjetas POS',
       type: 'QR_GATEWAY',
       account_number: 'POS-REDENLACE-55',
-      currency: 'USD',
       balance: 8900.0,
       fee_percentage: 2.0,
       in_transit_balance: 0.0,
@@ -163,7 +173,7 @@ export const FinanceView: React.FC = () => {
     [
       {
         id: 'TX-9004',
-        timestamp: '14/08/2026 12:10',
+        at: '2026-08-14T12:10:00.000Z',
         source_account: 'Caja 1 - Principal Mostrador',
         dest_account: 'Banco Mercantil Santa Cruz',
         amount: 500.0,
@@ -174,7 +184,7 @@ export const FinanceView: React.FC = () => {
       },
       {
         id: 'TX-9003',
-        timestamp: '14/08/2026 11:45',
+        at: '2026-08-14T11:45:00.000Z',
         source_account: 'Cliente Final',
         dest_account: 'Pasarela Digital QR BCP',
         amount: 145.0,
@@ -185,7 +195,7 @@ export const FinanceView: React.FC = () => {
       },
       {
         id: 'TX-9002',
-        timestamp: '14/08/2026 09:30',
+        at: '2026-08-14T09:30:00.000Z',
         source_account: 'Caja 1 - Principal Mostrador',
         dest_account: 'Proveedor Suministros',
         amount: 35.5,
@@ -229,7 +239,50 @@ export const FinanceView: React.FC = () => {
   /* El total líquido es la suma de los otros tres, no un dato aparte. */
   const liquidTotal = cashTotal + bankTotal + gatewayTotal;
 
-  const filteredTx = transactions.filter((t) => {
+  /* Las ventas cobradas por tarjeta y QR nunca llegaban aquí: se cobraba en la
+     terminal y el libro de cuentas no se enteraba. Ahora se derivan de los
+     tickets, con la comisión de la pasarela que corresponda, y se mezclan con
+     los traspasos que sí nacen en esta pantalla. */
+  const tickets = useSalesStore((state) => state.tickets);
+
+  const saleCredits = useMemo<FinancialTransaction[]>(() => {
+    const gateways = accounts.filter((a) => a.type === 'QR_GATEWAY');
+    const qrAccount = gateways.find((a) => /qr/i.test(a.name)) ?? gateways[0];
+    const cardAccount = gateways.find((a) => /tarjeta|enlace/i.test(a.name)) ?? gateways[0];
+    const drawer = accounts.find((a) => a.type === 'CASH_DRAWER');
+
+    return tickets
+      .filter((t) => t.status === 'COMPLETED')
+      .flatMap((t) =>
+        t.payments.map((pay, index): FinancialTransaction => {
+          const account =
+            pay.method === 'QR' ? qrAccount : pay.method === 'CARD' ? cardAccount : drawer;
+          const net = pay.amount_received - pay.change_given;
+          const fee = account?.fee_percentage
+            ? fromCents(Math.round(toCents(net) * (account.fee_percentage / 100)))
+            : 0;
+          return {
+            id: `${t.id}-${index + 1}`,
+            at: t.at,
+            source_account: t.customer_name ?? 'Cliente final',
+            dest_account: account?.name ?? 'Sin cuenta asignada',
+            amount: net,
+            fee_deducted: fee,
+            operation_type: 'POS_SALE_CREDIT',
+            voucher_number: t.id,
+            user_name: t.cashier_name,
+          };
+        }),
+      );
+  }, [tickets, accounts]);
+
+  /* Un solo libro, ordenado por instante. */
+  const allTx = useMemo(
+    () => [...transactions, ...saleCredits].sort((a, b) => b.at.localeCompare(a.at)),
+    [transactions, saleCredits],
+  );
+
+  const filteredTx = allTx.filter((t) => {
     const q = searchDebounced.toLowerCase();
     const matchesSearch =
       t.id.toLowerCase().includes(q) ||
@@ -256,21 +309,37 @@ export const FinanceView: React.FC = () => {
     setTransactions((prev) => [
       {
         id: `TX-${9000 + prev.length + 2}`,
-        timestamp: formatDateTime(new Date()),
+        at: new Date().toISOString(),
         source_account: source?.name ?? '',
         dest_account: dest?.name ?? '',
         amount: value,
         fee_deducted: 0,
         operation_type: 'DEPOSIT_CASH_TO_BANK',
         voucher_number: voucherNumber || undefined,
-        user_name: 'Administrador',
+        user_name: operatorName,
       },
       ...prev,
     ]);
+    /* El traspaso movía el asiento y no el dinero: se depositaban Bs 500 en el
+       banco, la operación aparecía en la lista y el efectivo en gavetas seguía
+       exactamente igual. Un libro de cuentas que no cuadra consigo mismo. */
+    setAccounts((prev) =>
+      prev.map((a) => {
+        if (a.id === sourceAccountId)
+          return { ...a, balance: fromCents(toCents(a.balance) - toCents(value)) };
+        if (a.id === destAccountId)
+          return { ...a, balance: fromCents(toCents(a.balance) + toCents(value)) };
+        return a;
+      }),
+    );
+
     setDepositAmount('');
     setVoucherNumber('');
     setIsDepositModalOpen(false);
-    toast('Depósito registrado', 'success');
+    toast(
+      `Depósito de ${value.toFixed(2)} · ${source?.name ?? ''} → ${dest?.name ?? ''}`,
+      'success',
+    );
   };
 
   /* Anchos declarados: ninguna cabecera debe partirse en dos líneas. */
@@ -285,7 +354,10 @@ export const FinanceView: React.FC = () => {
       key: 'date',
       header: 'Fecha',
       width: '170px',
-      render: (t) => <span className="font-mono tnum text-body text-ink-2">{t.timestamp}</span>,
+      sortValue: (t) => t.at,
+      render: (t) => (
+        <span className="font-mono tnum text-body text-ink-2">{formatDateTime(t.at)}</span>
+      ),
     },
     {
       key: 'op',
