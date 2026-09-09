@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   ArrowUpRight,
   BarChart3,
-  Calendar,
   LineChart as LineChartIcon,
   Package,
   RefreshCw,
@@ -24,14 +23,11 @@ import {
 } from '../ui';
 import type { Column } from '../ui';
 import { useCatalogStore, MOVEMENT_LABEL } from '../store/useCatalogStore';
-
-/* Datos de demostración deterministas: un generador congruencial con semilla
- fija. Con Math.random la serie se regeneraba en cada render y el gráfico
- cambiaba solo al pasar el ratón. */
-const seeded = (seed: number) => () => {
-  seed = (seed * 1103515245 + 12345) % 2147483648;
-  return seed / 2147483648;
-};
+import { useSalesStore } from '../store/useSalesStore';
+import { usePosStore } from '../store/usePosStore';
+import { useAuthStore, DEMO_BRANCHES } from '../store/useAuthStore';
+import { formatDate, formatTime } from '../utils/dates';
+import { CURRENCIES, useSettingsStore } from '../store/useSettingsStore';
 
 interface TrendPoint {
   day: number;
@@ -48,10 +44,14 @@ interface TrendPoint {
  temas. --ok y --warn quedan fuera de la banda de luminosidad sobre fondo
  oscuro: sirven como estado, no como marca de gráfico.                  */
 const TrendChart: React.FC<{
+  rangeLabel: string;
   data: TrendPoint[];
   metric: 'amount' | 'tickets';
   kind: 'line' | 'bar';
-}> = ({ data, metric, kind }) => {
+}> = ({ rangeLabel, data, metric, kind }) => {
+  const currencySymbol = useSettingsStore(
+    (state) => CURRENCIES[state.currency] ?? CURRENCIES.BOB,
+  ).symbol;
   const [hover, setHover] = useState<number | null>(null);
   /* El viewBox escala, pero los rótulos del eje no: bajo 1024px se amontonan,
      así que se muestra uno cada 10 días en lugar de cada 5. */
@@ -70,14 +70,26 @@ const TrendChart: React.FC<{
   const plotH = H - PAD.top - PAD.bottom;
 
   const values = data.map((d) => d[metric]);
-  const max = Math.max(...values);
-  const niceMax = Math.ceil(max / 100) * 100 || 1;
+  const max = Math.max(0, ...values);
+  /* Techo redondo proporcional a la magnitud del dato. Antes se redondeaba
+     siempre a centenas: servía para importes, pero el eje de tickets —donde el
+     máximo son tres o cuatro— quedaba de 0 a 100 con la serie pegada al suelo.
+     Y con un máximo por debajo de 100 las cinco marcas del eje se repetían,
+     que era el aviso de claves duplicadas de React. */
+  const niceMax = (() => {
+    if (max <= 0) return 1;
+    const magnitude = 10 ** Math.floor(Math.log10(max));
+    const step = [1, 2, 2.5, 5, 10].find((m) => max <= magnitude * m * 4) ?? 10;
+    return Math.ceil(max / (magnitude * step)) * magnitude * step;
+  })();
   const peakIndex = values.indexOf(max);
 
   const x = (i: number) => PAD.left + (i / Math.max(1, data.length - 1)) * plotW;
   const y = (v: number) => PAD.top + plotH - (v / niceMax) * plotH;
 
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(niceMax * t));
+  /* Cuatro tramos siempre; el valor puede repetirse con máximos pequeños, así
+     que la clave es la posición, no la cifra. */
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => niceMax * t);
   const linePath = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(d[metric])}`).join(' ');
   const areaPath = `${linePath} L${x(data.length - 1)},${PAD.top + plotH} L${x(0)},${PAD.top + plotH} Z`;
   const barW = Math.max(4, (plotW / data.length) * 0.55);
@@ -90,12 +102,12 @@ const TrendChart: React.FC<{
         viewBox={`0 0 ${W} ${H}`}
         className="w-full h-[260px] overflow-visible"
         role="img"
-        aria-label={`Tendencia de ${metric === 'amount' ? 'ventas' : 'tickets'} de los últimos 30 días`}
+        aria-label={`Tendencia de ${metric === 'amount' ? 'ventas' : 'tickets'} · ${rangeLabel}`}
         onMouseLeave={() => setHover(null)}
       >
         {/* Rejilla recesiva */}
-        {ticks.map((t) => (
-          <g key={t}>
+        {ticks.map((t, i) => (
+          <g key={i}>
             <line
               x1={PAD.left}
               x2={W - PAD.right}
@@ -111,7 +123,11 @@ const TrendChart: React.FC<{
               textAnchor="end"
               className="fill-ink-3 text-[11px] font-mono"
             >
-              {metric === 'amount' ? `${t / 1000 >= 1 ? `${t / 1000}k` : t}` : t}
+              {metric === 'amount'
+                ? t >= 1000
+                  ? `${Number((t / 1000).toFixed(1))}k`
+                  : Number(t.toFixed(2))
+                : Number(t.toFixed(1))}
             </text>
           </g>
         ))}
@@ -152,20 +168,24 @@ const TrendChart: React.FC<{
           textAnchor="middle"
           className="fill-ink text-[11px] font-mono font-semibold"
         >
-          {metric === 'amount' ? `$${max}` : max}
+          {/* El símbolo sale de los ajustes: la marca del máximo escribía «$»
+              mientras el resto del panel decía «Bs.». */}
+          {metric === 'amount' ? `${currencySymbol}${Number(max.toFixed(2))}` : max}
         </text>
 
         {/* Eje X: un rótulo cada cinco días */}
         {data.map((d, i) =>
           i % tickEvery === 0 || i === data.length - 1 ? (
             <text
-              key={d.day}
+              key={d.date}
               x={x(i)}
               y={H - 8}
               textAnchor="middle"
               className="fill-ink-3 text-[11px] font-mono"
             >
-              {d.day}
+              {/* El día del mes que corresponde, no un contador de 1 a 30: con
+                  la serie inventada daba igual, con fechas reales no. */}
+              {Number(d.date.slice(8, 10))}
             </text>
           ) : null,
         )}
@@ -212,7 +232,7 @@ const TrendChart: React.FC<{
       >
         {active ? (
           <>
-            <span className="font-mono text-ink-2">{active.date}</span>
+            <span className="font-mono text-ink-2">{formatDate(active.date)}</span>
             <span className="text-ink-3">·</span>
             <span className="text-ink-2">Ventas</span>
             <Money value={active.amount} size="body" className="text-ink font-semibold" />
@@ -231,7 +251,7 @@ const TrendChart: React.FC<{
 };
 
 export const DashboardView: React.FC = () => {
-  const [branch, setBranch] = useState('Consolidado Global');
+  const [branch, setBranch] = useState('ALL');
   const [range, setRange] = useState('30d');
   const [metric, setMetric] = useState<'amount' | 'tickets'>('amount');
   const [kind, setKind] = useState<'line' | 'bar'>('line');
@@ -262,20 +282,135 @@ export const DashboardView: React.FC = () => {
      de verdad ha pasado en esta terminal. */
   const recentMovements = useMemo(() => movements.slice(0, 6), [movements]);
 
-  const trend = useMemo<TrendPoint[]>(() => {
-    const rnd = seeded(20260814);
-    return Array.from({ length: 30 }, (_, i) => ({
-      day: i + 1,
-      date: `2026-08-${String(i + 1).padStart(2, '0')}`,
-      amount: Math.floor(rnd() * 400) + 400,
-      tickets: Math.floor(rnd() * 10) + 5,
-    }));
-  }, []);
+  /* Las cifras salen de las ventas cobradas en esta terminal. Antes el panel
+     anunciaba Bs 25.940,50 de ventas, Bs 8.378,40 de margen y un ticket medio
+     de Bs 86,40 escritos a mano, y la serie del gráfico la generaba un
+     pseudoaleatorio con semilla fija: treinta días de facturación inventada
+     sobre los que nadie podía decidir nada. */
+  const tickets = useSalesStore((state) => state.tickets);
+
+  /** Días que abarca el periodo elegido, incluido hoy. */
+  const days = range === 'today' ? 1 : range === '7d' ? 7 : range === 'month' ? 31 : 30;
+
+  const startOfPeriod = useMemo(() => {
+    const from = new Date();
+    from.setHours(0, 0, 0, 0);
+    if (range === 'month') from.setDate(1);
+    else from.setTime(from.getTime() - (days - 1) * 86_400_000);
+    return from;
+  }, [range, days]);
+
+  const periodTickets = useMemo(
+    () =>
+      tickets.filter((t) => {
+        if (t.status !== 'COMPLETED') return false;
+        if (branch !== 'ALL' && t.branch_id !== branch) return false;
+        const at = new Date(t.at).getTime();
+        return !Number.isNaN(at) && at >= startOfPeriod.getTime();
+      }),
+    [tickets, branch, startOfPeriod],
+  );
+
+  const revenue = periodTickets.reduce((sum, t) => sum + t.total, 0);
+  const avgTicket = periodTickets.length > 0 ? revenue / periodTickets.length : 0;
+
+  /* Margen real: lo cobrado menos lo que costó, línea a línea, con el coste que
+     tiene hoy el producto en el catálogo. */
+  const margin = useMemo(
+    () =>
+      periodTickets.reduce(
+        (sum, t) =>
+          sum +
+          t.items.reduce((line, item) => {
+            const cost = products.find((p) => p.id === item.id)?.cost_price ?? 0;
+            return line + (item.unit_price - cost) * item.quantity;
+          }, 0),
+        0,
+      ),
+    [periodTickets, products],
+  );
+
+  /* Comparación con el periodo anterior de la misma duración. Los deltas
+     estaban escritos a mano (+14,2 % · +3,1 % · −1,8 %) y no se movían
+     aunque no hubiera una sola venta. */
+  const previousTickets = useMemo(() => {
+    const end = startOfPeriod.getTime();
+    const start = end - days * 86_400_000;
+    return tickets.filter((t) => {
+      if (t.status !== 'COMPLETED') return false;
+      if (branch !== 'ALL' && t.branch_id !== branch) return false;
+      const at = new Date(t.at).getTime();
+      return !Number.isNaN(at) && at >= start && at < end;
+    });
+  }, [tickets, branch, startOfPeriod, days]);
+
+  /** Variación porcentual. Sin base con la que comparar no hay variación. */
+  const delta = (now: number, before: number): number | undefined =>
+    before === 0 ? undefined : Number((((now - before) / before) * 100).toFixed(1));
+
+  const previousRevenue = previousTickets.reduce((sum, t) => sum + t.total, 0);
+  const previousAvg = previousTickets.length > 0 ? previousRevenue / previousTickets.length : 0;
+  const marginRate = revenue > 0 ? (margin / revenue) * 100 : 0;
+
+  /* La jornada que se está viendo, no una fecha escrita a mano: el panel decía
+     «viernes, 14 de agosto de 2026 · Turno Mañana #1 · Sucursal Central» a
+     cualquiera, cualquier día y en cualquier sucursal. */
+  const cashShift = usePosStore((state) => state.cashShift);
+  const user = useAuthStore((state) => state.user);
+
+  const subtitle = [
+    new Date().toLocaleDateString('es-BO', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }),
+    cashShift
+      ? `${cashShift.registerName} · turno abierto ${formatTime(cashShift.openedAt)}`
+      : 'sin turno abierto',
+    user?.branchName ?? 'Sucursal sin asignar',
+  ].join(' · ');
+
+  /* «Actualizar» solo giraba un icono 600 ms. Ahora relee lo guardado, que es
+     lo único que puede haber cambiado por fuera: otra ventana de la misma caja
+     cobrando o recibiendo mercancía. */
+  const hydrateSales = useSalesStore((state) => state.hydrate);
+  const hydrateCatalog = useCatalogStore((state) => state.hydrate);
 
   const refresh = () => {
     setIsRefreshing(true);
-    window.setTimeout(() => setIsRefreshing(false), 600);
+    hydrateSales();
+    hydrateCatalog();
+    window.setTimeout(() => setIsRefreshing(false), 400);
   };
+
+  const rangeLabel =
+    range === 'today'
+      ? 'hoy'
+      : range === '7d'
+        ? 'últimos 7 días'
+        : range === 'month'
+          ? 'mes actual'
+          : 'últimos 30 días';
+
+  const trend = useMemo<TrendPoint[]>(() => {
+    /* Un cubo por día del periodo: los días sin ventas valen cero y se ven,
+       que es justo la información que interesa. */
+    const buckets = Array.from({ length: days }, (_, i) => {
+      const date = new Date(startOfPeriod.getTime() + i * 86_400_000);
+      return { day: i + 1, date: date.toISOString().slice(0, 10), amount: 0, tickets: 0 };
+    });
+    const index = new Map(buckets.map((b) => [b.date, b]));
+
+    for (const t of periodTickets) {
+      const key = new Date(t.at).toISOString().slice(0, 10);
+      const bucket = index.get(key);
+      if (!bucket) continue;
+      bucket.amount += t.total;
+      bucket.tickets += 1;
+    }
+    return buckets;
+  }, [periodTickets, startOfPeriod, days]);
 
   const movementColumns: Array<Column<(typeof recentMovements)[number]>> = [
     {
@@ -361,9 +496,7 @@ export const DashboardView: React.FC = () => {
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-display text-ink">Resumen de operación</h1>
-            <p className="text-base text-ink-2 mt-1">
-              viernes, 14 de agosto de 2026 · Turno Mañana #1 · Sucursal Central
-            </p>
+            <p className="text-base text-ink-2 mt-1">{subtitle}</p>
           </div>
 
           {/* Los filtros van en una sola fila sobre los gráficos */}
@@ -373,9 +506,15 @@ export const DashboardView: React.FC = () => {
               onChange={(e) => setBranch(e.target.value)}
               aria-label="Sucursal"
             >
-              <option>Consolidado Global</option>
-              <option>Sucursal Centro</option>
-              <option>Sucursal Norte</option>
+              {/* Las sucursales que existen de verdad. Antes eran tres nombres
+                  escritos aquí que no coincidían con ninguna lista del sistema
+                  y que además no filtraban nada. */}
+              <option value="ALL">Consolidado global</option>
+              {DEMO_BRANCHES.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
             </Select>
             <Select
               value={range}
@@ -387,9 +526,6 @@ export const DashboardView: React.FC = () => {
               <option value="30d">Últimos 30 días</option>
               <option value="month">Mes actual</option>
             </Select>
-            <Button variant="secondary" icon={<Calendar className="w-3.5 h-3.5" />}>
-              Fechas
-            </Button>
             <Button
               variant="ghost"
               icon={<RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />}
@@ -405,25 +541,32 @@ export const DashboardView: React.FC = () => {
         <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
           <StatTile
             label="Ventas del periodo"
-            value={<Money value={25_940.5} size="display" />}
-            delta={14.2}
-            hint="vs. periodo anterior"
+            value={<Money value={revenue} size="display" />}
+            delta={delta(revenue, previousRevenue)}
+            hint={
+              previousRevenue > 0
+                ? 'vs. el periodo anterior'
+                : `${periodTickets.length} ${periodTickets.length === 1 ? 'venta cobrada' : 'ventas cobradas'}`
+            }
             icon={<ShoppingCart className="w-4 h-4" />}
             tone="accent"
           />
           <StatTile
             label="Margen neto"
-            value={<Money value={8_378.4} size="display" />}
-            delta={3.1}
-            hint="32.3% de rentabilidad"
+            value={<Money value={margin} size="display" />}
+            hint={
+              revenue > 0
+                ? `${marginRate.toFixed(1)} % sobre lo facturado`
+                : 'sin ventas en el periodo'
+            }
             icon={<Wallet className="w-4 h-4" />}
             tone="success"
           />
           <StatTile
             label="Ticket promedio"
-            value={<Money value={86.4} size="display" />}
-            delta={-1.8}
-            hint="300 tickets emitidos"
+            value={<Money value={avgTicket} size="display" />}
+            delta={delta(avgTicket, previousAvg)}
+            hint={`${periodTickets.length} ${periodTickets.length === 1 ? 'ticket emitido' : 'tickets emitidos'}`}
             icon={<ArrowUpRight className="w-4 h-4" />}
           />
           <StatTile
@@ -437,7 +580,7 @@ export const DashboardView: React.FC = () => {
 
         {/* Tendencia */}
         <Card
-          title="Ventas de los últimos 30 días"
+          title={`Ventas · ${rangeLabel}`}
           icon={<LineChartIcon className="w-4 h-4" />}
           action={
             <div className="flex items-center gap-2">
@@ -487,7 +630,7 @@ export const DashboardView: React.FC = () => {
               <Skeleton variant="text" className="h-9" />
             </div>
           ) : (
-            <TrendChart data={trend} metric={metric} kind={kind} />
+            <TrendChart rangeLabel={rangeLabel} data={trend} metric={metric} kind={kind} />
           )}
         </Card>
 

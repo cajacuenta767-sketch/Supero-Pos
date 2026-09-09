@@ -40,6 +40,9 @@ export interface SaleTicket {
   at: string;
   cashier_name: string;
   customer_name?: string;
+  /** Sucursal donde se emitió. Sin esto no se puede consolidar ni comparar. */
+  branch_id?: string;
+  branch_name?: string;
   payment_method: PaymentMethod;
   total: number;
   cash_given: number;
@@ -59,6 +62,8 @@ const SEED: SaleTicket[] = [
     id: 'TK-10024',
     at: new Date(Date.now() - 26 * 3600 * 1000).toISOString(),
     cashier_name: 'Juan Pérez',
+    branch_id: 'branch-1',
+    branch_name: 'Sucursal Central - Av. Principal #123',
     payment_method: 'CASH',
     total: 74.0,
     cash_given: 100.0,
@@ -98,6 +103,8 @@ const SEED: SaleTicket[] = [
     id: 'TK-10023',
     at: new Date(Date.now() - 25 * 3600 * 1000).toISOString(),
     cashier_name: 'María Gómez',
+    branch_id: 'branch-2',
+    branch_name: 'Sucursal Norte - Mall Plaza Local 45',
     payment_method: 'QR',
     total: 144.9,
     cash_given: 144.9,
@@ -123,6 +130,8 @@ interface SalesState {
   recordSale: (ticket: Omit<SaleTicket, 'status'>) => SaleTicket;
   /** Marca un ticket como anulado. Devolver el stock es cosa de quien anula. */
   voidTicket: (id: string, reason: string, by: string) => SaleTicket | null;
+  /** Vuelve a leer lo guardado: otra ventana de la misma caja pudo cobrar. */
+  hydrate: () => void;
   ticketById: (id: string) => SaleTicket | undefined;
 }
 
@@ -154,6 +163,11 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     };
     set((state) => ({ tickets: persist(state.tickets.map((t) => (t.id === id ? voided : t))) }));
     return voided;
+  },
+
+  hydrate: () => {
+    const stored = readPersisted<SaleTicket[]>(STORAGE_KEY);
+    if (stored) set({ tickets: stored });
   },
 
   ticketById: (id) => get().tickets.find((t) => t.id === id),

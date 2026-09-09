@@ -69,7 +69,7 @@ interface ProductSerial {
 import { useAuthStore } from '../store/useAuthStore';
 import { hasPermission } from '../utils/permissions';
 import { isPrintingAvailable, printProductLabels } from '../services/printing';
-import { useCatalogStore, type Product } from '../store/useCatalogStore';
+import { useCatalogStore, MOVEMENT_LABEL, type Product } from '../store/useCatalogStore';
 import { formatDateTime } from '../utils/dates';
 
 export const ProductsView: React.FC = () => {
@@ -144,6 +144,37 @@ export const ProductsView: React.FC = () => {
 
   // Serial Forensic Search State
   const [serialSearch, setSerialSearch] = useState('');
+
+  /* Kardex por producto: el store lo lleva desde la primera ola y ninguna
+     pantalla lo enseñaba. El icono de historial de cada fila no hacía nada. */
+  const [kardexProduct, setKardexProduct] = useState<Product | null>(null);
+  const movementsFor = useCatalogStore((state) => state.movementsFor);
+  const kardex = kardexProduct ? movementsFor(kardexProduct.id) : [];
+
+  /* Duplicar: el icono tampoco hacía nada. Abre el alta con una copia, sin
+     existencias y con SKU y código de barras nuevos —dos productos no pueden
+     compartir el código que lee el escáner—. */
+  const duplicateProduct = (p: Product) => {
+    const base = '777' + Math.floor(100000000 + Math.random() * 900000000).toString();
+    setEditingProduct(null);
+    setFormData({
+      sku: `${p.sku}-COPIA`,
+      barcode: base + ean13CheckDigit(base),
+      name: `${p.name} (copia)`,
+      category: p.category,
+      brand: p.brand ?? 'Genérica',
+      unit_type: p.unit_type,
+      cost_price: p.cost_price,
+      sale_price: p.sale_price,
+      wholesale_price: p.wholesale_price,
+      wholesale_min_qty: p.wholesale_min_qty,
+      stock: 0,
+      min_stock: p.min_stock,
+      is_active: p.is_active,
+      image_url: p.image_url,
+    });
+    setIsProductModalOpen(true);
+  };
 
   // EAN-13 & SKU Auto Generator
   const generateSKU = () => {
@@ -448,14 +479,68 @@ export const ProductsView: React.FC = () => {
               <Edit3 className="w-4 h-4" />
             </IconButton>
           )}
-          <IconButton label={`Duplicar ${p.name}`}>
-            <Copy className="w-4 h-4" />
-          </IconButton>
-          <IconButton label={`Kardex de ${p.name}`}>
+          {canEditProduct && (
+            <IconButton label={`Duplicar ${p.name}`} onClick={() => duplicateProduct(p)}>
+              <Copy className="w-4 h-4" />
+            </IconButton>
+          )}
+          <IconButton label={`Kardex de ${p.name}`} onClick={() => setKardexProduct(p)}>
             <History className="w-4 h-4" />
           </IconButton>
         </div>
       ),
+    },
+  ];
+
+  const kardexColumns: Array<Column<(typeof kardex)[number]>> = [
+    {
+      key: 'at',
+      header: 'Fecha y hora',
+      width: '160px',
+      render: (m) => (
+        <span className="font-mono tnum text-body text-ink-2">{formatDateTime(m.at)}</span>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Motivo',
+      render: (m) => (
+        <div>
+          <Badge tone={m.quantity >= 0 ? 'success' : 'danger'}>{MOVEMENT_LABEL[m.type]}</Badge>
+          {m.reason && <p className="text-body text-ink-3 mt-1">{m.reason}</p>}
+        </div>
+      ),
+    },
+    {
+      key: 'reference',
+      header: 'Documento',
+      width: '150px',
+      render: (m) => <span className="font-mono text-body text-ink-3">{m.reference ?? '—'}</span>,
+    },
+    {
+      key: 'quantity',
+      header: 'Cantidad',
+      align: 'right',
+      width: '110px',
+      sortValue: (m) => m.quantity,
+      render: (m) => (
+        <span
+          className={cn(
+            'font-mono tnum font-semibold',
+            m.quantity >= 0 ? 'text-ok' : 'text-danger',
+          )}
+        >
+          {m.quantity > 0 ? '+' : ''}
+          {m.quantity}
+        </span>
+      ),
+    },
+    {
+      key: 'stockAfter',
+      header: 'Queda',
+      align: 'right',
+      width: '100px',
+      render: (m) => <span className="font-mono tnum text-ink-2">{m.stockAfter}</span>,
     },
   ];
 
@@ -931,6 +1016,32 @@ export const ProductsView: React.FC = () => {
             </div>
           </section>
         </form>
+      </Modal>
+
+      {/* Kardex del producto */}
+      <Modal
+        isOpen={kardexProduct !== null}
+        onClose={() => setKardexProduct(null)}
+        icon={<History className="w-4 h-4" />}
+        title="Movimientos del producto"
+        subtitle={kardexProduct?.name}
+        size="lg"
+      >
+        {kardex.length === 0 ? (
+          <EmptyState
+            icon={<History className="w-6 h-6" />}
+            title="Sin movimientos registrados"
+            hint="Las ventas, recepciones, mermas y ajustes de este producto aparecerán aquí."
+          />
+        ) : (
+          <DataTable
+            caption={`Movimientos de existencias de ${kardexProduct?.name ?? 'el producto'}`}
+            columns={kardexColumns}
+            rows={kardex}
+            rowKey={(m) => m.id}
+            dense
+          />
+        )}
       </Modal>
     </div>
   );

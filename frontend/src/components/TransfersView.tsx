@@ -81,7 +81,12 @@ export const TransfersView: React.FC = () => {
   /* El filtro corría en cada pulsación sobre la lista entera. */
   const searchQueryDebounced = useDebounced(searchQuery);
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [sourceFilter] = useState('ALL');
+  /* El filtro por almacén de origen existía como estado fijo en 'ALL' y sin
+     ningún control que lo cambiara: filtraba siempre por todo. */
+  const [sourceFilter, setSourceFilter] = useState('ALL');
+
+  /* Los orígenes que existen de verdad en las guías: una lista escrita a mano
+     se desincroniza en cuanto se crea un traslado desde otro almacén. */
 
   // Modals
   const [isNewTransferModalOpen, setIsNewTransferModalOpen] = useState(false);
@@ -158,6 +163,8 @@ export const TransfersView: React.FC = () => {
 
   /* F2 lleva el foco al buscador. */
   useViewShortcuts({});
+
+  const sourceBranches = Array.from(new Set(transfers.map((t) => t.source_branch))).sort();
 
   const filteredTransfers = transfers.filter((t) => {
     const q = searchQueryDebounced.toLowerCase();
@@ -349,18 +356,32 @@ export const TransfersView: React.FC = () => {
           onSearchChange={setSearchQuery}
           searchPlaceholder="Buscar por número de guía, origen o destino…"
           filters={
-            <ToolbarSelect
-              aria-label="Estado"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="ALL">Todos los estados</option>
-              {(Object.keys(STATUS_LABEL) as Array<TransferGuide['status']>).map((k) => (
-                <option key={k} value={k}>
-                  {STATUS_LABEL[k]}
-                </option>
-              ))}
-            </ToolbarSelect>
+            <>
+              <ToolbarSelect
+                aria-label="Estado"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="ALL">Todos los estados</option>
+                {(Object.keys(STATUS_LABEL) as Array<TransferGuide['status']>).map((k) => (
+                  <option key={k} value={k}>
+                    {STATUS_LABEL[k]}
+                  </option>
+                ))}
+              </ToolbarSelect>
+              <ToolbarSelect
+                aria-label="Almacén de origen"
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+              >
+                <option value="ALL">Todos los orígenes</option>
+                {sourceBranches.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </ToolbarSelect>
+            </>
           }
         />
 

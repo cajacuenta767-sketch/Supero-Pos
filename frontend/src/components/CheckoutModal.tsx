@@ -118,7 +118,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       // 1. Generación de UUID inmutable (Regla de Oro)
       const transaction_id = generateUUID();
       const timestamp = new Date().toISOString();
-      const branch_id = 'branch-01';
+      /* La sucursal sale de la sesión. Estaba fija en `branch-01`, un
+         identificador que no existe en ninguna lista de sucursales, así que
+         nada de lo vendido se podía atribuir a una tienda concreta. */
+      const branch_id = cashier?.branchId ?? 'branch-1';
       const register_id = 'caja-1';
       const shift_id = 'shift-01';
       /* El cajero es quien tiene la sesión abierta. Estaba fijo en
@@ -274,6 +277,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
         id: ticketNumber,
         at: timestamp,
         cashier_name: cashier?.name ?? cashier?.username ?? 'Sin identificar',
+        branch_id,
+        branch_name: cashier?.branchName,
         customer_name:
           selectedCustomer.id !== 'default-public' ? selectedCustomer.businessName : undefined,
         payment_method: paymentMethod,

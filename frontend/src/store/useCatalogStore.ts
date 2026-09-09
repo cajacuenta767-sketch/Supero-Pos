@@ -279,6 +279,8 @@ interface CatalogState {
   /** Solo lo vendible: activo y con existencias registradas. */
   sellableProducts: () => Product[];
   categories: () => string[];
+  /** Vuelve a leer lo guardado: otra ventana de la misma caja pudo vender. */
+  hydrate: () => void;
 }
 
 const persist = (products: Product[]) => {
@@ -312,6 +314,17 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         state.products.map((p) => (p.id === id ? { ...p, is_active: !p.is_active } : p)),
       ),
     })),
+
+  hydrate: () => {
+    const products = readPersisted<Product[]>(STORAGE_KEY);
+    const movements = readPersisted<StockMovement[]>(MOVEMENTS_KEY);
+    const serials = readPersisted<ProductSerial[]>(SERIALS_KEY);
+    set((state) => ({
+      products: products ?? state.products,
+      movements: movements ?? state.movements,
+      serials: serials ?? state.serials,
+    }));
+  },
 
   applyMovement: (input) => {
     const [movement] = get().applyMovements([input]);
