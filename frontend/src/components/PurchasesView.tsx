@@ -190,6 +190,19 @@ export const PurchasesView: React.FC = () => {
   const imeiInputError =
     imeiAddError || (typedImei.length >= 15 ? imeiError(typedImei) : undefined);
 
+  /** Cierra la recepción y suelta la orden.
+   *
+   *  El detalle se muestra con `!!selectedPO && !isReceivingModalOpen`, así que
+   *  cerrar la recepción dejando `selectedPO` puesto no devolvía a la lista:
+   *  abría el detalle de la orden, como si se hubiera pulsado otra cosa. */
+  const closeReceiving = () => {
+    setIsReceivingModalOpen(false);
+    setSelectedPO(null);
+    setScannedImeis([]);
+    setImeiInput('');
+    setImeiAddError(undefined);
+  };
+
   /** Añade un IMEI a la lista. Ignora el repetido en silencio: la cámara lee el
    *  mismo código varias veces por segundo y el operario no debería notarlo. */
   const addImei = (raw: string) => {
@@ -209,8 +222,13 @@ export const PurchasesView: React.FC = () => {
     setPurchaseOrders((prev) =>
       prev.map((p) => (p.id === po.id ? { ...p, status: 'COMPLETED' as const } : p)),
     );
+    // Mismo motivo que en `closeReceiving`: confirmar tampoco debe dejar la
+    // orden seleccionada, o al cerrarse la recepción aparece su detalle.
     setIsReceivingModalOpen(false);
+    setSelectedPO(null);
     setScannedImeis([]);
+    setImeiInput('');
+    setImeiAddError(undefined);
     toast(`Orden ${po.id} recibida`, 'success');
   };
 
@@ -415,23 +433,14 @@ export const PurchasesView: React.FC = () => {
       {/* Recepción */}
       <Modal
         isOpen={isReceivingModalOpen}
-        onClose={() => {
-          setIsReceivingModalOpen(false);
-          setScannedImeis([]);
-        }}
+        onClose={closeReceiving}
         icon={<Truck className="w-4 h-4" />}
         title="Recibir mercadería"
         subtitle={selectedPO ? `${selectedPO.id} · ${selectedPO.supplier_name}` : undefined}
         size="lg"
         footer={
           <>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setIsReceivingModalOpen(false);
-                setScannedImeis([]);
-              }}
-            >
+            <Button variant="ghost" onClick={closeReceiving}>
               Cancelar
             </Button>
             <Button
