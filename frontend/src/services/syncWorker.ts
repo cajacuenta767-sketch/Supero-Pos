@@ -4,6 +4,7 @@ import { localDb } from '../db/sqlite';
 import { useSyncStore } from '../store/useSyncStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { API_BASE_URL } from '../config/env';
+import { formatTime } from '../utils/dates';
 
 const SERVER_HEALTH_URL = `${API_BASE_URL}/health`;
 const BATCH_SYNC_URL = `${API_BASE_URL}/sync/batch`;
@@ -160,7 +161,7 @@ export class SyncWorkerService {
         );
       }
 
-      useSyncStore.getState().setLastSyncTime(new Date().toLocaleTimeString());
+      useSyncStore.getState().setLastSyncTime(formatTime(new Date()));
     } catch (err) {
       const reason = err instanceof AxiosError ? (err.message ?? '') : String(err);
       console.warn(`Error de envío del lote: ${reason}. Se conserva la cola intacta.`);

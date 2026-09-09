@@ -35,7 +35,11 @@ import {
   ToolbarSelect,
   useToast,
 } from '../ui';
+import { formatDateTime } from '../utils/dates';
+import { useViewShortcuts } from '../hooks/useViewShortcuts';
+import { useDebounced } from '../hooks/useDebounced';
 import type { Column } from '../ui';
+import { buildCsv, downloadCsv } from '../utils/exportCsv';
 
 const METHOD_LABEL: Record<SaleTicket['payment_method'], string> = {
   CASH: 'Efectivo',
@@ -79,11 +83,16 @@ interface SaleTicket {
 
 export const SalesHistoryView: React.FC = () => {
   const toast = useToast();
+
+  /* F2 lleva el foco al buscador. */
+  useViewShortcuts({});
   const { user } = useAuthStore();
   const userRole = user?.role || 'ADMIN';
   const canVoidSaleDirect = hasPermission(userRole, 'can_void_sale');
 
   const [searchQuery, setSearchQuery] = useState('');
+  /* El filtro corría en cada pulsación sobre la lista entera. */
+  const searchQueryDebounced = useDebounced(searchQuery);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'COMPLETED' | 'CANCELLED'>('ALL');
   const [dateFilter, setDateFilter] = useState('TODAY');
 
@@ -100,7 +109,7 @@ export const SalesHistoryView: React.FC = () => {
   const [tickets, setTickets] = usePersistentState<SaleTicket[]>('tickets', [
     {
       id: 'TK-10024',
-      timestamp: '14/08/2026 14:15:22',
+      timestamp: '14/08/2026 14:15',
       cashier_name: 'Juan Pérez',
       payment_method: 'CASH',
       total: 864.0,
@@ -131,7 +140,7 @@ export const SalesHistoryView: React.FC = () => {
     },
     {
       id: 'TK-10023',
-      timestamp: '14/08/2026 13:40:10',
+      timestamp: '14/08/2026 13:40',
       cashier_name: 'María Gómez',
       payment_method: 'QR',
       total: 145.0,
@@ -152,7 +161,7 @@ export const SalesHistoryView: React.FC = () => {
     },
     {
       id: 'TK-10022',
-      timestamp: '14/08/2026 11:20:05',
+      timestamp: '14/08/2026 11:20',
       cashier_name: 'Juan Pérez',
       payment_method: 'CARD',
       total: 35.0,
@@ -160,7 +169,7 @@ export const SalesHistoryView: React.FC = () => {
       change: 0.0,
       status: 'CANCELLED',
       cancellation_reason: 'Error de tipeo en producto a solicitud del cliente',
-      cancelled_at: '14/08/2026 11:25:00',
+      cancelled_at: '14/08/2026 11:25',
       cancelled_by: 'Administrador (Pin 1234)',
       items: [
         {
@@ -196,7 +205,7 @@ export const SalesHistoryView: React.FC = () => {
                 ...t,
                 status: 'CANCELLED',
                 cancellation_reason: voidReason,
-                cancelled_at: new Date().toLocaleString('es-ES'),
+                cancelled_at: formatDateTime(new Date()),
                 cancelled_by: 'Supervisor (PIN Autorizado)',
               }
             : t,
@@ -219,7 +228,7 @@ export const SalesHistoryView: React.FC = () => {
   /* Dos ejes de filtro distintos: periodo y estado. Antes se mezclaban en una
      sola fila, como si fueran opciones del mismo conjunto. */
   const filteredTickets = tickets.filter((t) => {
-    const q = searchQuery.toLowerCase();
+    const q = searchQueryDebounced.toLowerCase();
     const matchesSearch =
       t.id.toLowerCase().includes(q) ||
       t.cashier_name.toLowerCase().includes(q) ||
@@ -232,6 +241,37 @@ export const SalesHistoryView: React.FC = () => {
   const revenue = completed.reduce((s, t) => s + t.total, 0);
   const avgTicket = completed.length > 0 ? revenue / completed.length : 0;
   const voided = filteredTickets.length - completed.length;
+
+  /**
+   * Exporta lo que se está viendo, ya filtrado.
+   *
+   * Antes este botón no tenía `onClick`: se pulsaba y no ocurría nada.
+   */
+  const exportTickets = () => {
+    const csv = buildCsv<SaleTicket>(
+      [
+        { header: 'Ticket', value: (t) => t.id },
+        { header: 'Fecha y hora', value: (t) => t.timestamp },
+        { header: 'Cajero', value: (t) => t.cashier_name },
+        { header: 'Método de pago', value: (t) => METHOD_LABEL[t.payment_method] },
+        { header: 'Total', value: (t) => t.total.toFixed(2) },
+        { header: 'Recibido', value: (t) => t.cash_given.toFixed(2) },
+        { header: 'Cambio', value: (t) => t.change.toFixed(2) },
+        { header: 'Estado', value: (t) => (t.status === 'COMPLETED' ? 'Completada' : 'Anulada') },
+        { header: 'Motivo de anulación', value: (t) => t.cancellation_reason },
+        { header: 'Anulada por', value: (t) => t.cancelled_by },
+        { header: 'Artículos', value: (t) => t.items.length },
+      ],
+      filteredTickets,
+    );
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(`informe-ventas-${stamp}.csv`, csv);
+    toast(
+      `${filteredTickets.length} ${filteredTickets.length === 1 ? 'ticket exportado' : 'tickets exportados'}`,
+      'success',
+    );
+  };
 
   const columns: Array<Column<SaleTicket>> = [
     {
@@ -270,6 +310,7 @@ export const SalesHistoryView: React.FC = () => {
     },
     {
       key: 'total',
+      sortValue: (t) => t.total,
       header: 'Total',
       card: 'meta',
       align: 'right',
@@ -284,6 +325,7 @@ export const SalesHistoryView: React.FC = () => {
     },
     {
       key: 'status',
+      sortValue: (t) => t.status,
       header: 'Estado',
       width: '130px',
       render: (t) => (
@@ -331,8 +373,13 @@ export const SalesHistoryView: React.FC = () => {
           title="Informes"
           subtitle="Historial de ventas, anulaciones y desglose por método de pago."
           actions={
-            <Button variant="secondary" icon={<Printer className="w-4 h-4" />}>
-              Exportar
+            <Button
+              variant="secondary"
+              icon={<Printer className="w-4 h-4" />}
+              disabled={filteredTickets.length === 0}
+              onClick={exportTickets}
+            >
+              Exportar {filteredTickets.length > 0 && `(${filteredTickets.length})`}
             </Button>
           }
         />
@@ -390,8 +437,10 @@ export const SalesHistoryView: React.FC = () => {
         />
 
         <DataTable
+          caption="Tickets emitidos, con su método de pago, total y estado"
           columns={columns}
           rows={filteredTickets}
+          pageSize={25}
           rowKey={(t) => t.id}
           empty={
             <EmptyState

@@ -21,6 +21,9 @@ import {
   cn,
   useToast,
 } from '../ui';
+import { formatDateTime } from '../utils/dates';
+import { useViewShortcuts } from '../hooks/useViewShortcuts';
+import { useDebounced } from '../hooks/useDebounced';
 import type { Column, TabItem } from '../ui';
 
 type SubTab = 'adjustments' | 'losses' | 'audit';
@@ -91,6 +94,8 @@ export const StockAdjustmentsView: React.FC = () => {
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
+  /* El filtro corría en cada pulsación sobre la lista entera. */
+  const searchQueryDebounced = useDebounced(searchQuery);
   const [typeFilter, setTypeFilter] = useState('ALL');
 
   // Modals
@@ -176,13 +181,16 @@ export const StockAdjustmentsView: React.FC = () => {
 
   const filteredAdjustments = adjustments.filter((adj) => {
     const matchesSearch =
-      adj.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      adj.user_name.toLowerCase().includes(searchQuery.toLowerCase());
+      adj.id.toLowerCase().includes(searchQueryDebounced.toLowerCase()) ||
+      adj.user_name.toLowerCase().includes(searchQueryDebounced.toLowerCase());
     const matchesType = typeFilter === 'ALL' || adj.type === typeFilter;
     return matchesSearch && matchesType;
   });
 
   const toast = useToast();
+
+  /* F2 lleva el foco al buscador. */
+  useViewShortcuts({});
   /* La auditoría ciega no muestra el stock esperado hasta confirmar: si lo
      mostrara, dejaría de ser ciega. */
   const [auditRevealed, setAuditRevealed] = useState(false);
@@ -191,7 +199,7 @@ export const StockAdjustmentsView: React.FC = () => {
     if (!lossNotes.trim() || !supervisorPin) return;
     const record: AdjustmentRecord = {
       id: `ADJ-${4000 + adjustments.length + 1}`,
-      date: new Date().toLocaleString('es-ES'),
+      date: formatDateTime(new Date()),
       type: 'LOSS_DAMAGE',
       reason: lossReason,
       branch: 'Almacén Central',
@@ -218,6 +226,7 @@ export const StockAdjustmentsView: React.FC = () => {
     },
     {
       key: 'date',
+      sortValue: (a) => a.date,
       header: 'Fecha y hora',
       width: '170px',
       render: (a) => <span className="font-mono tnum text-body text-ink-2">{a.date}</span>,
@@ -384,8 +393,10 @@ export const StockAdjustmentsView: React.FC = () => {
               }
             />
             <DataTable
+              caption="Ajustes de inventario por tipo, producto y diferencia"
               columns={columns}
               rows={filteredAdjustments}
+              pageSize={25}
               rowKey={(a) => a.id}
               empty={
                 <EmptyState
@@ -432,7 +443,12 @@ export const StockAdjustmentsView: React.FC = () => {
                 {auditRevealed ? 'Ocultar esperado' : 'Revelar diferencias'}
               </Button>
             </div>
-            <DataTable columns={auditColumns} rows={auditItems} rowKey={(it) => it.id} />
+            <DataTable
+              columns={auditColumns}
+              rows={auditItems}
+              rowKey={(it) => it.id}
+              caption="Conteo de auditoría ciega en curso"
+            />
           </div>
         )}
       </div>

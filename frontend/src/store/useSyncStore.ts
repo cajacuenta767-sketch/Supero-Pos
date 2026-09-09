@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { formatTime } from '../utils/dates';
 
 interface SyncState {
   isOnline: boolean;
@@ -22,7 +23,7 @@ export const useSyncStore = create<SyncState>((set) => ({
   isOnline: true,
   pendingCount: 0,
   failedCount: 0,
-  lastSyncTime: new Date().toLocaleTimeString(),
+  lastSyncTime: formatTime(new Date()),
   setIsOnline: (isOnline) => set({ isOnline }),
   setPendingCount: (pendingCount) => set({ pendingCount }),
   setFailedCount: (failedCount) => set({ failedCount }),

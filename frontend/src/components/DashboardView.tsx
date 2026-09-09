@@ -493,6 +493,7 @@ export const DashboardView: React.FC = () => {
             padding="none"
           >
             <DataTable
+              caption="Productos por debajo de su stock mínimo"
               columns={stockColumns}
               rows={CRITICAL_STOCK}
               rowKey={(r) => r.sku}
@@ -509,6 +510,7 @@ export const DashboardView: React.FC = () => {
             padding="none"
           >
             <DataTable
+              caption="Últimos movimientos que requieren atención"
               columns={salesColumns}
               rows={RECENT_SALES}
               rowKey={(r) => r.ticket}

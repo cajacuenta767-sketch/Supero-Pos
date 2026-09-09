@@ -52,6 +52,8 @@ const UNIT_ROWS = [
   { from: 'Caja de 24', to: 'Pieza individual', factor: 24 },
   { from: 'Kilogramo', to: 'Gramo', factor: 1000 },
 ];
+import { useViewShortcuts } from '../hooks/useViewShortcuts';
+import { useDebounced } from '../hooks/useDebounced';
 import type { Column } from '../ui';
 
 interface ProductSerial {
@@ -72,6 +74,9 @@ import { useCatalogStore, type Product } from '../store/useCatalogStore';
 export const ProductsView: React.FC = () => {
   const { user } = useAuthStore();
   const toast = useToast();
+
+  /* F2 lleva el foco al buscador. */
+  useViewShortcuts({});
   // Sin respaldo a ADMIN: un perfil sin rol no debe habilitar altas ni ediciones.
   const userRole = user?.role;
   const canCreateProduct = hasPermission(userRole, 'can_create_product');
@@ -83,6 +88,8 @@ export const ProductsView: React.FC = () => {
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
+  /* El filtro corría en cada pulsación sobre la lista entera. */
+  const searchQueryDebounced = useDebounced(searchQuery);
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [unitTypeFilter, setUnitTypeFilter] = useState('ALL');
   const [stockStatusFilter, setStockStatusFilter] = useState('ALL');
@@ -210,9 +217,9 @@ export const ProductsView: React.FC = () => {
 
   const filteredProducts = products.filter((p) => {
     const matchesSearch =
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.barcode.includes(searchQuery);
+      p.name.toLowerCase().includes(searchQueryDebounced.toLowerCase()) ||
+      p.sku.toLowerCase().includes(searchQueryDebounced.toLowerCase()) ||
+      p.barcode.includes(searchQueryDebounced);
     const matchesCategory = categoryFilter === 'ALL' || p.category === categoryFilter;
     const matchesUnitType = unitTypeFilter === 'ALL' || p.unit_type === unitTypeFilter;
     const matchesStock =
@@ -573,6 +580,7 @@ export const ProductsView: React.FC = () => {
             </div>
 
             <DataTable
+              caption="Catálogo de productos con precio, existencias y estado"
               columns={catalogColumns}
               rows={filteredProducts}
               rowKey={(p) => p.id}
@@ -617,6 +625,7 @@ export const ProductsView: React.FC = () => {
               searchPlaceholder="Escanear o buscar número de serie / IMEI…"
             />
             <DataTable
+              caption="Números de serie e IMEI registrados por producto"
               columns={serialColumns}
               rows={filteredSerials}
               rowKey={(s) => s.id}
@@ -645,6 +654,7 @@ export const ProductsView: React.FC = () => {
               padding="none"
             >
               <DataTable
+                caption="Categorías del catálogo y cuántos productos contienen"
                 columns={categoryColumns}
                 rows={CATEGORY_ROWS}
                 rowKey={(c) => c.name}
@@ -665,6 +675,7 @@ export const ProductsView: React.FC = () => {
               padding="none"
             >
               <DataTable
+                caption="Equivalencias entre unidades de medida"
                 columns={unitColumns}
                 rows={UNIT_ROWS}
                 rowKey={(u) => u.from}

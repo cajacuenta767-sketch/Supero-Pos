@@ -9,13 +9,18 @@ import {
   EmptyState,
   Input,
   Meter,
+  Modal,
   PageHeader,
   Select,
   StatTile,
   Tabs,
+  Textarea,
   Toolbar,
   useToast,
 } from '../ui';
+import { formatDateTime } from '../utils/dates';
+import { useViewShortcuts } from '../hooks/useViewShortcuts';
+import { useDebounced } from '../hooks/useDebounced';
 import type { Column, TabItem } from '../ui';
 
 interface AttendanceLog {
@@ -90,11 +95,16 @@ const SHIFT_HOURS = 8;
 
 export const HrAttendanceView: React.FC = () => {
   const toast = useToast();
+
+  /* F2 lleva el foco al buscador, «N» abre el alta. */
+  useViewShortcuts({ onNew: () => setIsExceptionOpen(true) });
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('timeclock');
 
   const [clockPin, setClockPin] = useState('');
   const [clockEventType, setClockEventType] = useState<AttendanceLog['event_type']>('CLOCK_IN');
   const [searchQuery, setSearchQuery] = useState('');
+  /* El filtro corría en cada pulsación sobre la lista entera. */
+  const searchQueryDebounced = useDebounced(searchQuery);
   const [statusFilter, setStatusFilter] = useState('ALL');
 
   // Attendance Logs State
@@ -144,7 +154,16 @@ export const HrAttendanceView: React.FC = () => {
   ]);
 
   // Exceptions State
-  const [exceptions] = useState<ExceptionRecord[]>([
+  const [isExceptionOpen, setIsExceptionOpen] = useState(false);
+  const [exceptionForm, setExceptionForm] = useState({
+    employee_name: '',
+    type: 'PERMISO_GOCE' as ExceptionRecord['type'],
+    date_range: '',
+    notes: '',
+  });
+  const [exceptionError, setExceptionError] = useState<string | undefined>();
+
+  const [exceptions, setExceptions] = usePersistentState<ExceptionRecord[]>('incidencias', [
     {
       id: 'EXC-101',
       employee_name: 'María Gómez',
@@ -161,7 +180,7 @@ export const HrAttendanceView: React.FC = () => {
 
     const newLog: AttendanceLog = {
       id: `LOG-${7000 + logs.length + 1}`,
-      timestamp: new Date().toLocaleString('es-ES'),
+      timestamp: formatDateTime(new Date()),
       employee_name: 'Juan Pérez',
       role: 'CAJERO',
       event_type: clockEventType,
@@ -177,13 +196,13 @@ export const HrAttendanceView: React.FC = () => {
   };
 
   const filteredLogs = useMemo(() => {
-    const q = searchQuery.toLowerCase();
+    const q = searchQueryDebounced.toLowerCase();
     return logs.filter(
       (l) =>
         (l.employee_name.toLowerCase().includes(q) || l.id.toLowerCase().includes(q)) &&
         (statusFilter === 'ALL' || l.status === statusFilter),
     );
-  }, [logs, searchQuery, statusFilter]);
+  }, [logs, searchQueryDebounced, statusFilter]);
 
   const presentNow = logs.filter((l) => l.event_type === 'CLOCK_IN').length;
   const totalHours = logs.reduce((s, l) => s + (l.hours_worked ?? 0), 0);
@@ -198,6 +217,7 @@ export const HrAttendanceView: React.FC = () => {
     },
     {
       key: 'employee',
+      sortValue: (l) => l.employee_name,
       header: 'Empleado',
       card: 'title',
       render: (l) => (
@@ -315,6 +335,46 @@ export const HrAttendanceView: React.FC = () => {
     },
   ];
 
+  /* Los empleados salen de los fichajes: no se teclea un nombre a mano, que es
+     como acaban existiendo dos fichas de la misma persona. */
+  const employeeNames = useMemo(
+    () => [...new Set(logs.map((l) => l.employee_name))].sort((a, b) => a.localeCompare(b, 'es')),
+    [logs],
+  );
+
+  const closeExceptionModal = () => {
+    setIsExceptionOpen(false);
+    setExceptionError(undefined);
+    setExceptionForm({ employee_name: '', type: 'PERMISO_GOCE', date_range: '', notes: '' });
+  };
+
+  const saveException = () => {
+    if (!exceptionForm.employee_name) {
+      setExceptionError('Elija un empleado.');
+      return;
+    }
+    if (!exceptionForm.notes.trim()) {
+      setExceptionError('Indique el motivo de la incidencia.');
+      return;
+    }
+
+    setExceptions((prev) => [
+      {
+        id: `INC-${1000 + prev.length + 1}`,
+        employee_name: exceptionForm.employee_name,
+        type: exceptionForm.type,
+        date_range: exceptionForm.date_range.trim() || new Date().toLocaleDateString('es-BO'),
+        notes: exceptionForm.notes.trim(),
+        // Nace pendiente: aprobarla es decisión de un responsable, no del alta.
+        status: 'PENDING',
+      },
+      ...prev,
+    ]);
+
+    toast('Incidencia registrada', 'success');
+    closeExceptionModal();
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-canvas select-none">
       <div className="max-w-[1600px] mx-auto p-6 space-y-5">
@@ -322,10 +382,7 @@ export const HrAttendanceView: React.FC = () => {
           title="Recursos humanos"
           subtitle="Fichajes de entrada y salida, turnos asignados e incidencias del personal."
           actions={
-            <Button
-              icon={<Plus className="w-4 h-4" />}
-              onClick={() => toast('Registrar incidencia', 'info')}
-            >
+            <Button icon={<Plus className="w-4 h-4" />} onClick={() => setIsExceptionOpen(true)}>
               Nueva incidencia
             </Button>
           }
@@ -420,8 +477,10 @@ export const HrAttendanceView: React.FC = () => {
               />
 
               <DataTable
+                caption="Fichajes de entrada y salida del personal"
                 columns={logColumns}
                 rows={filteredLogs}
+                pageSize={25}
                 rowKey={(l) => l.id}
                 empty={
                   <EmptyState
@@ -443,6 +502,7 @@ export const HrAttendanceView: React.FC = () => {
             padding="none"
           >
             <DataTable
+              caption="Turnos programados por empleado"
               columns={shiftColumns}
               rows={shifts}
               rowKey={(s) => s.id}
@@ -454,6 +514,7 @@ export const HrAttendanceView: React.FC = () => {
 
         {activeSubTab === 'exceptions' && (
           <DataTable
+            caption="Incidencias de asistencia abiertas y resueltas"
             columns={exceptionColumns}
             rows={exceptions}
             rowKey={(x) => x.id}
@@ -467,6 +528,76 @@ export const HrAttendanceView: React.FC = () => {
           />
         )}
       </div>
+
+      {/* Alta de incidencia. Antes este botón solo lanzaba un aviso con el texto
+          «Registrar incidencia» y no registraba nada. */}
+      <Modal
+        isOpen={isExceptionOpen}
+        onClose={closeExceptionModal}
+        icon={<Plus className="w-4 h-4" />}
+        title="Nueva incidencia"
+        subtitle="Permisos, licencias y faltas justificadas del personal."
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeExceptionModal}>
+              Cancelar
+            </Button>
+            <Button onClick={saveException} icon={<Plus className="w-4 h-4" />}>
+              Registrar
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Select
+            label="Empleado"
+            value={exceptionForm.employee_name}
+            onChange={(e) => setExceptionForm({ ...exceptionForm, employee_name: e.target.value })}
+            error={exceptionError}
+          >
+            <option value="">Elija un empleado…</option>
+            {employeeNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </Select>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Tipo"
+              value={exceptionForm.type}
+              onChange={(e) =>
+                setExceptionForm({
+                  ...exceptionForm,
+                  type: e.target.value as ExceptionRecord['type'],
+                })
+              }
+            >
+              {(Object.keys(EXCEPTION_LABEL) as Array<ExceptionRecord['type']>).map((t) => (
+                <option key={t} value={t}>
+                  {EXCEPTION_LABEL[t]}
+                </option>
+              ))}
+            </Select>
+            <Input
+              label="Periodo"
+              placeholder="14/08/2026 – 16/08/2026"
+              value={exceptionForm.date_range}
+              onChange={(e) => setExceptionForm({ ...exceptionForm, date_range: e.target.value })}
+            />
+          </div>
+
+          <Textarea
+            label="Motivo"
+            rows={3}
+            hint="Queda en el expediente del empleado: conviene concretar."
+            value={exceptionForm.notes}
+            onChange={(e) => setExceptionForm({ ...exceptionForm, notes: e.target.value })}
+          />
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -27,6 +27,9 @@ import {
   ToolbarSelect,
   useToast,
 } from '../ui';
+import { formatDateTime } from '../utils/dates';
+import { useViewShortcuts } from '../hooks/useViewShortcuts';
+import { useDebounced } from '../hooks/useDebounced';
 import type { Column, TabItem } from '../ui';
 
 type SubTab = 'treasury' | 'drawers' | 'banks';
@@ -206,8 +209,13 @@ export const FinanceView: React.FC = () => {
   // Liquidity Aggregation
 
   const toast = useToast();
+
+  /* F2 lleva el foco al buscador. */
+  useViewShortcuts({});
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [search, setSearch] = useState('');
+  /* El filtro corría en cada pulsación sobre la lista entera. */
+  const searchDebounced = useDebounced(search);
 
   const cashTotal = accounts
     .filter((a) => a.type === 'CASH_DRAWER')
@@ -222,7 +230,7 @@ export const FinanceView: React.FC = () => {
   const liquidTotal = cashTotal + bankTotal + gatewayTotal;
 
   const filteredTx = transactions.filter((t) => {
-    const q = search.toLowerCase();
+    const q = searchDebounced.toLowerCase();
     const matchesSearch =
       t.id.toLowerCase().includes(q) ||
       t.source_account.toLowerCase().includes(q) ||
@@ -248,7 +256,7 @@ export const FinanceView: React.FC = () => {
     setTransactions((prev) => [
       {
         id: `TX-${9000 + prev.length + 2}`,
-        timestamp: new Date().toLocaleString('es-ES'),
+        timestamp: formatDateTime(new Date()),
         source_account: source?.name ?? '',
         dest_account: dest?.name ?? '',
         amount: value,
@@ -303,6 +311,7 @@ export const FinanceView: React.FC = () => {
     },
     {
       key: 'amount',
+      sortValue: (t) => t.amount,
       header: 'Monto',
       card: 'meta',
       align: 'right',
@@ -469,8 +478,10 @@ export const FinanceView: React.FC = () => {
               }
             />
             <DataTable
+              caption="Cuentas de la empresa y su saldo disponible"
               columns={txColumns}
               rows={filteredTx}
+              pageSize={25}
               rowKey={(t) => t.id}
               empty={
                 <EmptyState
@@ -483,6 +494,7 @@ export const FinanceView: React.FC = () => {
           </div>
         ) : (
           <DataTable
+            caption="Movimientos financieros por operación, cuenta e importe"
             columns={accountColumns}
             rows={visibleAccounts}
             rowKey={(a) => a.id}

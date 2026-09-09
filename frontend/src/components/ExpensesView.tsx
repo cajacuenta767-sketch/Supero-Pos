@@ -22,6 +22,9 @@ import {
   ToolbarSelect,
   useToast,
 } from '../ui';
+import { formatDateTime } from '../utils/dates';
+import { useViewShortcuts } from '../hooks/useViewShortcuts';
+import { useDebounced } from '../hooks/useDebounced';
 import type { Column, TabItem } from '../ui';
 
 type SubTab = 'expenses' | 'petty-cash';
@@ -64,6 +67,8 @@ export const ExpensesView: React.FC = () => {
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
+  /* El filtro corría en cada pulsación sobre la lista entera. */
+  const searchQueryDebounced = useDebounced(searchQuery);
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [accountFilter, setAccountFilter] = useState('ALL');
 
@@ -126,8 +131,11 @@ export const ExpensesView: React.FC = () => {
 
   const toast = useToast();
 
+  /* F2 lleva el foco al buscador, «N» abre el alta. */
+  useViewShortcuts({ onNew: () => setIsExpenseModalOpen(true) });
+
   const filteredExpenses = expenses.filter((exp) => {
-    const q = searchQuery.toLowerCase();
+    const q = searchQueryDebounced.toLowerCase();
     const matchesSearch =
       exp.id.toLowerCase().includes(q) ||
       exp.description.toLowerCase().includes(q) ||
@@ -157,7 +165,7 @@ export const ExpensesView: React.FC = () => {
     setExpenses((prev) => [
       {
         id: `EXP-${5000 + prev.length + 1}`,
-        date: new Date().toLocaleString('es-ES'),
+        date: formatDateTime(new Date()),
         category,
         description: description.trim(),
         account,
@@ -181,6 +189,7 @@ export const ExpensesView: React.FC = () => {
   const columns: Array<Column<OperationalExpense>> = [
     {
       key: 'date',
+      sortValue: (e) => e.date,
       header: 'Fecha',
       width: '170px',
       render: (e) => <span className="font-mono tnum text-body text-ink-2">{e.date}</span>,
@@ -198,6 +207,7 @@ export const ExpensesView: React.FC = () => {
     },
     {
       key: 'category',
+      sortValue: (e) => e.category,
       header: 'Categoría',
       width: '180px',
       render: (e) => <Badge tone="accent">{e.category}</Badge>,
@@ -216,6 +226,7 @@ export const ExpensesView: React.FC = () => {
     },
     {
       key: 'amount',
+      sortValue: (e) => e.amount,
       header: 'Importe',
       card: 'meta',
       align: 'right',
@@ -321,8 +332,10 @@ export const ExpensesView: React.FC = () => {
                 }
               />
               <DataTable
+                caption="Gastos operativos por fecha, categoría y cuenta"
                 columns={columns}
                 rows={filteredExpenses}
+                pageSize={25}
                 rowKey={(e) => e.id}
                 empty={
                   <EmptyState

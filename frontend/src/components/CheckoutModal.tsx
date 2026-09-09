@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, CreditCard, DollarSign, Layers, QrCode } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { useCatalogStore } from '../store/useCatalogStore';
+import { useSettingsStore } from '../store/useSettingsStore';
 import { usePosStore } from '../store/usePosStore';
 import { useSyncStore } from '../store/useSyncStore';
 import {
@@ -66,6 +67,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   const { selectedCustomer, manualDiscount, resetPosCycle, setPendingSyncCount } = usePosStore();
   const toast = useToast();
   const adjustStock = useCatalogStore((state) => state.adjustStock);
+  const settings = useSettingsStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
 
@@ -254,12 +256,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
           const outcome = await printSaleTicket({
             ticketNumber: transaction_id.slice(0, 8).toUpperCase(),
             dateText: new Date(timestamp).toLocaleString('es-BO'),
-            companyName: 'Supero POS',
-            companyNit: '1029384029',
-            cashierName: selectedCustomer ? undefined : undefined,
+            companyName: settings.companyName,
+            companyNit: settings.companyNit,
             customerName:
               selectedCustomer.id !== 'default-public' ? selectedCustomer.businessName : undefined,
-            paperWidth: '80mm',
+            paperWidth: settings.paperWidth,
             items: cartItemsToTicketLines(items),
             subtotal,
             discount: discountAmount,

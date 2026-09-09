@@ -19,6 +19,8 @@ import {
   ToolbarSelect,
   useToast,
 } from '../ui';
+import { useViewShortcuts } from '../hooks/useViewShortcuts';
+import { useDebounced } from '../hooks/useDebounced';
 import type { Column, TabItem } from '../ui';
 import { imeiError, isValidImei } from '../utils/imei';
 import { useCatalogStore } from '../store/useCatalogStore';
@@ -75,6 +77,8 @@ export const PurchasesView: React.FC = () => {
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
+  /* El filtro corría en cada pulsación sobre la lista entera. */
+  const searchQueryDebounced = useDebounced(searchQuery);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
   // Modals
@@ -178,12 +182,15 @@ export const PurchasesView: React.FC = () => {
 
   const toast = useToast();
 
+  /* F2 lleva el foco al buscador, «N» abre el alta. */
+  useViewShortcuts({ onNew: () => setIsPOModalOpen(true) });
+
   const filteredOrders = purchaseOrders.filter((po) => {
-    const q = searchQuery.toLowerCase();
+    const q = searchQueryDebounced.toLowerCase();
     const matchesSearch =
       po.id.toLowerCase().includes(q) ||
       po.supplier_name.toLowerCase().includes(q) ||
-      po.supplier_tax_id.includes(searchQuery);
+      po.supplier_tax_id.includes(searchQueryDebounced);
     const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -315,6 +322,7 @@ export const PurchasesView: React.FC = () => {
   const columns: Array<Column<PurchaseOrder>> = [
     {
       key: 'id',
+      sortValue: (po) => po.id,
       header: 'N.º orden',
       width: '120px',
       render: (po) => <span className="font-mono text-body text-ink">{po.id}</span>,
@@ -351,6 +359,7 @@ export const PurchasesView: React.FC = () => {
     },
     {
       key: 'total',
+      sortValue: (po) => po.total,
       header: 'Total',
       align: 'right',
       width: '140px',
@@ -358,6 +367,7 @@ export const PurchasesView: React.FC = () => {
     },
     {
       key: 'status',
+      sortValue: (po) => po.status,
       header: 'Estado',
       card: 'meta',
       width: '180px',
@@ -432,8 +442,10 @@ export const PurchasesView: React.FC = () => {
         />
 
         <DataTable
+          caption="Órdenes de compra por proveedor, destino y estado"
           columns={columns}
           rows={filteredOrders}
+          pageSize={25}
           rowKey={(po) => po.id}
           empty={
             <EmptyState

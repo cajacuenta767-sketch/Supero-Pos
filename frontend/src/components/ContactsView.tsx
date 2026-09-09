@@ -19,6 +19,7 @@ import {
   ToolbarSelect,
   useToast,
 } from '../ui';
+import { useViewShortcuts } from '../hooks/useViewShortcuts';
 import type { Column, TabItem } from '../ui';
 import { usePersistentState } from '../store/persist';
 
@@ -83,6 +84,9 @@ const GROUP_TONE: Record<Customer['group'], 'neutral' | 'accent' | 'success' | '
 
 export const ContactsView: React.FC = () => {
   const toast = useToast();
+
+  /* F2 lleva el foco al buscador, «N» abre el alta. */
+  useViewShortcuts({ onNew: () => setIsCustomerModalOpen(true) });
   const [activeTab, setActiveTab] = useState<Tab>('customers');
 
   const [customerSearch, setCustomerSearch] = useState('');
@@ -540,6 +544,7 @@ export const ContactsView: React.FC = () => {
             />
 
             <DataTable
+              caption="Clientes registrados, con su grupo, saldo y estado"
               columns={customerColumns}
               rows={filteredCustomers}
               rowKey={(c) => c.id}
@@ -570,6 +575,7 @@ export const ContactsView: React.FC = () => {
               searchPlaceholder="Buscar por empresa, contacto o NIT…"
             />
             <DataTable
+              caption="Proveedores registrados, con su deuda y condición de pago"
               columns={supplierColumns}
               rows={filteredSuppliers}
               rowKey={(s) => s.id}
@@ -599,6 +605,7 @@ export const ContactsView: React.FC = () => {
             padding="none"
           >
             <DataTable
+              caption="Grupos de clientes y la regla de precio de cada uno"
               columns={groupColumns}
               rows={customerGroups}
               rowKey={(g) => g.id}

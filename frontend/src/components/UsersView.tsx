@@ -36,6 +36,9 @@ import {
   ToolbarSelect,
   cn,
 } from '../ui';
+import { formatDateTime } from '../utils/dates';
+import { useViewShortcuts } from '../hooks/useViewShortcuts';
+import { useDebounced } from '../hooks/useDebounced';
 import type { Column, TabItem } from '../ui';
 
 type SubTab = 'users' | 'rbac' | 'commissions';
@@ -151,7 +154,7 @@ const INITIAL_MOCK_USERS: UserItem[] = [
     branch: 'Sucursal Central',
     branchId: 'branch-central',
     is_active: true,
-    last_login: '14/08/2026 08:30:15',
+    last_login: '14/08/2026 08:30',
   },
   {
     id: 'usr-2',
@@ -164,7 +167,7 @@ const INITIAL_MOCK_USERS: UserItem[] = [
     branch: 'Sucursal Central',
     branchId: 'branch-central',
     is_active: true,
-    last_login: '14/08/2026 09:12:00',
+    last_login: '14/08/2026 09:12',
   },
   {
     id: 'usr-3',
@@ -177,7 +180,7 @@ const INITIAL_MOCK_USERS: UserItem[] = [
     branch: 'Almacén Central',
     branchId: 'branch-central',
     is_active: true,
-    last_login: '13/08/2026 17:45:22',
+    last_login: '13/08/2026 17:45',
   },
   {
     id: 'usr-4',
@@ -190,15 +193,20 @@ const INITIAL_MOCK_USERS: UserItem[] = [
     branch: 'Sucursal Norte',
     branchId: 'branch-norte',
     is_active: false,
-    last_login: '10/08/2026 11:20:10',
+    last_login: '10/08/2026 11:20',
   },
 ];
 
 export const UsersView: React.FC = () => {
+  /* F2 lleva el foco al buscador del apartado. */
+  useViewShortcuts({});
+
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'rbac' | 'commissions'>('users');
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
+  /* El filtro corría en cada pulsación sobre la lista entera. */
+  const searchQueryDebounced = useDebounced(searchQuery);
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [branchFilter, setBranchFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -313,7 +321,7 @@ export const UsersView: React.FC = () => {
             branch: u.branch?.name || 'Sucursal Central',
             branchId: u.branchId,
             is_active: u.isActive ?? true,
-            last_login: u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Nunca',
+            last_login: u.lastLogin ? formatDateTime(u.lastLogin) : 'Nunca',
           }));
           setUsersList(apiUsers);
         }
@@ -403,9 +411,9 @@ export const UsersView: React.FC = () => {
 
   const filteredUsers = usersList.filter((u) => {
     const matchesSearch =
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase());
+      u.name.toLowerCase().includes(searchQueryDebounced.toLowerCase()) ||
+      u.username.toLowerCase().includes(searchQueryDebounced.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchQueryDebounced.toLowerCase());
     const matchesRole = roleFilter === 'ALL' || u.role === roleFilter || u.roleId === roleFilter;
     const matchesBranch =
       branchFilter === 'ALL' || u.branch === branchFilter || u.branchId === branchFilter;
@@ -610,6 +618,7 @@ export const UsersView: React.FC = () => {
     },
     {
       key: 'role',
+      sortValue: (u) => u.role,
       header: 'Rol',
       card: 'meta',
       width: '150px',
@@ -792,6 +801,7 @@ export const UsersView: React.FC = () => {
             />
 
             <DataTable
+              caption="Usuarios del sistema con su rol, sucursal y estado"
               columns={userColumns}
               rows={filteredUsers}
               rowKey={(u) => u.id}
@@ -871,6 +881,7 @@ export const UsersView: React.FC = () => {
             padding="none"
           >
             <DataTable
+              caption="Comisiones del personal de venta por periodo"
               columns={commissionColumns}
               rows={commissionsList}
               rowKey={(c) => c.id}

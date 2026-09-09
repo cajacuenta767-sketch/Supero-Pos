@@ -1,6 +1,7 @@
 import React from 'react';
 import { Search } from 'lucide-react';
 import { cn } from './cn';
+import { Kbd } from './Kbd';
 
 export interface ToolbarProps {
   /** Valor y manejador del buscador. Omitir ambos deja la fila sin buscador. */
@@ -32,12 +33,20 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       <div className="relative flex-1 min-w-[220px] max-w-md">
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none" />
         <input
-          type="text"
+          type="search"
+          /* Marca del buscador del apartado: es lo que busca F2 para llevarle el
+             foco, sin que cada vista tenga que pasar una referencia. */
+          data-view-search="true"
           value={search ?? ''}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={searchPlaceholder}
-          className="w-full h-9 pl-9 pr-3 bg-raised border border-line-strong rounded-md text-base text-ink hover:border-ink-3 focus:border-accent transition-colors duration-fast ease-ease"
+          aria-label={searchPlaceholder}
+          className="w-full h-9 pl-9 pr-14 bg-raised border border-line-strong rounded-md text-base text-ink hover:border-ink-3 focus:border-accent transition-colors duration-fast ease-ease"
         />
+        {/* Un atajo que nadie descubre no existe. */}
+        <span className="hidden sm:block absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+          <Kbd keys="F2" />
+        </span>
       </div>
     )}
 

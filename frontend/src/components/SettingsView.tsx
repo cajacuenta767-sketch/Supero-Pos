@@ -29,6 +29,9 @@ import {
   useToast,
 } from '../ui';
 import type { Column, TabItem } from '../ui';
+import { useSettingsStore, type CurrencyCode } from '../store/useSettingsStore';
+import { syncWorker } from '../services/syncWorker';
+import { localDb } from '../db/sqlite';
 
 interface Branch {
   id: string;
@@ -61,14 +64,18 @@ export const SettingsView: React.FC = () => {
       setDirty(true);
     };
 
-  // Identidad de la empresa
-  const [companyName, setCompanyName] = useState('SUPERO POS ENTERPRISE S.R.L.');
-  const [companyNit, setCompanyNit] = useState('10293847019');
-  const [companyAddress, setCompanyAddress] = useState('Av. Las Palmas #450, Santa Cruz - Bolivia');
-  const [phone, setPhone] = useState('+591 70012345');
-  const [email, setEmail] = useState('contacto@superopos.com');
-  const [currency, setCurrency] = useState('BOB');
-  const [logo, setLogo] = useState<string | null>(null);
+  /* Identidad de la empresa. Los valores salen del store, no de literales: lo
+     que se elige aquí es lo que usan el símbolo de moneda de toda la aplicación
+     y la cabecera del ticket impreso. Antes la moneda se guardaba en un estado
+     local que no consumía nadie. */
+  const settings = useSettingsStore();
+  const [companyName, setCompanyName] = useState(settings.companyName);
+  const [companyNit, setCompanyNit] = useState(settings.companyNit);
+  const [companyAddress, setCompanyAddress] = useState(settings.companyAddress);
+  const [phone, setPhone] = useState(settings.phone);
+  const [email, setEmail] = useState(settings.email);
+  const [currency, setCurrency] = useState<CurrencyCode>(settings.currency);
+  const [logo, setLogo] = useState<string | null>(settings.logo);
 
   const [branches] = useState<Branch[]>([
     {
@@ -96,7 +103,7 @@ export const SettingsView: React.FC = () => {
 
   // Periféricos
   const [printerInterface, setPrinterInterface] = useState('USB');
-  const [paperWidth, setPaperWidth] = useState('80mm');
+  const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>(settings.paperWidth);
   const [autoCutPaper, setAutoCutPaper] = useState(true);
   const [cashDrawerPulse, setCashDrawerPulse] = useState(true);
   const [scannerLatency, setScannerLatency] = useState(10);
@@ -112,8 +119,52 @@ export const SettingsView: React.FC = () => {
   const [syncIntervalSec, setSyncIntervalSec] = useState(30);
   const [pendingQueueCount] = useState(0);
 
+  const [syncing, setSyncing] = useState(false);
+
+  /**
+   * Fuerza un ciclo de sincronización.
+   *
+   * Antes esto solo mostraba «Sincronización lanzada en segundo plano»: el aviso
+   * afirmaba algo que no ocurría. Ahora dispara el worker de verdad y dice qué
+   * pasó, incluido que no había nada pendiente.
+   */
+  const runSyncNow = async () => {
+    setSyncing(true);
+    const before = localDb.getPendingCount();
+    try {
+      await syncWorker.triggerManualSync();
+      const after = localDb.getPendingCount();
+      if (before === 0) {
+        toast('No hay nada pendiente de sincronizar', 'info');
+      } else if (after === 0) {
+        toast(
+          `${before} ${before === 1 ? 'venta sincronizada' : 'ventas sincronizadas'}`,
+          'success',
+        );
+      } else if (after < before) {
+        toast(`Sincronizadas ${before - after} de ${before}; quedan ${after}`, 'warning');
+      } else {
+        toast('El servidor no responde: la cola se conserva intacta', 'warning');
+      }
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    /* Antes esto solo bajaba la bandera y mostraba un aviso: nada de lo que se
+       tocaba aquí llegaba a ninguna parte. */
+    settings.update({
+      companyName,
+      companyNit,
+      companyAddress,
+      phone,
+      email,
+      currency,
+      paperWidth,
+      logo,
+    });
     setDirty(false);
     toast('Ajustes guardados', 'success');
   };
@@ -215,7 +266,7 @@ export const SettingsView: React.FC = () => {
                   <Select
                     label="Moneda base"
                     value={currency}
-                    onChange={(e) => touch(setCurrency)(e.target.value)}
+                    onChange={(e) => touch(setCurrency)(e.target.value as CurrencyCode)}
                   >
                     <option value="BOB">BOB · Bolivianos</option>
                     <option value="USD">USD · Dólares</option>
@@ -232,6 +283,7 @@ export const SettingsView: React.FC = () => {
               padding="none"
             >
               <DataTable
+                caption="Sucursales de la empresa con su dirección y teléfono"
                 columns={branchColumns}
                 rows={branches}
                 rowKey={(b) => b.id}
@@ -261,7 +313,7 @@ export const SettingsView: React.FC = () => {
                   label="Ancho de papel"
                   hint="Determina el ancho de la plantilla de ticket."
                   value={paperWidth}
-                  onChange={(e) => touch(setPaperWidth)(e.target.value)}
+                  onChange={(e) => touch(setPaperWidth)(e.target.value as '80mm' | '58mm')}
                 >
                   <option value="80mm">80 mm · estándar de mostrador</option>
                   <option value="58mm">58 mm · portátil</option>
@@ -383,11 +435,7 @@ export const SettingsView: React.FC = () => {
               title="Cola de sincronización"
               icon={<RefreshCw className="w-4 h-4" />}
               action={
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => toast('Sincronización lanzada en segundo plano', 'info')}
-                >
+                <Button variant="secondary" size="sm" loading={syncing} onClick={runSyncNow}>
                   Sincronizar ahora
                 </Button>
               }

@@ -17,6 +17,8 @@ import {
   ToolbarSelect,
   useToast,
 } from '../ui';
+import { useViewShortcuts } from '../hooks/useViewShortcuts';
+import { useDebounced } from '../hooks/useDebounced';
 import type { Column, TabItem } from '../ui';
 
 type SubTab = 'catalog' | 'reception' | 'discrepancies';
@@ -71,6 +73,8 @@ export const TransfersView: React.FC = () => {
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
+  /* El filtro corría en cada pulsación sobre la lista entera. */
+  const searchQueryDebounced = useDebounced(searchQuery);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [sourceFilter] = useState('ALL');
 
@@ -138,8 +142,11 @@ export const TransfersView: React.FC = () => {
 
   const toast = useToast();
 
+  /* F2 lleva el foco al buscador. */
+  useViewShortcuts({});
+
   const filteredTransfers = transfers.filter((t) => {
-    const q = searchQuery.toLowerCase();
+    const q = searchQueryDebounced.toLowerCase();
     const matchesSearch =
       t.id.toLowerCase().includes(q) ||
       t.source_branch.toLowerCase().includes(q) ||
@@ -194,6 +201,7 @@ export const TransfersView: React.FC = () => {
     },
     {
       key: 'status',
+      sortValue: (t) => t.status,
       header: 'Estado',
       card: 'meta',
       width: '180px',
@@ -278,8 +286,10 @@ export const TransfersView: React.FC = () => {
         />
 
         <DataTable
+          caption="Guías de traslado entre almacenes, con origen y destino"
           columns={columns}
           rows={filteredTransfers}
+          pageSize={25}
           rowKey={(t) => t.id}
           empty={
             <EmptyState
