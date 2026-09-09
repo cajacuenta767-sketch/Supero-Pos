@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingCart, Plus, Truck, Cpu, ArrowDownRight, Eye } from 'lucide-react';
+import { ShoppingCart, Plus, Truck, ArrowDownRight, Eye, X } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -11,12 +11,14 @@ import {
   Modal,
   Money,
   PageHeader,
+  ScanField,
   Tabs,
   Toolbar,
   ToolbarSelect,
   useToast,
 } from '../ui';
 import type { Column, TabItem } from '../ui';
+import { imeiError, isValidImei } from '../utils/imei';
 
 type SubTab = 'orders' | 'receivings' | 'returns';
 
@@ -80,6 +82,7 @@ export const PurchasesView: React.FC = () => {
   // Receiving IMEI Scanning State
   const [scannedImeis, setScannedImeis] = useState<string[]>([]);
   const [imeiInput, setImeiInput] = useState('');
+  const [imeiAddError, setImeiAddError] = useState<string | undefined>(undefined);
 
   // Mock Purchase Orders List
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([
@@ -133,7 +136,29 @@ export const PurchasesView: React.FC = () => {
           received_qty: 5,
           cost_price: 1400.0,
           unit_type: 'SERIALIZED',
-          serials: ['IMEI-358492019482710', 'IMEI-358492019482711'],
+          serials: ['358492019482717', '358492019482725'],
+        },
+      ],
+    },
+    {
+      id: 'PO-2003',
+      date: '14/08/2026',
+      supplier_name: 'Importadora Electrónica TechBol',
+      supplier_tax_id: '803928102',
+      branch: 'Almacén Central',
+      items_count: 3,
+      total: 4350.0,
+      status: 'PENDING',
+      payment_terms: '15 días',
+      items: [
+        {
+          id: 4,
+          sku: 'SKU-1005',
+          name: 'Smartphone Xiaomi Redmi Note 13 256GB',
+          ordered_qty: 3,
+          received_qty: 0,
+          cost_price: 1450.0,
+          unit_type: 'SERIALIZED',
         },
       ],
     },
@@ -150,6 +175,35 @@ export const PurchasesView: React.FC = () => {
     const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const serializedQty = selectedPO
+    ? selectedPO.items
+        .filter((i) => i.unit_type === 'SERIALIZED')
+        .reduce((sum, i) => sum + i.ordered_qty, 0)
+    : 0;
+
+  const cleanImei = (raw: string) => raw.trim().replace(/^IMEI[-\s]?/i, '');
+
+  /* Mientras se teclea solo se avisa a partir del dígito 15: marcar en rojo un
+     IMEI a medio escribir es ruido. Al intentar añadirlo sí se valida entero. */
+  const typedImei = cleanImei(imeiInput);
+  const imeiInputError =
+    imeiAddError || (typedImei.length >= 15 ? imeiError(typedImei) : undefined);
+
+  /** Añade un IMEI a la lista. Ignora el repetido en silencio: la cámara lee el
+   *  mismo código varias veces por segundo y el operario no debería notarlo. */
+  const addImei = (raw: string) => {
+    const serial = cleanImei(raw);
+    if (serial === '') return;
+    const problem = imeiError(serial) ?? (serial.length === 15 ? undefined : 'IMEI incompleto.');
+    if (problem) {
+      setImeiAddError(problem);
+      return;
+    }
+    setImeiAddError(undefined);
+    setScannedImeis((prev) => (prev.includes(serial) ? prev : [...prev, serial]));
+    setImeiInput('');
+  };
 
   const receiveOrder = (po: PurchaseOrder) => {
     setPurchaseOrders((prev) =>
@@ -380,7 +434,13 @@ export const PurchasesView: React.FC = () => {
             >
               Cancelar
             </Button>
-            <Button variant="success" onClick={() => selectedPO && receiveOrder(selectedPO)}>
+            <Button
+              variant="success"
+              /* Un equipo serializado sin IMEI entra al inventario sin
+                 trazabilidad, que es justo lo que la serialización evita. */
+              disabled={serializedQty > 0 && scannedImeis.length !== serializedQty}
+              onClick={() => selectedPO && receiveOrder(selectedPO)}
+            >
               Confirmar recepción
             </Button>
           </>
@@ -412,30 +472,61 @@ export const PurchasesView: React.FC = () => {
               </div>
             </div>
 
-            {selectedPO.items.some((i) => i.unit_type === 'SERIALIZED') && (
-              <div className="space-y-2">
-                <Input
-                  label="Escanear IMEI de los equipos"
-                  leading={<Cpu className="w-4 h-4" />}
+            {serializedQty > 0 && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-micro uppercase text-ink-3">IMEI de los equipos</p>
+                  <Badge tone={scannedImeis.length === serializedQty ? 'success' : 'warning'}>
+                    {scannedImeis.length} de {serializedQty}
+                  </Badge>
+                </div>
+
+                <ScanField
+                  label="Escanear con pistola, cámara o teclear"
+                  /* La cámara sigue abierta entre lecturas: se reciben lotes de
+                     diez o veinte equipos, y reabrirla en cada uno haría el
+                     escaneo más lento que teclear. */
+                  closeOnScan={false}
                   value={imeiInput}
-                  onChange={(e) => setImeiInput(e.target.value)}
+                  onChange={(value) => {
+                    setImeiInput(value);
+                    setImeiAddError(undefined);
+                  }}
+                  onScan={addImei}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && imeiInput.trim()) {
                       e.preventDefault();
-                      setScannedImeis((p) => [...p, imeiInput.trim()]);
-                      setImeiInput('');
+                      addImei(imeiInput);
                     }
                   }}
-                  placeholder="Escanee y pulse Enter"
+                  error={imeiInputError}
+                  hint="Pulse Enter para añadir. Un IMEI repetido no se suma dos veces."
+                  placeholder="354892019482910"
                 />
+
                 {scannedImeis.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
-                    {scannedImeis.map((s) => (
-                      <Badge key={s} tone="warning">
-                        {s}
-                      </Badge>
+                    {scannedImeis.map((serial) => (
+                      <button
+                        key={serial}
+                        type="button"
+                        onClick={() => setScannedImeis((p) => p.filter((x) => x !== serial))}
+                        aria-label={`Quitar el IMEI ${serial}`}
+                        className="group"
+                      >
+                        <Badge tone={isValidImei(serial) ? 'success' : 'warning'}>
+                          <span className="font-mono">{serial}</span>
+                          <X className="w-3 h-3 opacity-50 group-hover:opacity-100" aria-hidden />
+                        </Badge>
+                      </button>
                     ))}
                   </div>
+                )}
+
+                {scannedImeis.length > serializedQty && (
+                  <p className="text-body text-danger">
+                    Hay más IMEI escaneados que equipos pedidos en la orden.
+                  </p>
                 )}
               </div>
             )}

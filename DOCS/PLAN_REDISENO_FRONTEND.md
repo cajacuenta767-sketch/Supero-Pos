@@ -285,3 +285,72 @@ frontend/src/
 ├── index.css                   ← importa tokens, base, fuentes
 └── ../tailwind.config.js       ← escala + tokens semánticos
 ```
+
+---
+
+## 11. Entrega 8 — Evidencia fotográfica, escaneo y validación de códigos
+
+Las entregas 1–7 dejaron los quince apartados migrados y responsive. Esta cierra otra cosa: los
+**campos latentes**. `image_url` en productos y `receipt_attached` en gastos existían en el modelo y
+no guardaban nada — un booleano que decía «hay comprobante» sin comprobante detrás. El patrón se
+repetía en el arqueo, en las mermas y en la recepción de mercadería.
+
+### Piezas nuevas en `src/ui/`
+
+| Pieza | Qué resuelve |
+|---|---|
+| `PhotoThumb` | Miniatura ampliable de una foto justificante. En una celda de tabla una foto es ilegible: sirve para saber que existe; al pulsarla se abre a tamaño completo, que es cuando se audita |
+| `SignaturePad` | Lienzo de firma por eventos de puntero — dedo, ratón y lápiz sin ramas por dispositivo. Dibuja a la densidad real de la pantalla y exporta PNG transparente, para que la tinta no dependa del tema en que se firmó |
+| `ScanField` | Campo de texto con visor de cámara. El botón solo aparece si el navegador admite `BarcodeDetector`: donde no funciona, no hay botón muerto |
+
+Y `src/utils/imei.ts`, con el dígito de control por Luhn.
+
+### Qué cambia en cada apartado
+
+| Apartado | Antes | Ahora |
+|---|---|---|
+| **Productos** | «Auto» generaba `'777' + 9 dígitos` = **12 dígitos**, un EAN-13 que ningún lector acepta | 12 dígitos de datos + su dígito de control, con validación en vivo y previsualización del código real bajo el campo |
+| **Gastos** | `receipt_attached: !!refNumber` | Foto del comprobante, reducida en el navegador antes de guardar, y miniatura ampliable en la columna Comprobante |
+| **Turno de caja** | Arqueo ciego que no se comparaba con nada | Dos pasos: se cuenta y se fotografía el efectivo; solo entonces se revela el desglose esperado y el descuadre. La cifra contada queda bloqueada al revelar — si se pudiera retocar, dejaría de ser ciego |
+| **Ajuste de stock** | Merma justificada solo con texto | Foto del producto o del estante, visible en el detalle del ajuste |
+| **Compras** | Un campo de texto suelto para los IMEI | Escaneo por lote con cámara o pistola, contador «n de N», IMEI validado por Luhn, chips retirables y recepción bloqueada hasta cuadrar |
+| **Cobro** | — | Conforme de entrega firmado, obligatorio en ventas a empresa desde 500 Bs. Se guarda en `block_a.customer_signature` |
+| **IMEI (POS)** | Longitud mínima de 5 caracteres | Validación por Luhn cuando son 15 dígitos; otras series de fábrica se aceptan tal cual, porque no todo producto serializado es un teléfono |
+
+### Tres fallos reales que salieron al probarlo
+
+No estaban en la lista: aparecieron al usar la aplicación, y ninguno era visible con `grep`.
+
+1. **`Modal` perdía el foco en cada tecla.** Su efecto de foco atrapado dependía de `onClose`, que casi
+   siempre llega como función anónima y cambia de identidad en cada render del padre. Teclear una
+   letra desmontaba el efecto: devolvía el foco al elemento que abrió el modal y luego lo llevaba al
+   botón «Cerrar». En la recepción de compras, la segunda tecla ya no llegaba al campo y el `Enter`
+   activaba el botón de la fila de debajo. Afectaba a **todos** los formularios en modal.
+   Ahora `onClose` pasa por una referencia y el efecto depende solo de si el modal está abierto.
+2. **El foco inicial iba al botón «Cerrar».** Casi todos estos modales son formularios; aterrizar en
+   «Cerrar» obliga a tabular antes de escribir, y anulaba los `autoFocus` de los campos. Ahora va al
+   primer campo, y al primer elemento solo si no hay ninguno.
+3. **Clave de React duplicada en el carrito.** Un producto serializado genera una línea por número de
+   serie, todas con el mismo `id`, y la lista usaba `key={item.id}`. La identidad de la línea es el
+   par id + serie, igual que en el store.
+
+Queda anotado, sin tocar: `updateQuantity`, `updateItemSerial` y `removeItem` del carrito operan solo
+por `id`, así que con dos líneas del mismo producto serializado actúan sobre las dos a la vez. Es
+lógica de store y está fuera del alcance de este plan.
+
+### Un desbordamiento que solo se vio mirando
+
+Al añadir la miniatura, Gastos empezó a desbordar horizontalmente **la página entera** entre 768 y
+1280px. La tabla estaba bien contenida —su envoltorio recortaba— y ningún elemento sin recortar
+sobresalía. El culpable era un `<span class="sr-only">` dentro de la miniatura vacía: `sr-only` es
+`position: absolute`, y dentro de una tabla más ancha que su contenedor se posiciona contra el bloque
+raíz y alarga el scroll del documento. El rótulo pasó a `aria-label`.
+
+Es el mismo tipo de fallo que el responsive del principio: invisible a `grep`, invisible a `tsc`, y
+solo detectable ejecutando y midiendo.
+
+### Verificación
+
+`tsc --noEmit`, `lint`, `format:check` y `build` limpios · 112 comprobaciones (14 apartados × 4
+anchos × 2 temas) sin desbordamiento ni errores de consola · flujos nuevos recorridos uno a uno en
+1440px y 390px · los dígitos de control de EAN-13 e IMEI contrastados con códigos publicados.

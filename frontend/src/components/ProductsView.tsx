@@ -16,6 +16,8 @@ import {
 import {
   Badge,
   Barcode,
+  ean13CheckDigit,
+  isValidEan13,
   Button,
   Card,
   ImageUpload,
@@ -225,10 +227,23 @@ export const ProductsView: React.FC = () => {
     setFormData((prev) => ({ ...prev, sku: randomSKU }));
   };
 
+  // '777' es el prefijo GS1 de Bolivia. Los 9 dígitos siguientes completan los
+  // 12 de datos; el decimotercero es el de control y lo calcula la primitiva,
+  // no nosotros: un EAN-13 sin él no lo lee ningún escáner.
   const generateEAN13 = () => {
-    let ean = '777' + Math.floor(100000000 + Math.random() * 900000000).toString();
-    setFormData((prev) => ({ ...prev, barcode: ean }));
+    const base = '777' + Math.floor(100000000 + Math.random() * 900000000).toString();
+    setFormData((prev) => ({ ...prev, barcode: base + ean13CheckDigit(base) }));
   };
+
+  const barcodeError = (() => {
+    const code = formData.barcode.trim();
+    if (code === '') return undefined;
+    if (!/^\d+$/.test(code)) return 'Solo dígitos.';
+    if (code.length !== 13) return `Un EAN-13 tiene 13 dígitos; llevas ${code.length}.`;
+    if (!isValidEan13(code))
+      return `Dígito de control incorrecto: debería terminar en ${ean13CheckDigit(code)}.`;
+    return undefined;
+  })();
 
   // Real-time Profit Margin Calculation
   const profitMargin =
@@ -816,14 +831,33 @@ export const ProductsView: React.FC = () => {
                 <Input
                   label="Código de barras EAN-13"
                   value={formData.barcode}
-                  onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      barcode: e.target.value.replace(/\D/g, '').slice(0, 13),
+                    })
+                  }
                   placeholder="7771234567890"
+                  error={barcodeError}
+                  /* Ambos campos llevan siempre línea de mensaje: la fila se alinea
+                     por abajo, y un mensaje que aparece y desaparece movía el botón
+                     «Auto» respecto al de al lado. */
+                  hint={
+                    isValidEan13(formData.barcode)
+                      ? 'Código válido, listo para imprimir.'
+                      : '13 dígitos. «Auto» genera uno con su dígito de control.'
+                  }
                   className="flex-1 [&_input]:font-mono"
                 />
                 <Button type="button" variant="secondary" onClick={generateEAN13}>
                   Auto
                 </Button>
               </div>
+              {isValidEan13(formData.barcode) && (
+                <div className="lg:col-span-2 flex justify-center py-2 bg-surface border border-line rounded-md">
+                  <Barcode value={formData.barcode} height={36} moduleWidth={2} />
+                </div>
+              )}
               <Input
                 label="Nombre del producto"
                 required

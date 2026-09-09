@@ -386,7 +386,10 @@ export const PosView: React.FC = () => {
               <div className="divide-y divide-line">
                 {items.map((item) => (
                   <div
-                    key={item.id}
+                    /* Un producto serializado genera una línea por número de
+                       serie, todas con el mismo `id`: la identidad de la línea
+                       es el par id + serie, igual que en el store. */
+                    key={`${item.id}-${item.serial_number ?? ''}`}
                     className={cn(
                       'min-h-16 px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 bg-raised',
                       flashId === item.id && 'animate-scan-flash',

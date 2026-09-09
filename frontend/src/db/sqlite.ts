@@ -20,6 +20,14 @@ export interface BlockA {
   shift_id: string;
   cashier_id: string;
   customer_id: string | null;
+  /**
+   * Conforme de entrega firmado por el cliente, PNG en data: URI.
+   *
+   * Solo se pide en ventas a cuenta de un cliente identificado: es la prueba de
+   * que la mercancía salió aceptada. Opcional porque una venta al público
+   * general nunca la lleva.
+   */
+  customer_signature?: string;
 }
 
 export interface BlockB {
@@ -243,6 +251,49 @@ class LocalDatabaseEngine {
     });
 
     return transaction(saleData);
+  }
+
+  /**
+   * Efectivo que debería haber en la gaveta por las ventas del turno.
+   *
+   * Es lo que convierte el arqueo ciego en un arqueo: sin esta cifra el conteo
+   * físico no se compara con nada. Solo lee.
+   *
+   * Advertencia sobre el modo SQLite: la tabla `sales` guarda un único
+   * `payment_method` por venta —el primero del desglose—, así que una venta
+   * mixta se atribuye entera a ese método. En el modo navegador, donde el
+   * desglose completo sigue en la cola, la cifra es exacta. Corregirlo del todo
+   * exige una columna nueva en `sales`, que es esquema y no presentación.
+   */
+  public getCashSalesTotal(sinceIso: string): number {
+    if (!this.db) {
+      return this.mockSyncQueue.reduce((total, item) => {
+        if (item.payload_type !== 'SALE_TRANSACTION') return total;
+        let payload: FourBlockSalePayload;
+        try {
+          payload = JSON.parse(item.payload_data) as FourBlockSalePayload;
+        } catch {
+          return total;
+        }
+        if (payload.timestamp < sinceIso) return total;
+        const cash = (payload.payment_breakdown ?? []).reduce(
+          (sum, line) =>
+            line.payment_method === 'CASH' ? sum + line.amount_received - line.change_given : sum,
+          0,
+        );
+        return total + cash;
+      }, 0);
+    }
+
+    const row = this.db
+      .prepare(
+        `SELECT COALESCE(SUM(grand_total), 0) AS total
+         FROM sales
+         WHERE payment_method = 'CASH' AND created_at >= ?`,
+      )
+      .get(sinceIso) as { total: number } | undefined;
+
+    return row?.total ?? 0;
   }
 
   // Component 1 & 4: Strict FIFO Sync Queue Extractor (oldest items first)

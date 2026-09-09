@@ -14,7 +14,10 @@ export { Card } from './Card';
 
 // Formulario
 export { Input, Select, Textarea } from './Field';
+export type { InputProps } from './Field';
+export { ScanField } from './ScanField';
 export { ImageUpload } from './ImageUpload';
+export { SignaturePad } from './SignaturePad';
 export { Modal } from './Modal';
 
 // Datos
@@ -26,6 +29,7 @@ export type { DescriptionItem } from './DescriptionList';
 export { StatTile } from './StatTile';
 export { Meter } from './Meter';
 export { Money } from './Money';
+export { PhotoThumb } from './PhotoThumb';
 
 // Señales
 export { Badge } from './Badge';
