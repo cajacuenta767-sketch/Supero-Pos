@@ -7,7 +7,6 @@ import {
   Percent,
   Edit3,
   Key,
-  CheckCircle2,
   Eye,
   EyeOff,
   Save,
@@ -34,11 +33,13 @@ import {
   Tabs,
   Toolbar,
   ToolbarSelect,
-  cn,
+  useToast,
 } from '../ui';
 import { formatDateTime } from '../utils/dates';
 import { useViewShortcuts } from '../hooks/useViewShortcuts';
 import { useDebounced } from '../hooks/useDebounced';
+import { useAuthStore, DEMO_BRANCHES } from '../store/useAuthStore';
+import { DEMO_ACCOUNTS } from '../config/demoUsers';
 import type { Column, TabItem } from '../ui';
 
 type SubTab = 'users' | 'rbac' | 'commissions';
@@ -142,60 +143,23 @@ export interface BranchOption {
   name: string;
 }
 
-const INITIAL_MOCK_USERS: UserItem[] = [
-  {
-    id: 'usr-1',
-    name: 'Juan Pérez',
-    username: 'jperez',
-    email: 'juan.perez@superopos.com',
-    phone: '+591 71234567',
-    role: 'CAJERO',
-    roleId: 'role-cajero',
-    branch: 'Sucursal Central',
-    branchId: 'branch-central',
-    is_active: true,
-    last_login: '14/08/2026 08:30',
-  },
-  {
-    id: 'usr-2',
-    name: 'María Gómez',
-    username: 'mgomez',
-    email: 'maria.gomez@superopos.com',
-    phone: '+591 72345678',
-    role: 'ADMIN',
-    roleId: 'role-admin',
-    branch: 'Sucursal Central',
-    branchId: 'branch-central',
-    is_active: true,
-    last_login: '14/08/2026 09:12',
-  },
-  {
-    id: 'usr-3',
-    name: 'Carlos Mendoza',
-    username: 'cmendoza',
-    email: 'carlos.mendoza@superopos.com',
-    phone: '+591 73456789',
-    role: 'ALMACENERO',
-    roleId: 'role-almacen',
-    branch: 'Almacén Central',
-    branchId: 'branch-central',
-    is_active: true,
-    last_login: '13/08/2026 17:45',
-  },
-  {
-    id: 'usr-4',
-    name: 'Roberto Silva',
-    username: 'rsilva',
-    email: 'roberto.silva@superopos.com',
-    phone: '+591 74567890',
-    role: 'SUPERVISOR',
-    roleId: 'role-supervisor',
-    branch: 'Sucursal Norte',
-    branchId: 'branch-norte',
-    is_active: false,
-    last_login: '10/08/2026 11:20',
-  },
-];
+/* Las cuentas del sistema son las que de verdad pueden entrar. Antes esta lista
+   nombraba a cuatro empleados —Juan Pérez, María Gómez, Carlos Mendoza, Roberto
+   Silva— que no existían en ningún sitio más: ninguno podía iniciar sesión, y
+   quien miraba la pantalla no encontraba en ella su propia cuenta. */
+const INITIAL_MOCK_USERS: UserItem[] = DEMO_ACCOUNTS.map((account) => ({
+  id: account.id,
+  name: account.name,
+  username: account.user,
+  email: `${account.user}@superopos.com`,
+  phone: '',
+  role: account.role,
+  roleId: `role-${account.role.toLowerCase()}`,
+  branch: DEMO_BRANCHES[0].name,
+  branchId: DEMO_BRANCHES[0].id,
+  is_active: true,
+  last_login: '—',
+}));
 
 export const UsersView: React.FC = () => {
   /* F2 lleva el foco al buscador del apartado. */
@@ -221,11 +185,6 @@ export const UsersView: React.FC = () => {
     { id: 'Sucursal Sur', name: 'Sucursal Sur' },
   ]);
   const [loading, setLoading] = useState(true);
-  const [toastMessage, setToastMessage] = useState<{
-    type: 'success' | 'error' | 'info';
-    text: string;
-  } | null>(null);
-
   // Modal State for User Create / Edit
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
@@ -291,12 +250,14 @@ export const UsersView: React.FC = () => {
     { id: '2', name: 'María Gómez', type: 'NET', rate: 5.0, monthlyGoal: 8000, currentSales: 6200 },
   ]);
 
-  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToastMessage({ text, type });
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4000);
-  };
+  const sessionUser = useAuthStore((state) => state.user);
+
+  /* Los avisos salen del mismo sitio que en el resto de la aplicación. Esta
+     vista llevaba su propia caja de avisos, con sus tonos y su temporizador
+     aparte: una cuarta implementación del mismo aviso en el proyecto. */
+  const toast = useToast();
+  const showToast = (text: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') =>
+    toast(text, type === 'error' ? 'danger' : type);
 
   // API Data Fetching
   const fetchUsers = useCallback(async () => {
@@ -377,6 +338,24 @@ export const UsersView: React.FC = () => {
   const handleToggleUserStatus = async (user: UserItem) => {
     const targetState = !user.is_active;
 
+    /* Nadie se da de baja a sí mismo: quien lo hiciera perdería el acceso en el
+       acto y, si es el único administrador, nadie podría devolvérselo. */
+    if (!targetState && String(user.id) === String(sessionUser?.id)) {
+      showToast('No puede darse de baja a sí mismo mientras tiene la sesión abierta.', 'warning');
+      return;
+    }
+
+    /* Ni se deja el sistema sin administrador: sin ninguno activo no hay quien
+       vuelva a dar de alta a nadie. */
+    const activeAdmins = usersList.filter((u) => u.is_active && u.role === 'ADMIN');
+    if (!targetState && user.role === 'ADMIN' && activeAdmins.length <= 1) {
+      showToast(
+        'Es el último administrador activo: el sistema quedaría sin quien lo gestione.',
+        'warning',
+      );
+      return;
+    }
+
     try {
       const response = await fetch(`http://localhost:3000/api/v1/users/${user.id}/toggle-active`, {
         method: 'PATCH',
@@ -387,13 +366,21 @@ export const UsersView: React.FC = () => {
         body: JSON.stringify({ isActive: targetState }),
       });
 
-      if (response.ok) {
-        const resData = await response.json();
+      if (!response.ok) {
+        /* Antes un 403 o un 500 no impedían nada: el interruptor se movía igual
+           y quien lo pulsaba se quedaba creyendo que el cambio había entrado. */
         showToast(
-          resData.message ||
-            (targetState ? 'Usuario reactivado correctamente' : 'Baja lógica aplicada'),
+          `El servidor rechazó el cambio (${response.status}). El usuario sigue como estaba.`,
+          'error',
         );
+        return;
       }
+
+      const resData = await response.json();
+      showToast(
+        resData.message ||
+          (targetState ? 'Usuario reactivado correctamente' : 'Baja lógica aplicada'),
+      );
     } catch {
       // Offline mode fallback
       showToast(
@@ -1057,26 +1044,6 @@ export const UsersView: React.FC = () => {
       </Modal>
 
       {/* Aviso temporal */}
-      {toastMessage && (
-        <div
-          role="status"
-          className={cn(
-            'fixed bottom-5 right-5 z-[60] flex items-center gap-2.5 px-4 h-11 rounded-md border shadow-e2 text-base font-semibold animate-rise-in',
-            toastMessage.type === 'success'
-              ? 'bg-ok-soft border-ok/30 text-ok-ink'
-              : toastMessage.type === 'error'
-                ? 'bg-danger-soft border-danger/30 text-danger-ink'
-                : 'bg-accent-soft border-accent/30 text-accent-ink',
-          )}
-        >
-          {toastMessage.type === 'success' ? (
-            <CheckCircle2 className="w-4 h-4" />
-          ) : (
-            <AlertCircle className="w-4 h-4" />
-          )}
-          {toastMessage.text}
-        </div>
-      )}
     </div>
   );
 };
