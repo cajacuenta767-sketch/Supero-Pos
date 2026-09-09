@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { cn } from './cn';
 
 export interface SwitchProps {
@@ -20,12 +20,20 @@ export const Switch: React.FC<SwitchProps> = ({
   disabled = false,
   className,
 }) => {
+  /* Un `<label>` no nombra a un `<button>`: la asociación implícita solo vale
+     para controles de formulario. Con el rótulo visible, el conmutador se
+     quedaba literalmente sin nombre accesible —ni `aria-label` ni nada— y para
+     un lector de pantalla era «botón, activado» y ya. Se apunta al texto
+     visible, que además es lo que se dice en voz alta si alguien lo dicta. */
+  const labelId = useId();
+
   const control = (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       aria-label={showLabel ? undefined : label}
+      aria-labelledby={showLabel ? labelId : undefined}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
@@ -48,9 +56,15 @@ export const Switch: React.FC<SwitchProps> = ({
   if (!showLabel) return <span className={className}>{control}</span>;
 
   return (
-    <label className={cn('inline-flex items-center gap-2.5 cursor-pointer', className)}>
+    <span className={cn('inline-flex items-center gap-2.5', className)}>
       {control}
-      <span className="text-base text-ink">{label}</span>
-    </label>
+      <span
+        id={labelId}
+        onClick={() => !disabled && onChange(!checked)}
+        className={cn('text-base text-ink', disabled ? 'opacity-40' : 'cursor-pointer')}
+      >
+        {label}
+      </span>
+    </span>
   );
 };

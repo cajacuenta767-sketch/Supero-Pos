@@ -102,21 +102,29 @@ export const SettingsView: React.FC = () => {
   ]);
 
   // Periféricos
-  const [printerInterface, setPrinterInterface] = useState('USB');
+  const [printerInterface, setPrinterInterface] = useState(settings.printerInterface);
   const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>(settings.paperWidth);
-  const [autoCutPaper, setAutoCutPaper] = useState(true);
-  const [cashDrawerPulse, setCashDrawerPulse] = useState(true);
-  const [scannerLatency, setScannerLatency] = useState(10);
-  const [scaleProtocol, setScaleProtocol] = useState('CAS_PD_II');
+  const [autoCutPaper, setAutoCutPaper] = useState(settings.autoCutPaper);
+  const [cashDrawerPulse, setCashDrawerPulse] = useState(settings.cashDrawerPulse);
+  const [scannerLatency, setScannerLatency] = useState(settings.scannerLatencyMs);
+  const [scaleProtocol, setScaleProtocol] = useState(settings.scaleProtocol);
 
   // Seguridad
-  const [inactivityTimeoutMins, setInactivityTimeoutMins] = useState(15);
-  const [requireSupervisorPinForVoids, setRequireSupervisorPinForVoids] = useState(true);
-  const [requireSupervisorPinForDiscounts, setRequireSupervisorPinForDiscounts] = useState(true);
-  const [criticalStockThreshold, setCriticalStockThreshold] = useState(5);
+  const [inactivityTimeoutMins, setInactivityTimeoutMins] = useState(
+    settings.inactivityTimeoutMins,
+  );
+  const [requireSupervisorPinForVoids, setRequireSupervisorPinForVoids] = useState(
+    settings.requirePinForVoids,
+  );
+  const [requireSupervisorPinForDiscounts, setRequireSupervisorPinForDiscounts] = useState(
+    settings.requirePinForDiscounts,
+  );
+  const [criticalStockThreshold, setCriticalStockThreshold] = useState(
+    settings.criticalStockThreshold,
+  );
 
   // Sincronización
-  const [syncIntervalSec, setSyncIntervalSec] = useState(30);
+  const [syncIntervalSec, setSyncIntervalSec] = useState(settings.syncIntervalSec);
   const [pendingQueueCount] = useState(0);
 
   const [syncing, setSyncing] = useState(false);
@@ -164,6 +172,18 @@ export const SettingsView: React.FC = () => {
       currency,
       paperWidth,
       logo,
+      /* Hardware, seguridad y sincronización: se editaban y no llegaban a
+         ninguna parte. */
+      printerInterface,
+      autoCutPaper,
+      cashDrawerPulse,
+      scannerLatencyMs: scannerLatency,
+      scaleProtocol,
+      inactivityTimeoutMins,
+      requirePinForVoids: requireSupervisorPinForVoids,
+      requirePinForDiscounts: requireSupervisorPinForDiscounts,
+      criticalStockThreshold,
+      syncIntervalSec,
     });
     setDirty(false);
     toast('Ajustes guardados', 'success');

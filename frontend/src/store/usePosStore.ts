@@ -4,6 +4,7 @@ import { useCartStore } from './useCartStore';
 import { readPersisted, writePersisted } from './persist';
 import { localId } from '../utils/ids';
 import { useAuthStore } from './useAuthStore';
+import { useSettingsStore } from './useSettingsStore';
 
 const SHIFT_KEY = 'turno_caja';
 
@@ -139,7 +140,10 @@ export const usePosStore = create<PosState>((set) => ({
     /* Los descuentos por encima del 10 % exigen autorización. El PIN ya no vive
        en el store —era la cadena '1234' en el bundle—: la comprobación está en
        utils/supervisorPin, que es el único punto por el que pasa. */
-    if (discount > 10) {
+    /* La exigencia del PIN se configura en Ajustes · Seguridad. El interruptor
+       existía y no lo leía nadie: el PIN se pedía siempre, estuviera apagado o
+       encendido. */
+    if (discount > 10 && useSettingsStore.getState().requirePinForDiscounts) {
       const check = verifySupervisorPin(pinInput ?? '');
       if (!check.authorized) {
         return { success: false, message: check.message };

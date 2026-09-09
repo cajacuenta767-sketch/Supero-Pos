@@ -52,6 +52,7 @@ const HrAttendanceView = lazy(() =>
 );
 
 import { useOfflineSync } from './hooks/useOfflineSync';
+import { useInactivityLogout } from './hooks/useInactivityLogout';
 import { useAuthStore } from './store/useAuthStore';
 import { canAccessView, VIEW_PERMISSIONS } from './utils/permissions';
 import { EmptyState, ErrorBoundary, Skeleton, ToastProvider } from './ui';
@@ -100,6 +101,9 @@ export const App: React.FC = () => {
 
   // Hook de sincronización offline (listeners pasivos + worker de 30 s)
   useOfflineSync();
+  /* Sin esto, el campo de inactividad de Ajustes era decorativo y la terminal
+     se quedaba abierta toda la noche en el mostrador. */
+  useInactivityLogout();
 
   /* La pestaña efectiva se deriva en el render, no con un efecto que provocaría
      un render en cascada. Antes solo se corregía al almacenero y solo en tres

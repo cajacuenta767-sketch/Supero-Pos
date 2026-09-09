@@ -42,6 +42,7 @@ import { buildCsv, downloadCsv } from '../utils/exportCsv';
 import { useCatalogStore } from '../store/useCatalogStore';
 import { verifySupervisorPin } from '../utils/supervisorPin';
 import { useSalesStore } from '../store/useSalesStore';
+import { useSettingsStore } from '../store/useSettingsStore';
 import type { SaleTicket } from '../store/useSalesStore';
 
 const METHOD_LABEL: Record<SaleTicket['payment_method'], string> = {
@@ -69,6 +70,8 @@ export const SalesHistoryView: React.FC = () => {
   const { user } = useAuthStore();
   const userRole = user?.role || 'ADMIN';
   const canVoidSaleDirect = hasPermission(userRole, 'can_void_sale');
+  /* Exigir PIN para anular se configura en Ajustes · Seguridad. */
+  const requirePinForVoids = useSettingsStore((state) => state.requirePinForVoids);
 
   const [searchQuery, setSearchQuery] = useState('');
   /* El filtro corría en cada pulsación sobre la lista entera. */
@@ -105,7 +108,7 @@ export const SalesHistoryView: React.FC = () => {
        Antes esta vista comparaba con '1234' escrito aquí mismo y el mensaje de
        error anunciaba el PIN. La comprobación pasa por el único punto que la
        tiene, igual que los descuentos del punto de venta. */
-    if (!canVoidSaleDirect) {
+    if (!canVoidSaleDirect && requirePinForVoids) {
       const check = verifySupervisorPin(supervisorPin);
       if (!check.authorized) {
         setVoidError(check.message);
@@ -539,7 +542,7 @@ export const SalesHistoryView: React.FC = () => {
             error={voidError && !voidReason ? voidError : undefined}
           />
 
-          {!canVoidSaleDirect && (
+          {!canVoidSaleDirect && requirePinForVoids && (
             <Input
               label="PIN de supervisor"
               type="password"

@@ -50,6 +50,22 @@ interface CompanySettings {
   ticketShowCustomer: boolean;
   ticketShowSerials: boolean;
   ticketShowQr: boolean;
+
+  /* Hardware, seguridad y sincronización. Doce campos que se editaban, se
+     guardaban con un «Ajustes guardados» y volvían al valor de fábrica en la
+     siguiente recarga porque no se escribían en ninguna parte. */
+  printerInterface: string;
+  autoCutPaper: boolean;
+  cashDrawerPulse: boolean;
+  scannerLatencyMs: number;
+  scaleProtocol: string;
+  /** Minutos de inactividad antes de cerrar la sesión. 0 lo desactiva. */
+  inactivityTimeoutMins: number;
+  requirePinForVoids: boolean;
+  requirePinForDiscounts: boolean;
+  criticalStockThreshold: number;
+  /** Segundos entre intentos de subir la cola pendiente. */
+  syncIntervalSec: number;
 }
 
 const DEFAULTS: CompanySettings = {
@@ -67,6 +83,16 @@ const DEFAULTS: CompanySettings = {
   ticketShowCustomer: true,
   ticketShowSerials: true,
   ticketShowQr: true,
+  printerInterface: 'USB',
+  autoCutPaper: true,
+  cashDrawerPulse: true,
+  scannerLatencyMs: 10,
+  scaleProtocol: 'CAS_PD_II',
+  inactivityTimeoutMins: 15,
+  requirePinForVoids: true,
+  requirePinForDiscounts: true,
+  criticalStockThreshold: 5,
+  syncIntervalSec: 30,
 };
 
 interface SettingsState extends CompanySettings {
@@ -98,6 +124,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         ticketShowCustomer: next.ticketShowCustomer,
         ticketShowSerials: next.ticketShowSerials,
         ticketShowQr: next.ticketShowQr,
+        printerInterface: next.printerInterface,
+        autoCutPaper: next.autoCutPaper,
+        cashDrawerPulse: next.cashDrawerPulse,
+        scannerLatencyMs: next.scannerLatencyMs,
+        scaleProtocol: next.scaleProtocol,
+        inactivityTimeoutMins: next.inactivityTimeoutMins,
+        requirePinForVoids: next.requirePinForVoids,
+        requirePinForDiscounts: next.requirePinForDiscounts,
+        criticalStockThreshold: next.criticalStockThreshold,
+        syncIntervalSec: next.syncIntervalSec,
       });
       return next;
     }),
