@@ -37,6 +37,19 @@ interface CompanySettings {
   /** Ancho del papel de la impresora térmica. */
   paperWidth: '80mm' | '58mm';
   logo: string | null;
+
+  /* Plantilla del ticket impreso. Vivía dentro de la pantalla de
+     Notificaciones, en un estado que no se guardaba en ningún sitio: se
+     configuraba el pie de página, se pulsaba «Guardar», el aviso decía
+     «Plantilla guardada» y al recargar volvía todo al valor de fábrica. Y como
+     lo que se imprime sale de aquí, nada de lo configurado allí llegaba nunca
+     al papel. */
+  ticketFooter: string;
+  ticketDisclaimer: string;
+  ticketShowLogo: boolean;
+  ticketShowCustomer: boolean;
+  ticketShowSerials: boolean;
+  ticketShowQr: boolean;
 }
 
 const DEFAULTS: CompanySettings = {
@@ -48,6 +61,12 @@ const DEFAULTS: CompanySettings = {
   currency: 'BOB',
   paperWidth: '80mm',
   logo: null,
+  ticketFooter: '¡Gracias por su compra! Vuelva pronto.',
+  ticketDisclaimer: 'ESTE DOCUMENTO ES UNA REPRESENTACIÓN DE COMPROBANTE DE VENTA INTERNO.',
+  ticketShowLogo: true,
+  ticketShowCustomer: true,
+  ticketShowSerials: true,
+  ticketShowQr: true,
 };
 
 interface SettingsState extends CompanySettings {
@@ -62,17 +81,23 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   update: (patch) =>
     set((state) => {
       const next = { ...state, ...patch };
-      const { companyName, companyNit, companyAddress, phone, email, currency, paperWidth, logo } =
-        next;
+      /* Se guarda campo a campo y no el estado entero: en el estado también
+         viven las funciones del store, que no son datos. */
       writePersisted<CompanySettings>(STORAGE_KEY, {
-        companyName,
-        companyNit,
-        companyAddress,
-        phone,
-        email,
-        currency,
-        paperWidth,
-        logo,
+        companyName: next.companyName,
+        companyNit: next.companyNit,
+        companyAddress: next.companyAddress,
+        phone: next.phone,
+        email: next.email,
+        currency: next.currency,
+        paperWidth: next.paperWidth,
+        logo: next.logo,
+        ticketFooter: next.ticketFooter,
+        ticketDisclaimer: next.ticketDisclaimer,
+        ticketShowLogo: next.ticketShowLogo,
+        ticketShowCustomer: next.ticketShowCustomer,
+        ticketShowSerials: next.ticketShowSerials,
+        ticketShowQr: next.ticketShowQr,
       });
       return next;
     }),

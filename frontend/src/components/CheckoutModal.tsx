@@ -332,9 +332,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
             companyName: settings.companyName,
             companyNit: settings.companyNit,
             customerName:
-              selectedCustomer.id !== 'default-public' ? selectedCustomer.businessName : undefined,
+              settings.ticketShowCustomer && selectedCustomer.id !== 'default-public'
+                ? selectedCustomer.businessName
+                : undefined,
             paperWidth: settings.paperWidth,
-            items: cartItemsToTicketLines(items),
+            /* Lo que se configura en Notificaciones acaba en el papel. El pie y
+               el aviso legal se editaban allí y no salían impresos nunca. */
+            footerText: [settings.ticketFooter, settings.ticketDisclaimer]
+              .filter((line) => line.trim() !== '')
+              .join('\n'),
+            cashierName: cashier?.name ?? cashier?.username,
+            branchName: cashier?.branchName,
+            items: cartItemsToTicketLines(items).map((line) =>
+              settings.ticketShowSerials ? line : { ...line, serials: undefined },
+            ),
             subtotal,
             discount: discountAmount,
             total,

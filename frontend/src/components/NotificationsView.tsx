@@ -13,6 +13,7 @@ import {
   useToast,
 } from '../ui';
 import type { TabItem } from '../ui';
+import { useSettingsStore } from '../store/useSettingsStore';
 
 interface TicketTemplateConfig {
   paper_width: '58mm' | '80mm';
@@ -130,14 +131,39 @@ const TicketPreview: React.FC<{ config: TicketTemplateConfig; logo: string | nul
 export const NotificationsView: React.FC = () => {
   const toast = useToast();
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('thermal-editor');
-  const [config, setConfig] = useState<TicketTemplateConfig>(DEFAULTS);
-  const [logo, setLogo] = useState<string | null>(null);
+  /* La plantilla vive en los ajustes, que es de donde el punto de venta saca lo
+     que imprime. Aquí había una copia entera —nombre, NIT, dirección y ancho de
+     papel— que solo alimentaba esta previsualización: se cambiaba el ancho a
+     58 mm, el recuadro se estrechaba y la impresora seguía sacando 80. */
+  const settings = useSettingsStore();
+  const updateSettings = useSettingsStore((state) => state.update);
+
+  const saved: TicketTemplateConfig = {
+    paper_width: settings.paperWidth,
+    company_name: settings.companyName,
+    company_nit: settings.companyNit,
+    company_address: settings.companyAddress,
+    header_logo_enabled: settings.ticketShowLogo,
+    show_customer_info: settings.ticketShowCustomer,
+    show_imei_serials: settings.ticketShowSerials,
+    footer_message: settings.ticketFooter,
+    legal_disclaimer: settings.ticketDisclaimer,
+    show_qr_validation: settings.ticketShowQr,
+    branch: DEFAULTS.branch,
+  };
+
+  const [config, setConfig] = useState<TicketTemplateConfig>(saved);
+  const logo = settings.logo;
   const [dirty, setDirty] = useState(false);
 
   const [whatsappEnabled, setWhatsappEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
+  /* El importe llevaba «$» escrito delante mientras la terminal factura en
+     bolivianos. La moneda sale de los ajustes, como en el resto. */
   const [whatsappTemplate, setWhatsappTemplate] = useState(
-    'Hola {{client_name}}, gracias por tu compra en {{company_name}}. Aquí tienes tu comprobante digital #{{ticket_number}} por un total de ${{total_amount}}. Ver en PDF: {{pdf_url}}',
+    'Hola {{client_name}}, gracias por tu compra en {{company_name}}. Aquí tienes tu ' +
+      `comprobante digital #{{ticket_number}} por un total de ${settings.currencyInfo().symbol}` +
+      '{{total_amount}}. Ver en PDF: {{pdf_url}}',
   );
 
   const patch = (p: Partial<TicketTemplateConfig>) => {
@@ -147,13 +173,52 @@ export const NotificationsView: React.FC = () => {
 
   const reset = () => {
     setConfig(DEFAULTS);
-    setDirty(false);
-    toast('Plantilla restablecida', 'info');
+    setDirty(true);
+    toast('Valores de fábrica cargados · pulse Guardar para aplicarlos', 'info');
   };
 
+  /* Variables que el ticket sabe sustituir. Una que no esté aquí sale impresa
+     tal cual, con las llaves, delante del cliente. */
+  const KNOWN_VARIABLES = [
+    'client_name',
+    'company_name',
+    'ticket_number',
+    'total_amount',
+    'pdf_url',
+  ];
+
   const save = () => {
+    const unknown = [...whatsappTemplate.matchAll(/\{\{\s*([\w_]+)\s*\}\}/g)]
+      .map((m) => m[1])
+      .filter((name) => !KNOWN_VARIABLES.includes(name));
+
+    if (unknown.length > 0) {
+      toast(
+        `No se guarda: ${[...new Set(unknown)].map((v) => `{{${v}}}`).join(', ')} no ${
+          unknown.length === 1 ? 'es una variable conocida' : 'son variables conocidas'
+        } y se imprimiría tal cual.`,
+        'danger',
+      );
+      return;
+    }
+
+    /* Antes esto solo apagaba el aviso de cambios y decía «Plantilla
+       guardada»: no escribía en ningún sitio y al recargar volvía todo al
+       valor de fábrica. */
+    updateSettings({
+      paperWidth: config.paper_width,
+      companyName: config.company_name,
+      companyNit: config.company_nit,
+      companyAddress: config.company_address,
+      ticketShowLogo: config.header_logo_enabled,
+      ticketShowCustomer: config.show_customer_info,
+      ticketShowSerials: config.show_imei_serials,
+      ticketFooter: config.footer_message,
+      ticketDisclaimer: config.legal_disclaimer,
+      ticketShowQr: config.show_qr_validation,
+    });
     setDirty(false);
-    toast('Plantilla guardada', 'success');
+    toast('Plantilla guardada · es la que saldrá impresa', 'success');
   };
 
   return (
@@ -241,8 +306,9 @@ export const NotificationsView: React.FC = () => {
                     <ImageUpload
                       value={logo}
                       onChange={(v) => {
-                        setLogo(v);
-                        setDirty(true);
+                        /* El logotipo es el mismo que el de Ajustes: es el que
+                           acompaña al ticket impreso. */
+                        updateSettings({ logo: v });
                       }}
                       label="Logotipo del ticket"
                       hint="En blanco y negro se imprime mejor: la térmica no tiene grises."
