@@ -1,4 +1,5 @@
 import { usePersistentState } from '../store/persist';
+import { useAuthStore } from '../store/useAuthStore';
 import { useCatalogStore } from '../store/useCatalogStore';
 import React, { useState } from 'react';
 import { AlertTriangle, Calculator, Eye, Lock, Plus, Sliders } from 'lucide-react';
@@ -147,6 +148,13 @@ export const StockAdjustmentsView: React.FC = () => {
   ]);
 
   // Mock Adjustment Records
+  /* Quien registra el movimiento es quien tiene la sesión abierta. Estaba
+     escrito «Administrador» pasara lo que pasara, así que el responsable de una
+     merma o de un gasto de caja chica no se podía saber: la mitad del valor de
+     llevar el registro. */
+  const operator = useAuthStore((state) => state.user);
+  const operatorName = operator?.name ?? operator?.username ?? 'Sin identificar';
+
   const [adjustments, setAdjustments] = usePersistentState<AdjustmentRecord[]>('ajustes', [
     {
       id: 'ADJ-4001',
@@ -176,7 +184,7 @@ export const StockAdjustmentsView: React.FC = () => {
       reason: 'Auditoría Mensual Ciega de Tienda',
       branch: 'Sucursal Centro',
       items_count: 35,
-      user_name: 'Administrador',
+      user_name: 'María Gómez',
       status: 'APPLIED',
       items: [],
     },
@@ -233,7 +241,7 @@ export const StockAdjustmentsView: React.FC = () => {
         reason: `Auditoría ciega en ${auditBranch}`,
         branch: auditBranch,
         items_count: auditDiffs.length,
-        user_name: 'Administrador',
+        user_name: operatorName,
         status: 'APPLIED',
         items: auditDiffs,
       },
@@ -266,7 +274,7 @@ export const StockAdjustmentsView: React.FC = () => {
       reason: lossReason,
       branch: 'Almacén Central',
       items_count: 1,
-      user_name: 'Administrador',
+      user_name: operatorName,
       status: 'APPLIED',
       items: [
         {

@@ -1,4 +1,5 @@
 import { usePersistentState } from '../store/persist';
+import { useAuthStore } from '../store/useAuthStore';
 import React, { useState } from 'react';
 import { DollarSign, Plus, TrendingDown, Lock, RefreshCw } from 'lucide-react';
 import {
@@ -93,6 +94,13 @@ export const ExpensesView: React.FC = () => {
   const [fixedFund] = useState(500.0);
 
   // Mock Expenses Data
+  /* Quien registra el movimiento es quien tiene la sesión abierta. Estaba
+     escrito «Administrador» pasara lo que pasara, así que el responsable de una
+     merma o de un gasto de caja chica no se podía saber: la mitad del valor de
+     llevar el registro. */
+  const operator = useAuthStore((state) => state.user);
+  const operatorName = operator?.name ?? operator?.username ?? 'Sin identificar';
+
   const [expenses, setExpenses] = usePersistentState<OperationalExpense[]>('gastos', [
     {
       id: 'EXP-5001',
@@ -124,7 +132,7 @@ export const ExpensesView: React.FC = () => {
       account: 'Banco Central',
       amount: 3500.0,
       ref_number: 'TRANS-884920',
-      user_name: 'Administrador',
+      user_name: 'María Gómez',
       receipt_attached: true,
     },
   ]);
@@ -171,7 +179,7 @@ export const ExpensesView: React.FC = () => {
         account,
         amount: value,
         ref_number: refNumber || undefined,
-        user_name: 'Administrador',
+        user_name: operatorName,
         receipt_attached: !!refNumber || !!receiptPhoto,
         receipt_photo: receiptPhoto ?? undefined,
       },

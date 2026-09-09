@@ -66,7 +66,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
     clearCart,
   } = useCartStore();
 
-  const { selectedCustomer, manualDiscount, resetPosCycle, setPendingSyncCount } = usePosStore();
+  const { selectedCustomer, manualDiscount, resetPosCycle, setPendingSyncCount, cashShift } =
+    usePosStore();
   const toast = useToast();
   const applyMovements = useCatalogStore((state) => state.applyMovements);
   const markSerialsSold = useCatalogStore((state) => state.markSerialsSold);
@@ -122,8 +123,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
          identificador que no existe en ninguna lista de sucursales, así que
          nada de lo vendido se podía atribuir a una tienda concreta. */
       const branch_id = cashier?.branchId ?? 'branch-1';
-      const register_id = 'caja-1';
-      const shift_id = 'shift-01';
+      const register_id = cashShift?.registerId ?? 'caja-1';
+      /* El turno de la venta es el que está abierto. Estaba fijo en
+         `shift-01`, así que ninguna venta se podía atribuir a un arqueo
+         concreto y el cierre de caja no tenía con qué cotejarse. */
+      const shift_id = cashShift?.id ?? 'sin-turno';
       /* El cajero es quien tiene la sesión abierta. Estaba fijo en
          `user-01`, así que toda venta de toda terminal se atribuía al mismo
          empleado y el historial no servía para pedir cuentas a nadie. */
