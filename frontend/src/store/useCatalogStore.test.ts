@@ -153,3 +153,55 @@ describe('casos que no deben romper nada', () => {
     warn.mockRestore();
   });
 });
+
+describe('duplicateOf', () => {
+  beforeEach(() => {
+    useCatalogStore.setState({
+      products: [
+        {
+          id: 1,
+          sku: 'AB-001',
+          barcode: '7770000000001',
+          name: 'Leche entera',
+          category: 'Abarrotes',
+          unit_type: 'UNIT',
+          cost_price: 6,
+          sale_price: 8.5,
+          wholesale_price: 7.5,
+          wholesale_min_qty: 12,
+          stock: 10,
+          min_stock: 4,
+          is_active: true,
+        },
+      ],
+    });
+  });
+
+  it('detecta el SKU repetido, sin distinguir mayúsculas ni espacios', () => {
+    expect(useCatalogStore.getState().duplicateOf({ sku: ' ab-001 ', barcode: '999' })?.field).toBe(
+      'sku',
+    );
+  });
+
+  it('detecta el código de barras repetido: el escáner cobraría el otro producto', () => {
+    const clash = useCatalogStore.getState().duplicateOf({ sku: 'NUEVO', barcode: '7770000000001' });
+    expect(clash?.field).toBe('barcode');
+    expect(clash?.product.name).toBe('Leche entera');
+  });
+
+  it('al editar, un producto no se acusa a sí mismo', () => {
+    expect(
+      useCatalogStore.getState().duplicateOf({ sku: 'AB-001', barcode: '7770000000001' }, 1),
+    ).toBeUndefined();
+  });
+
+  it('un SKU o un código vacíos no cuentan como repetidos', () => {
+    expect(useCatalogStore.getState().duplicateOf({ sku: '', barcode: '' })).toBeUndefined();
+  });
+
+  it('deja pasar lo que de verdad es nuevo', () => {
+    expect(
+      useCatalogStore.getState().duplicateOf({ sku: 'AB-002', barcode: '7770000000002' }),
+    ).toBeUndefined();
+  });
+});

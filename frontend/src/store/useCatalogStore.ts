@@ -280,6 +280,18 @@ interface CatalogState {
   /** Solo lo vendible: activo y con existencias registradas. */
   sellableProducts: () => Product[];
   categories: () => string[];
+  /**
+   * ¿Hay ya otro producto con este SKU o este código de barras?
+   *
+   * El código de barras es lo que el escáner busca —`p.barcode === leido`— y
+   * devuelve el primero que encuentra. Con dos productos compartiéndolo, pasar
+   * una botella por el lector cobra otro artículo, y nadie se entera hasta el
+   * conteo. El SKU repetido rompe el cruce con las órdenes de compra.
+   */
+  duplicateOf: (
+    fields: { sku: string; barcode: string },
+    exceptId?: number,
+  ) => { product: Product; field: 'sku' | 'barcode' } | undefined;
   /** Vuelve a leer lo guardado: otra ventana de la misma caja pudo vender. */
   hydrate: () => void;
 }
@@ -449,6 +461,21 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     }),
 
   findByBarcode: (barcode) => get().products.find((p) => p.barcode === barcode.trim()),
+
+  duplicateOf: ({ sku, barcode }, exceptId) => {
+    const cleanSku = sku.trim().toLowerCase();
+    const cleanBarcode = barcode.trim();
+    for (const product of get().products) {
+      if (product.id === exceptId) continue;
+      if (cleanSku !== '' && product.sku.trim().toLowerCase() === cleanSku) {
+        return { product, field: 'sku' as const };
+      }
+      if (cleanBarcode !== '' && product.barcode.trim() === cleanBarcode) {
+        return { product, field: 'barcode' as const };
+      }
+    }
+    return undefined;
+  },
 
   sellableProducts: () => get().products.filter((p) => p.is_active),
 

@@ -148,6 +148,8 @@ export const ProductsView: React.FC = () => {
   /* Kardex por producto: el store lo lleva desde la primera ola y ninguna
      pantalla lo enseñaba. El icono de historial de cada fila no hacía nada. */
   const [kardexProduct, setKardexProduct] = useState<Product | null>(null);
+  const [formError, setFormError] = useState<string | undefined>();
+  const duplicateOf = useCatalogStore((state) => state.duplicateOf);
   const movementsFor = useCatalogStore((state) => state.movementsFor);
   const kardex = kardexProduct ? movementsFor(kardexProduct.id) : [];
 
@@ -157,6 +159,7 @@ export const ProductsView: React.FC = () => {
   const duplicateProduct = (p: Product) => {
     const base = '777' + Math.floor(100000000 + Math.random() * 900000000).toString();
     setEditingProduct(null);
+    setFormError(undefined);
     setFormData({
       sku: `${p.sku}-COPIA`,
       barcode: base + ean13CheckDigit(base),
@@ -253,13 +256,38 @@ export const ProductsView: React.FC = () => {
 
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.sku) return;
+
+    /* Antes esto era un `return` mudo: sin nombre o sin SKU el botón no hacía
+       nada y no decía por qué. */
+    if (!formData.name.trim()) {
+      setFormError('El nombre del producto es obligatorio.');
+      return;
+    }
+    if (!formData.sku.trim()) {
+      setFormError('El SKU es obligatorio: es lo que cruza el producto con las compras.');
+      return;
+    }
+
+    /* Dos productos con el mismo código de barras hacen que el escáner cobre
+       el que encuentra primero, y nadie se entera hasta el conteo. */
+    const clash = duplicateOf(formData, editingProduct?.id);
+    if (clash) {
+      setFormError(
+        clash.field === 'sku'
+          ? `El SKU «${formData.sku}» ya es de «${clash.product.name}».`
+          : `El código de barras «${formData.barcode}» ya es de «${clash.product.name}»: el escáner no podría distinguirlos.`,
+      );
+      return;
+    }
 
     if (editingProduct) {
       updateProduct(editingProduct.id, formData);
+      toast(`«${formData.name}» actualizado`, 'success');
     } else {
       addProduct(formData);
+      toast(`«${formData.name}» añadido al catálogo`, 'success');
     }
+    setFormError(undefined);
     setIsProductModalOpen(false);
   };
 
@@ -470,6 +498,7 @@ export const ProductsView: React.FC = () => {
               tone="accent"
               onClick={() => {
                 setEditingProduct(p);
+                setFormError(undefined);
                 // `brand` es opcional en el catálogo y el formulario lo trata
                 // como cadena: se normaliza al cargar en vez de al guardar.
                 setFormData({ ...p, brand: p.brand ?? '', image_url: p.image_url });
@@ -839,7 +868,10 @@ export const ProductsView: React.FC = () => {
       {/* Alta y edición de producto */}
       <Modal
         isOpen={isProductModalOpen}
-        onClose={() => setIsProductModalOpen(false)}
+        onClose={() => {
+          setIsProductModalOpen(false);
+          setFormError(undefined);
+        }}
         icon={<Package className="w-4 h-4" />}
         title={editingProduct ? 'Editar producto' : 'Nuevo producto'}
         subtitle={editingProduct?.name}
@@ -855,7 +887,22 @@ export const ProductsView: React.FC = () => {
           </>
         }
       >
-        <form id="product-form" onSubmit={handleSaveProduct} className="space-y-5">
+        {/* `noValidate` deja pasar el envío para que valide el manejador: el
+            aviso nativo del navegador sale en su idioma —«Please fill out this
+            field.» en una interfaz en español— y en una burbuja flotante, no
+            junto al campo como el resto de los errores de la aplicación. Los
+            campos conservan `required` por su semántica accesible. */}
+        <form id="product-form" noValidate onSubmit={handleSaveProduct} className="space-y-5">
+          {formError && (
+            <div
+              role="alert"
+              className="p-3 rounded-md bg-danger-soft border border-danger/25 flex items-start gap-2 text-body text-danger-ink"
+            >
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              {formError}
+            </div>
+          )}
+
           <section className="space-y-3">
             <p className="text-micro uppercase text-ink-3">Identificación</p>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
