@@ -1,0 +1,410 @@
+import React, { useState } from 'react';
+import { 
+  CreditCard, 
+  DollarSign, 
+  Building2, 
+  QrCode, 
+  ArrowRightLeft, 
+  ShieldCheck, 
+  Plus, 
+  Lock, 
+  Unlock
+} from 'lucide-react';
+
+interface PaymentAccount {
+  id: string;
+  name: string;
+  type: 'CASH_DRAWER' | 'BANK_ACCOUNT' | 'QR_GATEWAY';
+  account_number?: string;
+  currency: string;
+  balance: number;
+  status: 'OPEN' | 'LOCKED' | 'RECONCILIATION_PENDING';
+  fee_percentage?: number;
+  in_transit_balance?: number;
+  branch: string;
+}
+
+interface FinancialTransaction {
+  id: string; // TX-9001
+  timestamp: string;
+  source_account: string;
+  dest_account: string;
+  amount: number;
+  fee_deducted: number;
+  operation_type: 'DEPOSIT_CASH_TO_BANK' | 'POS_SALE_CREDIT' | 'PETTY_CASH_EXPENSE' | 'FEE_COMMISSION';
+  voucher_number?: string;
+  user_name: string;
+}
+
+export const FinanceView: React.FC = () => {
+  const [activeSubTab, setActiveSubTab] = useState<'drawers' | 'banks' | 'deposits' | 'treasury'>('treasury');
+
+  // Payment Accounts State
+  const [accounts, setAccounts] = useState<PaymentAccount[]>([
+    { id: 'ACC-01', name: 'Caja 1 - Principal Mostrador', type: 'CASH_DRAWER', currency: 'USD', balance: 1028.50, status: 'OPEN', branch: 'Sucursal Central' },
+    { id: 'ACC-02', name: 'Caja 2 - Expres Rápida', type: 'CASH_DRAWER', currency: 'USD', balance: 450.00, status: 'OPEN', branch: 'Sucursal Central' },
+    { id: 'ACC-03', name: 'Banco Mercantil Santa Cruz (Cta Cte)', type: 'BANK_ACCOUNT', account_number: '4010-948201-92', currency: 'USD', balance: 42500.00, status: 'OPEN', branch: 'Oficina Central' },
+    { id: 'ACC-04', name: 'Pasarela Digital QR BCP', type: 'QR_GATEWAY', account_number: 'QR-BCP-MERCHANT-88', currency: 'USD', balance: 3450.00, fee_percentage: 1.5, in_transit_balance: 450.00, status: 'OPEN', branch: 'Digital' },
+    { id: 'ACC-05', name: 'Red Enlace Tarjetas POS', type: 'QR_GATEWAY', account_number: 'POS-REDENLACE-55', currency: 'USD', balance: 8900.00, fee_percentage: 2.0, in_transit_balance: 0.00, status: 'OPEN', branch: 'Digital' }
+  ]);
+
+  // Financial Audit Ledger (financial_transactions_log)
+  const [transactions, setTransactions] = useState<FinancialTransaction[]>([
+    { id: 'TX-9004', timestamp: '14/08/2026 12:10', source_account: 'Caja 1 - Principal Mostrador', dest_account: 'Banco Mercantil Santa Cruz', amount: 500.00, fee_deducted: 0, operation_type: 'DEPOSIT_CASH_TO_BANK', voucher_number: 'BOL-884920', user_name: 'Juan Pérez' },
+    { id: 'TX-9003', timestamp: '14/08/2026 11:45', source_account: 'Cliente Final', dest_account: 'Pasarela Digital QR BCP', amount: 145.00, fee_deducted: 2.18, operation_type: 'POS_SALE_CREDIT', voucher_number: 'QR-VAL-1029', user_name: 'María Gómez' },
+    { id: 'TX-9002', timestamp: '14/08/2026 09:30', source_account: 'Caja 1 - Principal Mostrador', dest_account: 'Proveedor Suministros', amount: 35.50, fee_deducted: 0, operation_type: 'PETTY_CASH_EXPENSE', voucher_number: 'REC-3011', user_name: 'Juan Pérez' }
+  ]);
+
+  // Deposit Form State (Caja -> Banco)
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [sourceAccountId, setSourceAccountId] = useState('ACC-01');
+  const [destAccountId, setDestAccountId] = useState('ACC-03');
+  const [depositAmount, setDepositAmount] = useState('');
+  const [voucherNumber, setVoucherNumber] = useState('');
+
+  // Toggle Remote Drawer Lock
+  const handleToggleDrawerLock = (accountId: string) => {
+    setAccounts(prev => prev.map(a => a.id === accountId ? {
+      ...a,
+      status: a.status === 'OPEN' ? 'LOCKED' : 'OPEN'
+    } : a));
+  };
+
+  // Liquidity Aggregation
+  const totalCashInDrawers = accounts.filter(a => a.type === 'CASH_DRAWER').reduce((acc, a) => acc + a.balance, 0);
+  const totalBankBalances = accounts.filter(a => a.type === 'BANK_ACCOUNT').reduce((acc, a) => acc + a.balance, 0);
+  const totalQRGateways = accounts.filter(a => a.type === 'QR_GATEWAY').reduce((acc, a) => acc + a.balance, 0);
+  const globalLiquidity = totalCashInDrawers + totalBankBalances + totalQRGateways;
+
+  const handleExecuteAtomicTransfer = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(depositAmount);
+    if (isNaN(amt) || amt <= 0) return;
+
+    const sourceAcc = accounts.find(a => a.id === sourceAccountId);
+    const destAcc = accounts.find(a => a.id === destAccountId);
+
+    if (!sourceAcc || !destAcc) return;
+    if (amt > sourceAcc.balance) {
+      alert(`⚠️ El monto a depositar ($${amt.toFixed(2)}) supera el saldo disponible en ${sourceAcc.name} ($${sourceAcc.balance.toFixed(2)}).`);
+      return;
+    }
+
+    setAccounts(prev => prev.map(a => {
+      if (a.id === sourceAccountId) return { ...a, balance: a.balance - amt };
+      if (a.id === destAccountId) return { ...a, balance: a.balance + amt };
+      return a;
+    }));
+
+    const newTx: FinancialTransaction = {
+      id: `TX-${Math.floor(9000 + Math.random() * 900)}`,
+      timestamp: new Date().toLocaleString('es-ES'),
+      source_account: sourceAcc.name,
+      dest_account: destAcc.name,
+      amount: amt,
+      fee_deducted: 0,
+      operation_type: 'DEPOSIT_CASH_TO_BANK',
+      voucher_number: voucherNumber || `BOL-${Date.now()}`,
+      user_name: 'Administrador (Firma Digital)'
+    };
+
+    setTransactions(prev => [newTx, ...prev]);
+    setIsDepositModalOpen(false);
+    setDepositAmount('');
+    setVoucherNumber('');
+    alert(`✅ Depósito registrado correctamente. Se restó $${amt.toFixed(2)} de ${sourceAcc.name} y se acreditó en ${destAcc.name}.`);
+  };
+
+  return (
+    <div className="p-6 bg-gray-50 dark:bg-[#000000] h-[calc(100vh-56px)] overflow-y-auto pr-2 space-y-6 select-none transition-colors duration-200">
+      {/* 1. Header Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#121212] p-5 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+            <CreditCard className="w-7 h-7 text-blue-500" />
+            10. Cuentas de Pago y Finanzas Globales
+          </h1>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Administración centralizada de cajas físicas, cuentas bancarias, pasarelas QR y transferencias internas
+          </p>
+        </div>
+
+        {/* Sub-tabs Switcher */}
+        <div className="flex items-center bg-gray-100 dark:bg-[#0B0C10] p-1.5 rounded-xl border border-gray-200 dark:border-[#1F2833]">
+          <button
+            onClick={() => setActiveSubTab('treasury')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeSubTab === 'treasury' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            Saldo Consolidado Global
+          </button>
+          <button
+            onClick={() => setActiveSubTab('drawers')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeSubTab === 'drawers' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'
+            }`}
+          >
+            <DollarSign className="w-4 h-4" />
+            Cajas Físicas Mostrador
+          </button>
+          <button
+            onClick={() => setActiveSubTab('banks')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+              activeSubTab === 'banks' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            Cuentas Bancarias & QR
+          </button>
+          <button
+            onClick={() => setIsDepositModalOpen(true)}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow"
+          >
+            <ArrowRightLeft className="w-4 h-4" /> Depósito Caja → Banco
+          </button>
+        </div>
+      </div>
+
+      {/* SUB-TAB 1: TREASURY & GLOBAL LIQUIDITY DASHBOARD */}
+      {activeSubTab === 'treasury' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="p-5 bg-white dark:bg-[#121212] rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm">
+              <span className="text-xs text-gray-500 font-bold uppercase">Cajas Físicas Mostrador</span>
+              <p className="font-mono font-black text-2xl text-emerald-600 dark:text-emerald-400 mt-1">${totalCashInDrawers.toFixed(2)}</p>
+              <span className="text-[10px] text-gray-400">Efectivo acumulado en gavetas</span>
+            </div>
+
+            <div className="p-5 bg-white dark:bg-[#121212] rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm">
+              <span className="text-xs text-gray-500 font-bold uppercase">Cuentas Bancarias Corporativas</span>
+              <p className="font-mono font-black text-2xl text-blue-600 dark:text-blue-400 mt-1">${totalBankBalances.toFixed(2)}</p>
+              <span className="text-[10px] text-gray-400">Fondos acreditados en banco</span>
+            </div>
+
+            <div className="p-5 bg-white dark:bg-[#121212] rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm">
+              <span className="text-xs text-gray-500 font-bold uppercase">Pasarelas Digitales & QR</span>
+              <p className="font-mono font-black text-2xl text-purple-600 dark:text-purple-400 mt-1">${totalQRGateways.toFixed(2)}</p>
+              <span className="text-[10px] text-gray-400">Saldo neto tras comisiones</span>
+            </div>
+
+            <div className="p-5 bg-blue-600 dark:bg-blue-950 text-white rounded-2xl border border-blue-500 shadow-md">
+              <span className="text-xs font-bold uppercase text-blue-200">Liquidez Total Consolidada</span>
+              <p className="font-mono font-black text-3xl mt-1">${globalLiquidity.toFixed(2)}</p>
+              <span className="text-[10px] text-blue-200">Dinero total líquido disponible</span>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-[#121212] rounded-2xl border border-gray-200 dark:border-[#1F2833] p-6 shadow-sm space-y-4">
+            <h3 className="font-extrabold text-base text-gray-900 dark:text-white flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-blue-500" /> Libro Mayor de Movimientos Cruzados (Historial Completo)
+            </h3>
+            <p className="text-xs text-gray-500">Registro cronológico de entradas, egresos, transferencias internas y comisiones</p>
+
+            <div className="overflow-hidden border border-gray-200 dark:border-[#1F2833] rounded-xl">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 dark:bg-[#0B0C10] text-gray-500 dark:text-gray-400 text-[11px] font-extrabold uppercase tracking-wider border-b border-gray-200 dark:border-[#1F2833]">
+                    <th className="p-4"># Transacción</th>
+                    <th className="p-4">Fecha & Hora</th>
+                    <th className="p-4">Tipo Operación</th>
+                    <th className="p-4">Cuenta Origen → Destino</th>
+                    <th className="p-4 font-mono text-right">Monto ($)</th>
+                    <th className="p-4 font-mono text-right">Comisión Restada</th>
+                    <th className="p-4 text-right"># Boleta / Voucher</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-[#1F2833] text-xs font-mono">
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-[#1A1D20]">
+                      <td className="p-4 font-bold text-blue-600 dark:text-blue-400">{tx.id}</td>
+                      <td className="p-4 text-gray-500">{tx.timestamp}</td>
+                      <td className="p-4 font-sans">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-950 font-bold rounded text-[10px]">
+                          {tx.operation_type}
+                        </span>
+                      </td>
+                      <td className="p-4 font-sans font-bold text-gray-800 dark:text-gray-200">
+                        {tx.source_account} → <span className="text-emerald-600 dark:text-emerald-400">{tx.dest_account}</span>
+                      </td>
+                      <td className="p-4 text-right font-black text-gray-900 dark:text-white">${tx.amount.toFixed(2)}</td>
+                      <td className="p-4 text-right text-rose-600 font-bold">-${tx.fee_deducted.toFixed(2)}</td>
+                      <td className="p-4 text-right text-gray-500 font-bold">{tx.voucher_number || 'N/A'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 2: CASH DRAWERS MANAGEMENT */}
+      {activeSubTab === 'drawers' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-white dark:bg-[#121212] p-4 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm">
+            <h3 className="font-extrabold text-base text-gray-900 dark:text-white">Administración de Cajas Físicas de Mostrador</h3>
+            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow">
+              <Plus className="w-4 h-4" /> Registrar Nueva Caja Física
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {accounts.filter(a => a.type === 'CASH_DRAWER').map(acc => {
+              const isLocked = acc.status === 'LOCKED';
+
+              return (
+                <div key={acc.id} className="bg-white dark:bg-[#121212] p-6 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm space-y-4">
+                  <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#1F2833] pb-3">
+                    <div>
+                      <h3 className="font-extrabold text-base text-gray-900 dark:text-white flex items-center gap-2">
+                        <DollarSign className="w-5 h-5 text-emerald-500" /> {acc.name}
+                      </h3>
+                      <span className="text-[10px] text-gray-400 font-semibold">{acc.branch}</span>
+                    </div>
+
+                    <button
+                      onClick={() => handleToggleDrawerLock(acc.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
+                        isLocked ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 border-rose-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 border-emerald-200'
+                      }`}
+                    >
+                      {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                      {isLocked ? 'CAJA BLOQUEADA' : 'CAJA ABIERTA'}
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between p-3 bg-gray-50 dark:bg-[#0B0C10] rounded-xl border border-gray-200 dark:border-[#1F2833]">
+                      <span className="text-gray-500 font-bold">Efectivo Acumulado en Gaveta:</span>
+                      <span className="font-mono font-black text-xl text-emerald-600 dark:text-emerald-400">${acc.balance.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 3: BANK ACCOUNTS & GATEWAYS */}
+      {activeSubTab === 'banks' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-white dark:bg-[#121212] p-4 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm">
+            <h3 className="font-extrabold text-base text-gray-900 dark:text-white">Directorio de Cuentas Bancarias & Pasarelas QR</h3>
+            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow">
+              <Plus className="w-4 h-4" /> Registrar Cuenta / Pasarela QR
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {accounts.filter(a => a.type === 'BANK_ACCOUNT' || a.type === 'QR_GATEWAY').map(acc => (
+              <div key={acc.id} className="bg-white dark:bg-[#121212] p-6 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#1F2833] pb-3">
+                  <div>
+                    <h3 className="font-extrabold text-base text-gray-900 dark:text-white flex items-center gap-2">
+                      {acc.type === 'BANK_ACCOUNT' ? <Building2 className="w-5 h-5 text-blue-500" /> : <QrCode className="w-5 h-5 text-purple-500" />}
+                      {acc.name}
+                    </h3>
+                    <span className="text-[10px] text-gray-400 font-mono">Nº Cta / Merchant: {acc.account_number}</span>
+                  </div>
+
+                  {acc.fee_percentage && (
+                    <span className="px-2.5 py-1 bg-amber-100 text-amber-800 dark:bg-amber-950 border border-amber-200 rounded-lg font-mono text-[10px] font-bold">
+                      Comisión: {acc.fee_percentage}%
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-2 text-xs font-mono">
+                  <div className="flex justify-between p-3 bg-gray-50 dark:bg-[#0B0C10] rounded-xl border border-gray-200 dark:border-[#1F2833]">
+                    <span className="text-gray-500">Saldo Acreditado:</span>
+                    <span className="font-bold text-gray-900 dark:text-white text-base">${acc.balance.toFixed(2)}</span>
+                  </div>
+                  {acc.in_transit_balance !== undefined && (
+                    <div className="flex justify-between p-3 bg-purple-50 dark:bg-purple-950/40 rounded-xl border border-purple-200">
+                      <span className="text-purple-700 dark:text-purple-300 font-bold">Saldo Pendiente en Tránsito:</span>
+                      <span className="font-bold text-purple-700 dark:text-purple-300 text-base">${acc.in_transit_balance.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* INTERNAL TRANSFER / DEPOSIT MODAL */}
+      {isDepositModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#121212] rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-2xl w-full max-w-md overflow-hidden space-y-4">
+            <div className="p-5 border-b border-gray-100 dark:border-[#1F2833] flex items-center justify-between">
+              <h3 className="font-extrabold text-base text-gray-900 dark:text-white flex items-center gap-2">
+                <ArrowRightLeft className="w-5 h-5 text-emerald-500" /> Depósito Interno: Caja → Banco
+              </h3>
+              <button onClick={() => setIsDepositModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            <form onSubmit={handleExecuteAtomicTransfer} className="p-5 space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-gray-700 dark:text-gray-300">Cuenta de Origen (Caja Física) *</label>
+                <select
+                  value={sourceAccountId}
+                  onChange={(e) => setSourceAccountId(e.target.value)}
+                  className="w-full mt-1 p-2 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-bold"
+                >
+                  {accounts.filter(a => a.type === 'CASH_DRAWER').map(a => (
+                    <option key={a.id} value={a.id}>{a.name} (Saldo: ${a.balance.toFixed(2)})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 dark:text-gray-300">Cuenta de Destino (Banco Concentrador) *</label>
+                <select
+                  value={destAccountId}
+                  onChange={(e) => setDestAccountId(e.target.value)}
+                  className="w-full mt-1 p-2 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-bold"
+                >
+                  {accounts.filter(a => a.type === 'BANK_ACCOUNT').map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 dark:text-gray-300">Monto a Depositar ($) *</label>
+                <input
+                  type="number" step="0.01" required
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full mt-1 p-2 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-mono font-bold text-base text-emerald-600"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 dark:text-gray-300"># Boleta de Depósito / Comprobante Bancario *</label>
+                <input
+                  type="text" required
+                  value={voucherNumber}
+                  onChange={(e) => setVoucherNumber(e.target.value)}
+                  placeholder="Ej. BOL-904812"
+                  className="w-full mt-1 p-2 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-mono font-bold"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setIsDepositModalOpen(false)} className="px-4 py-2 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl font-bold">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold shadow">
+                  Ejecutar Depósito Síncrono
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

@@ -1,0 +1,496 @@
+// Prisma Schema definition for Supero POS Enterprise Database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------
+// 1. Módulo de Usuarios, Roles y Seguridad (RBAC)
+// ----------------------------------------------------
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique // Admin, Cajero, Almacenero, Supervisor
+  permissions Json     // Matriz de permisos por módulo
+
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  fullName     String
+  email        String    @unique
+  phone        String?
+  passwordHash String
+  roleId       String
+  branchId     String
+  isActive     Boolean   @default(true)
+  lastLogin    DateTime?
+  createdAt    DateTime  @default(now())
+
+  role             Role               @relation(fields: [roleId], references: [id])
+  branch           Branch             @relation(fields: [branchId], references: [id])
+  cashShifts       CashShift[]
+  sales            Sale[]
+  stockAdjustments StockAdjustment[]
+  attendanceLogs   AttendanceLog[]
+  auditLogs        AuditLog[]
+
+  @@map("users")
+}
+
+// ----------------------------------------------------
+// 2. Sucursales, Cajas y Tesorería
+// ----------------------------------------------------
+model Branch {
+  id      String @id @default(uuid())
+  name    String
+  address String
+  phone   String
+
+  users            User[]
+  cashRegisters    CashRegister[]
+  stocks           Stock[]
+  customers        Customer[]
+  sales            Sale[]
+  purchaseOrders   PurchaseOrder[]
+  originTransfers  StockTransfer[]   @relation("OriginBranch")
+  destTransfers    StockTransfer[]   @relation("DestBranch")
+  stockAdjustments StockAdjustment[]
+  kardexMovements  KardexMovement[]
+  expenses         Expense[]
+  attendanceLogs   AttendanceLog[]
+  auditLogs        AuditLog[]
+
+  @@map("branches")
+}
+
+enum CashRegisterStatus {
+  OPEN
+  LOCKED
+}
+
+model CashRegister {
+  id             String             @id @default(uuid())
+  branchId       String
+  name           String             // Caja 1 Principal
+  status         CashRegisterStatus @default(OPEN)
+  currentBalance Decimal            @default(0) @db.Decimal(12, 4)
+
+  branch     Branch      @relation(fields: [branchId], references: [id])
+  cashShifts CashShift[]
+  sales      Sale[]
+
+  @@map("cash_registers")
+}
+
+enum CashShiftStatus {
+  ACTIVE
+  CLOSED
+}
+
+model CashShift {
+  id           String          @id @default(uuid())
+  registerId   String
+  userId       String
+  openedAt     DateTime        @default(now())
+  closedAt     DateTime?
+  initialFloat Decimal         @db.Decimal(12, 4) // Fondo inicial / sencillo
+  expectedCash Decimal         @db.Decimal(12, 4) // Saldo teórico
+  countedCash  Decimal?        @db.Decimal(12, 4) // Conteo ciego físico
+  difference   Decimal?        @db.Decimal(12, 4) // Sobrante o faltante
+  status       CashShiftStatus @default(ACTIVE)
+
+  register CashRegister @relation(fields: [registerId], references: [id])
+  user     User         @relation(fields: [userId], references: [id])
+  sales    Sale[]
+
+  @@map("cash_shifts")
+}
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  QR_GATEWAY
+}
+
+model BankAccount {
+  id             String      @id @default(uuid())
+  bankName       String
+  accountNumber  String
+  accountType    AccountType
+  balance        Decimal     @db.Decimal(12, 4)
+  commissionRate Decimal     @db.Decimal(5, 2) // Porcentaje de comisión bancaria
+
+  @@map("bank_accounts")
+}
+
+// ----------------------------------------------------
+// 3. Catálogo, Productos, Seriales e Inventario
+// ----------------------------------------------------
+model Category {
+  id   String @id @default(uuid())
+  name String
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Brand {
+  id   String @id @default(uuid())
+  name String
+
+  products Product[]
+
+  @@map("brands")
+}
+
+enum UnitType {
+  UNIT
+  FRACTION
+  SERIALIZED
+}
+
+model Product {
+  id              String   @id @default(uuid())
+  sku             String   @unique
+  barcode         String?  @unique
+  name            String
+  description     String?
+  categoryId      String
+  brandId         String
+  unitType        UnitType @default(UNIT)
+  costPrice       Decimal  @db.Decimal(12, 4) // Costo base / CPP
+  retailPrice     Decimal  @db.Decimal(12, 4) // Precio minorista
+  wholesalePrice  Decimal  @db.Decimal(12, 4) // Precio mayorista
+  wholesaleMinQty Decimal  @default(10) @db.Decimal(12, 4) // Cantidad mínima mayorista
+  minStock        Decimal  @default(5) @db.Decimal(12, 4) // Alerta de stock crítico
+  isActive        Boolean  @default(true)
+
+  category           Category            @relation(fields: [categoryId], references: [id])
+  brand              Brand               @relation(fields: [brandId], references: [id])
+  serials            ProductSerial[]
+  stocks             Stock[]
+  saleItems          SaleItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+  kardexMovements    KardexMovement[]
+
+  @@map("products")
+}
+
+enum SerialStatus {
+  IN_STOCK
+  SOLD
+  RETURNED
+  DAMAGED
+}
+
+model ProductSerial {
+  id           String       @id @default(uuid())
+  productId    String
+  serialNumber String       @unique
+  status       SerialStatus @default(IN_STOCK)
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("product_serials")
+}
+
+model Stock {
+  id        String  @id @default(uuid())
+  productId String
+  branchId  String
+  quantity  Decimal @default(0) @db.Decimal(12, 4) // Stock físico actual
+
+  product Product @relation(fields: [productId], references: [id])
+  branch  Branch  @relation(fields: [branchId], references: [id])
+
+  @@unique([productId, branchId])
+  @@map("stocks")
+}
+
+// ----------------------------------------------------
+// 4. Contactos (Clientes y Proveedores)
+// ----------------------------------------------------
+model CustomerGroup {
+  id                 String  @id @default(uuid())
+  name               String  // Minorista, Mayorista, VIP
+  discountPercentage Decimal @db.Decimal(5, 2)
+
+  customers Customer[]
+
+  @@map("customer_groups")
+}
+
+model Customer {
+  id           String  @id @default(uuid())
+  businessName String
+  taxId        String  @unique // NIT / RUC
+  phone        String
+  email        String?
+  address      String
+  groupId      String
+  creditLimit  Decimal @default(0) @db.Decimal(12, 4) // Límite de crédito CxC
+  currentDebt  Decimal @default(0) @db.Decimal(12, 4) // Saldo deudor actual
+  isBlocked    Boolean @default(false)
+  branchId     String?
+
+  group  CustomerGroup @relation(fields: [groupId], references: [id])
+  branch Branch?        @relation(fields: [branchId], references: [id])
+  sales  Sale[]
+
+  @@map("customers")
+}
+
+model Supplier {
+  id           String  @id @default(uuid())
+  businessName String
+  contactName  String
+  taxId        String  @unique
+  phone        String
+  email        String
+  address      String
+  bankDetails  String?
+  currentDebt  Decimal @default(0) @db.Decimal(12, 4) // Saldo acreedor CxP
+
+  purchaseOrders PurchaseOrder[]
+
+  @@map("suppliers")
+}
+
+// ----------------------------------------------------
+// 5. Transacciones POS, Ventas e Historial
+// ----------------------------------------------------
+enum PaymentMethod {
+  CASH
+  CARD
+  QR
+  MIXED
+}
+
+enum SaleStatus {
+  COMPLETED
+  CANCELLED
+}
+
+model Sale {
+  id                 String        @id @default(uuid())
+  ticketNumber       String        @unique
+  branchId           String
+  registerId         String
+  shiftId            String
+  userId             String        // Cajero
+  customerId         String?
+  subtotal           Decimal       @db.Decimal(12, 4)
+  tax                Decimal       @default(0) @db.Decimal(12, 4)
+  totalAmount        Decimal       @db.Decimal(12, 4)
+  paymentMethod      PaymentMethod
+  receivedAmount     Decimal       @db.Decimal(12, 4)
+  changeAmount       Decimal       @db.Decimal(12, 4)
+  status             SaleStatus    @default(COMPLETED)
+  cancellationReason String?
+  createdAt          DateTime      @default(now())
+
+  branch       Branch       @relation(fields: [branchId], references: [id])
+  register     CashRegister @relation(fields: [registerId], references: [id])
+  shift        CashShift    @relation(fields: [shiftId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  customer     Customer?    @relation(fields: [customerId], references: [id])
+  items        SaleItem[]
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id          String  @id @default(uuid())
+  saleId      String
+  productId   String
+  quantity    Decimal @db.Decimal(12, 4)
+  unitPrice   Decimal @db.Decimal(12, 4)
+  subtotal    Decimal @db.Decimal(12, 4)
+  serialsUsed Json?   // Arreglo de IMEIs vendidos en esta línea
+
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("sale_items")
+}
+
+// ----------------------------------------------------
+// 6. Compras, Proveedores y Abastecimiento
+// ----------------------------------------------------
+enum PurchaseStatus {
+  PENDING
+  PARTIAL
+  COMPLETED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id          String         @id @default(uuid())
+  orderNumber String         @unique
+  supplierId  String
+  branchId    String
+  totalAmount Decimal        @db.Decimal(12, 4)
+  status      PurchaseStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  branch   Branch              @relation(fields: [branchId], references: [id])
+  items    PurchaseOrderItem[]
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id         String  @id @default(uuid())
+  purchaseId String
+  productId  String
+  orderedQty Decimal @db.Decimal(12, 4)
+  receivedQty Decimal @db.Decimal(12, 4)
+  unitCost   Decimal @db.Decimal(12, 4) // Costo de adquisición
+
+  purchase PurchaseOrder @relation(fields: [purchaseId], references: [id])
+  product  Product       @relation(fields: [productId], references: [id])
+
+  @@map("purchase_order_items")
+}
+
+// ----------------------------------------------------
+// 7. Logística (Transferencias, Ajustes y Kardex)
+// ----------------------------------------------------
+enum TransferStatus {
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+model StockTransfer {
+  id             String         @id @default(uuid())
+  transferNumber String         @unique
+  originBranchId String
+  destBranchId   String
+  status         TransferStatus @default(IN_TRANSIT)
+  createdAt      DateTime       @default(now())
+
+  originBranch Branch @relation("OriginBranch", fields: [originBranchId], references: [id])
+  destBranch   Branch @relation("DestBranch", fields: [destBranchId], references: [id])
+
+  @@map("stock_transfers")
+}
+
+enum AdjustmentType {
+  DAMAGED
+  EXPIRED
+  INTERNAL_USE
+  CYCLE_COUNT_DISCREPANCY
+}
+
+model StockAdjustment {
+  id             String         @id @default(uuid())
+  branchId       String
+  userId         String
+  adjustmentType AdjustmentType
+  reason         String
+  createdAt      DateTime       @default(now())
+
+  branch Branch @relation(fields: [branchId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("stock_adjustments")
+}
+
+enum MovementType {
+  PURCHASE
+  SALE
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUSTMENT
+}
+
+model KardexMovement {
+  id             String       @id @default(uuid())
+  productId      String
+  branchId       String
+  movementType   MovementType
+  referenceId    String       // ID de la venta, compra o transferencia
+  quantityChange Decimal      @db.Decimal(12, 4) // Positivo (entrada) o negativo (salida)
+  stockBefore    Decimal      @db.Decimal(12, 4)
+  stockAfter     Decimal      @db.Decimal(12, 4)
+  unitCost       Decimal      @db.Decimal(12, 4) // CPP vigente en el momento
+  createdAt      DateTime     @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+  branch  Branch  @relation(fields: [branchId], references: [id])
+
+  @@map("kardex_movements")
+}
+
+// ----------------------------------------------------
+// 8. Gastos Operativos, Finanzas y RRHH
+// ----------------------------------------------------
+enum PaymentSource {
+  PETTY_CASH
+  BANK_ACCOUNT
+}
+
+model Expense {
+  id              String        @id @default(uuid())
+  branchId        String
+  category        String        // Servicios, Alquiler, Suministros
+  amount          Decimal       @db.Decimal(12, 4)
+  paymentSource   PaymentSource
+  referenceNumber String?
+  description     String
+  createdAt       DateTime      @default(now())
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@map("expenses")
+}
+
+enum AttendanceType {
+  CLOCK_IN
+  BREAK_START
+  BREAK_END
+  CLOCK_OUT
+}
+
+model AttendanceLog {
+  id        String         @id @default(uuid())
+  userId    String
+  branchId  String
+  type      AttendanceType
+  timestamp DateTime       @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@map("attendance_logs")
+}
+
+// ----------------------------------------------------
+// 9. Registro de Auditoría de Seguridad (Audit Logs)
+// ----------------------------------------------------
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  branchId  String?
+  action    String   // VOID_SALE, MANUAL_STOCK_ADJUSTMENT, PRICE_OVERRIDE, CASH_SHIFT_OPEN, CASH_SHIFT_CLOSE, LOGOUT
+  details   Json     // Forensic diff / payload JSONB
+  createdAt DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id])
+  branch Branch? @relation(fields: [branchId], references: [id])
+
+  @@map("audit_logs")
+}
+

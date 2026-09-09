@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: pos_postgres_core
+    environment:
+      POSTGRES_USER: pos_admin
+      POSTGRES_PASSWORD: secure_password_db
+      POSTGRES_DB: pos_central_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+
+  backend_api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pos_nestjs_backend
+    environment:
+      DATABASE_URL: postgresql://pos_admin:secure_password_db@postgres_db:5432/pos_central_db?schema=public
+      JWT_SECRET: super_secret_jwt_key_2026
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres_db
+    restart: always
+
+volumes:
+  pgdata:
