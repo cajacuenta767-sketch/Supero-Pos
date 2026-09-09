@@ -7,6 +7,7 @@ import {
   QrCode,
   Scale,
   Search,
+  Camera,
   ShieldAlert,
   ShieldCheck,
   ShoppingBag,
@@ -20,6 +21,7 @@ import { useCartStore } from '../store/useCartStore';
 import { usePosStore } from '../store/usePosStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
+import { useCameraScanner } from '../hooks/useCameraScanner';
 import { hasPermission } from '../utils/permissions';
 import { ImeiModal } from './ImeiModal';
 import { DecimalQuantityModal } from './DecimalQuantityModal';
@@ -41,6 +43,7 @@ interface ProductItem {
   stock: number;
   min_stock: number;
   category: string;
+  image_url?: string;
 }
 
 const MASTER_POS_CATALOG: ProductItem[] = [
@@ -193,8 +196,9 @@ export const PosView: React.FC = () => {
     }
   };
 
-  // Lector láser nativo (<10 ms)
-  useBarcodeScanner((barcode) => {
+  /* Un solo camino de escaneo para los dos lectores: la pistola USB de la
+     terminal fija y la cámara de una tablet de mostrador. */
+  const handleScannedCode = (barcode: string) => {
     const matched = MASTER_POS_CATALOG.find(
       (p) => p.barcode === barcode || p.sku.toLowerCase() === barcode.toLowerCase(),
     );
@@ -202,7 +206,17 @@ export const PosView: React.FC = () => {
       handleSelectProduct(matched);
       setSearchQuery('');
     }
-  });
+  };
+
+  useBarcodeScanner(handleScannedCode);
+  const {
+    supported: cameraSupported,
+    scanning: cameraScanning,
+    error: cameraError,
+    videoRef: cameraVideoRef,
+    start: startCamera,
+    stop: stopCamera,
+  } = useCameraScanner(handleScannedCode);
 
   // F2 busca · F8/F12 cobra
   useEffect(() => {
@@ -552,6 +566,31 @@ export const PosView: React.FC = () => {
             </span>
           </div>
 
+          {cameraSupported && (
+            <div className="shrink-0 space-y-2">
+              <Button
+                variant={cameraScanning ? 'danger' : 'secondary'}
+                block
+                icon={<Camera className="w-4 h-4" />}
+                onClick={() => (cameraScanning ? stopCamera() : startCamera())}
+              >
+                {cameraScanning ? 'Detener cámara' : 'Escanear con la cámara'}
+              </Button>
+
+              {cameraError && <p className="text-body text-danger">{cameraError}</p>}
+
+              <video
+                ref={cameraVideoRef}
+                className={cn(
+                  'w-full rounded-md border border-line bg-black',
+                  cameraScanning ? 'block max-h-48 object-cover' : 'hidden',
+                )}
+                muted
+                playsInline
+              />
+            </div>
+          )}
+
           <div className="shrink-0 flex gap-2 overflow-x-auto pb-0.5">
             {CATEGORIES.map((cat) => (
               <button
@@ -608,9 +647,20 @@ export const PosView: React.FC = () => {
                         )}
                       </div>
 
-                      <p className="flex-1 text-base font-semibold text-ink leading-snug group-hover:text-accent transition-colors duration-fast">
-                        {product.name}
-                      </p>
+                      <div className="flex-1 flex items-start gap-2.5 min-w-0">
+                        {product.image_url && (
+                          <span className="w-10 h-10 shrink-0 rounded-md bg-sunken border border-line overflow-hidden">
+                            <img
+                              src={product.image_url}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          </span>
+                        )}
+                        <p className="flex-1 text-base font-semibold text-ink leading-snug group-hover:text-accent transition-colors duration-fast">
+                          {product.name}
+                        </p>
+                      </div>
 
                       <p
                         className={cn(

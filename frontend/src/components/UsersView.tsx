@@ -591,6 +591,7 @@ export const UsersView: React.FC = () => {
     {
       key: 'user',
       header: 'Usuario',
+      card: 'title',
       render: (u) => (
         <div className="flex items-center gap-3 min-w-0">
           <span className="w-9 h-9 shrink-0 rounded-full bg-sunken text-ink-2 flex items-center justify-center text-micro font-bold">
@@ -606,6 +607,7 @@ export const UsersView: React.FC = () => {
     {
       key: 'role',
       header: 'Rol',
+      card: 'meta',
       width: '150px',
       render: (u) => <Badge tone={ROLE_TONE[u.role] ?? 'neutral'}>{u.role}</Badge>,
     },
@@ -637,6 +639,7 @@ export const UsersView: React.FC = () => {
     {
       key: 'actions',
       header: '',
+      card: 'hidden',
       align: 'right',
       width: '100px',
       render: (u) => (

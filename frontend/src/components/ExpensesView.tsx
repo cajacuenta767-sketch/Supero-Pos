@@ -180,6 +180,7 @@ export const ExpensesView: React.FC = () => {
     {
       key: 'concept',
       header: 'Concepto',
+      card: 'title',
       render: (e) => (
         <div className="min-w-0">
           <p className="text-base text-ink truncate">{e.description}</p>
@@ -208,6 +209,7 @@ export const ExpensesView: React.FC = () => {
     {
       key: 'amount',
       header: 'Importe',
+      card: 'meta',
       align: 'right',
       width: '130px',
       render: (e) => <Money value={e.amount} size="base" className="text-ink" />,

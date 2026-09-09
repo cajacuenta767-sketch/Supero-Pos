@@ -15,8 +15,10 @@ import {
 } from 'lucide-react';
 import {
   Badge,
+  Barcode,
   Button,
   Card,
+  ImageUpload,
   Modal,
   DataTable,
   EmptyState,
@@ -116,6 +118,7 @@ export const ProductsView: React.FC = () => {
     stock: 50,
     min_stock: 10,
     is_active: true,
+    image_url: undefined as string | undefined,
   });
 
   // Mock Products List
@@ -284,6 +287,7 @@ export const ProductsView: React.FC = () => {
     {
       key: 'product',
       header: 'Producto',
+      card: 'title',
       render: (s) => (
         <span className="text-base font-semibold text-ink truncate">{s.product_name}</span>
       ),
@@ -361,8 +365,10 @@ export const ProductsView: React.FC = () => {
       header: 'Producto',
       render: (p) => (
         <div className="flex items-center gap-3 min-w-0">
-          <span className="w-9 h-9 shrink-0 rounded-md bg-sunken border border-line flex items-center justify-center text-ink-3">
-            {p.unit_type === 'UNIT' ? (
+          <span className="w-9 h-9 shrink-0 rounded-md bg-sunken border border-line overflow-hidden flex items-center justify-center text-ink-3">
+            {p.image_url ? (
+              <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+            ) : p.unit_type === 'UNIT' ? (
               <Package className="w-4 h-4" />
             ) : p.unit_type === 'FRACTION' ? (
               <Scale className="w-4 h-4" />
@@ -382,6 +388,7 @@ export const ProductsView: React.FC = () => {
     {
       key: 'type',
       header: 'Tipo',
+      card: 'meta',
       width: '150px',
       render: (p) => (
         <Badge tone={UNIT_META[p.unit_type].tone} icon={UNIT_META[p.unit_type].icon}>
@@ -460,6 +467,7 @@ export const ProductsView: React.FC = () => {
     {
       key: 'actions',
       header: '',
+      card: 'hidden',
       align: 'right',
       width: '130px',
       render: (p) => (
@@ -470,7 +478,7 @@ export const ProductsView: React.FC = () => {
               tone="accent"
               onClick={() => {
                 setEditingProduct(p);
-                setFormData({ ...p });
+                setFormData({ ...p, image_url: p.image_url });
                 setIsProductModalOpen(true);
               }}
             >
@@ -754,16 +762,11 @@ export const ProductsView: React.FC = () => {
                 <span className="text-[9px] font-semibold text-center leading-tight line-clamp-2">
                   {selectedLabelProduct?.name ?? ''}
                 </span>
-                <div className="flex items-end gap-[1px] h-6">
-                  {Array.from({ length: 28 }, (_, i) => (
-                    <span
-                      key={i}
-                      className="bg-black"
-                      style={{ width: i % 3 === 0 ? 2 : 1, height: '100%' }}
-                    />
-                  ))}
-                </div>
-                <span className="font-mono text-[8px]">{selectedLabelProduct?.barcode ?? ''}</span>
+                <Barcode
+                  value={selectedLabelProduct?.barcode ?? ''}
+                  height={labelSize === '50x25' ? 30 : 24}
+                  moduleWidth={1}
+                />
                 <span className="font-mono text-[11px] font-bold">
                   ${selectedLabelProduct?.sale_price.toFixed(2) ?? '0.00'}
                 </span>
@@ -829,6 +832,17 @@ export const ProductsView: React.FC = () => {
                 className="lg:col-span-2"
               />
             </div>
+          </section>
+
+          <section className="pt-4 border-t border-line">
+            <ImageUpload
+              value={formData.image_url ?? null}
+              onChange={(url) => setFormData({ ...formData, image_url: url ?? undefined })}
+              label="Imagen del producto"
+              hint="El cajero reconoce un producto por su foto antes que por su nombre: es lo que hace rápida la rejilla del punto de venta."
+              preview="lg"
+              maxSize={600}
+            />
           </section>
 
           <section className="space-y-3 pt-4 border-t border-line">

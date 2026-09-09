@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
 import { Bell, Eye, Mail, MessageSquare, Printer, RotateCcw, Save } from 'lucide-react';
-import { Button, Card, Input, PageHeader, Select, Switch, Tabs, Textarea, useToast } from '../ui';
+import {
+  Button,
+  Card,
+  ImageUpload,
+  Input,
+  PageHeader,
+  Select,
+  Switch,
+  Tabs,
+  Textarea,
+  useToast,
+} from '../ui';
 import type { TabItem } from '../ui';
 
 interface TicketTemplateConfig {
@@ -51,16 +62,22 @@ const PAPER_PX: Record<TicketTemplateConfig['paper_width'], number> = {
 };
 
 /** Ticket tal como saldrá de la impresora térmica, al ancho real. */
-const TicketPreview: React.FC<{ config: TicketTemplateConfig }> = ({ config }) => {
+const TicketPreview: React.FC<{ config: TicketTemplateConfig; logo: string | null }> = ({
+  config,
+  logo,
+}) => {
   const line = '-'.repeat(config.paper_width === '80mm' ? 40 : 30);
   return (
     <div
       className="shrink-0 bg-white text-black font-mono text-[11px] leading-[1.45] p-3 border border-line-strong rounded-sm shadow-e1"
       style={{ width: PAPER_PX[config.paper_width] }}
     >
-      {config.header_logo_enabled && (
-        <div className="text-center font-bold tracking-wider mb-1">[ LOGO ]</div>
-      )}
+      {config.header_logo_enabled &&
+        (logo ? (
+          <img src={logo} alt="" className="mx-auto mb-1 max-h-10 object-contain" />
+        ) : (
+          <div className="text-center font-bold tracking-wider mb-1">[ LOGO ]</div>
+        ))}
       <div className="text-center font-bold uppercase">{config.company_name}</div>
       <div className="text-center">NIT {config.company_nit}</div>
       <div className="text-center">{config.company_address}</div>
@@ -114,6 +131,7 @@ export const NotificationsView: React.FC = () => {
   const toast = useToast();
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('thermal-editor');
   const [config, setConfig] = useState<TicketTemplateConfig>(DEFAULTS);
+  const [logo, setLogo] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
   const [whatsappEnabled, setWhatsappEnabled] = useState(true);
@@ -219,6 +237,19 @@ export const NotificationsView: React.FC = () => {
                     label="Imprimir logotipo en la cabecera"
                     showLabel
                   />
+                  {config.header_logo_enabled && (
+                    <ImageUpload
+                      value={logo}
+                      onChange={(v) => {
+                        setLogo(v);
+                        setDirty(true);
+                      }}
+                      label="Logotipo del ticket"
+                      hint="En blanco y negro se imprime mejor: la térmica no tiene grises."
+                      preview="sm"
+                      maxSize={300}
+                    />
+                  )}
                 </div>
               </Card>
 
@@ -264,7 +295,7 @@ export const NotificationsView: React.FC = () => {
               <p className="flex items-center gap-1.5 text-micro uppercase text-ink-2">
                 <Eye className="w-3.5 h-3.5" /> Vista previa · {config.paper_width}
               </p>
-              <TicketPreview config={config} />
+              <TicketPreview config={config} logo={logo} />
             </div>
           </div>
         )}

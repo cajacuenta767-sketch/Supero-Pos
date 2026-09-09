@@ -170,6 +170,7 @@ export const PurchasesView: React.FC = () => {
     {
       key: 'supplier',
       header: 'Proveedor',
+      card: 'title',
       render: (po) => (
         <div className="min-w-0">
           <p className="text-base font-semibold text-ink truncate">{po.supplier_name}</p>
@@ -206,12 +207,14 @@ export const PurchasesView: React.FC = () => {
     {
       key: 'status',
       header: 'Estado',
+      card: 'meta',
       width: '180px',
       render: (po) => <Badge tone={STATUS_TONE[po.status]}>{STATUS_LABEL[po.status]}</Badge>,
     },
     {
       key: 'actions',
       header: '',
+      card: 'hidden',
       align: 'right',
       width: '110px',
       render: (po) => (

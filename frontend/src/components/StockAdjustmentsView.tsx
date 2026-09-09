@@ -217,12 +217,14 @@ export const StockAdjustmentsView: React.FC = () => {
     {
       key: 'type',
       header: 'Tipo',
+      card: 'meta',
       width: '180px',
       render: (a) => <Badge tone={TYPE_TONE[a.type]}>{TYPE_LABEL[a.type]}</Badge>,
     },
     {
       key: 'reason',
       header: 'Motivo',
+      card: 'title',
       render: (a) => <span className="text-body text-ink-2 truncate">{a.reason || '—'}</span>,
     },
     {
@@ -260,6 +262,7 @@ export const StockAdjustmentsView: React.FC = () => {
     {
       key: 'actions',
       header: '',
+      card: 'hidden',
       align: 'right',
       width: '60px',
       render: (a) => (
