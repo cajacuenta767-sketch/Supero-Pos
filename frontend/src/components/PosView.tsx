@@ -312,9 +312,11 @@ export const PosView: React.FC = () => {
       </div>
 
       {/* 44 / 56 a favor del catálogo */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Bajo 1280px la división lado a lado deja columnas de ~240px:
+          por debajo de ese ancho el ticket y el catálogo se apilan. */}
+      <div className="flex-1 flex flex-col xl:flex-row overflow-y-auto xl:overflow-hidden">
         {/* ─── Ticket ─────────────────────────────────────────────────── */}
-        <section className="w-[44%] flex flex-col bg-surface border-r border-line">
+        <section className="w-full xl:w-[44%] shrink-0 flex flex-col bg-surface border-b xl:border-b-0 xl:border-r border-line">
           {/* Cliente activo */}
           <div className="shrink-0 h-14 px-3 border-b border-line flex items-center justify-between gap-3">
             <button
@@ -359,7 +361,7 @@ export const PosView: React.FC = () => {
           </div>
 
           {/* Líneas del ticket */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-[180px] xl:min-h-0 overflow-y-auto">
             {items.length === 0 ? (
               <EmptyState
                 icon={<ShoppingBag className="w-6 h-6" />}
@@ -372,11 +374,11 @@ export const PosView: React.FC = () => {
                   <div
                     key={item.id}
                     className={cn(
-                      'min-h-16 px-3 py-2.5 flex items-center gap-3 bg-raised',
+                      'min-h-16 px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 bg-raised',
                       flashId === item.id && 'animate-scan-flash',
                     )}
                   >
-                    <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex-1 min-w-[160px] space-y-0.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-base font-semibold text-ink">{item.name}</span>
                         {item.is_wholesale_applied && (
@@ -506,9 +508,13 @@ export const PosView: React.FC = () => {
                 </p>
               )}
 
-              <div className="flex items-end justify-between gap-3 pt-2 border-t border-line-strong">
+              <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1 pt-2 border-t border-line-strong">
                 <span className="text-micro uppercase text-ink-2 pb-2">Total a pagar</span>
-                <Money value={totalPagar} size="hero" className="text-ink leading-none" />
+                <Money
+                  value={totalPagar}
+                  size="hero"
+                  className="text-ink leading-none text-[clamp(2rem,7vw,3.5rem)]"
+                />
               </div>
             </div>
 
@@ -529,7 +535,7 @@ export const PosView: React.FC = () => {
         </section>
 
         {/* ─── Catálogo ───────────────────────────────────────────────── */}
-        <section className="w-[56%] flex flex-col p-4 gap-3 min-w-0">
+        <section className="w-full xl:w-[56%] flex flex-col p-4 gap-3 min-w-0">
           <div className="relative shrink-0">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none" />
             <input
@@ -564,7 +570,7 @@ export const PosView: React.FC = () => {
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto -mr-1 pr-1">
+          <div className="flex-1 min-h-[320px] xl:min-h-0 overflow-y-auto -mr-1 pr-1">
             {filteredCatalog.length === 0 ? (
               <EmptyState
                 icon={<Search className="w-6 h-6" />}
