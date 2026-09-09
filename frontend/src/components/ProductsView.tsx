@@ -14,6 +14,8 @@ import {
   FolderPlus,
   Scan
 } from 'lucide-react';
+import { Badge, Button, DataTable, EmptyState, IconButton, Money, cn } from '../ui';
+import type { Column } from '../ui';
 
 interface Product {
  id: number;
@@ -147,239 +149,267 @@ export const ProductsView: React.FC = () => {
  setIsProductModalOpen(false);
   };
 
+  const UNIT_META = {
+    UNIT:       { label: 'Unitario',    tone: 'accent'  as const, icon: <Package className="w-3 h-3" /> },
+    FRACTION:   { label: 'A granel',    tone: 'success' as const, icon: <Scale className="w-3 h-3" /> },
+    SERIALIZED: { label: 'Serializado', tone: 'warning' as const, icon: <Cpu className="w-3 h-3" /> },
+  };
+
+  const catalogColumns: Array<Column<Product>> = [
+    {
+      key: 'product',
+      header: 'Producto',
+      render: (p) => (
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="w-9 h-9 shrink-0 rounded-md bg-sunken border border-line flex items-center justify-center text-ink-3">
+            {p.unit_type === 'UNIT' ? <Package className="w-4 h-4" />
+              : p.unit_type === 'FRACTION' ? <Scale className="w-4 h-4" />
+              : <Cpu className="w-4 h-4" />}
+          </span>
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-ink truncate">{p.name}</p>
+            <p className="font-mono text-micro text-ink-3">{p.sku} · EAN {p.barcode}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Tipo',
+      width: '150px',
+      render: (p) => (
+        <Badge tone={UNIT_META[p.unit_type].tone} icon={UNIT_META[p.unit_type].icon}>
+          {UNIT_META[p.unit_type].label}
+        </Badge>
+      ),
+    },
+    {
+      key: 'prices',
+      header: 'Costo / Venta / Mayorista',
+      align: 'right',
+      width: '230px',
+      render: (p) => (
+        <div className="space-y-0.5">
+          <div className="flex items-center justify-end gap-2">
+            <span className="text-ink-3">
+              <Money value={p.cost_price} size="body" />
+            </span>
+            <span className="text-ink-3">·</span>
+            <Money value={p.sale_price} size="base" className="text-ink" />
+          </div>
+          <p className="text-body text-ok">
+            May. <Money value={p.wholesale_price} size="body" /> (≥{p.wholesale_min_qty})
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: 'stock',
+      header: 'Stock',
+      align: 'right',
+      width: '130px',
+      render: (p) => {
+        const low = p.stock <= p.min_stock;
+        const unit = p.unit_type === 'FRACTION' ? 'kg' : 'u.';
+        return low ? (
+          <Badge tone={p.stock === 0 ? 'danger' : 'warning'} icon={<AlertTriangle className="w-3 h-3" />}>
+            {p.stock} {unit}
+          </Badge>
+        ) : (
+          <span className="font-mono tnum text-ink">{p.stock} {unit}</span>
+        );
+      },
+    },
+    {
+      key: 'active',
+      header: 'En venta',
+      align: 'center',
+      width: '90px',
+      render: (p) => (
+        <button
+          onClick={() => handleToggleProductStatus(p.id)}
+          role="switch"
+          aria-checked={p.is_active}
+          aria-label={`${p.is_active ? 'Retirar de' : 'Poner en'} venta ${p.name}`}
+          className={cn(
+            'relative inline-flex h-6 w-11 items-center rounded-full shrink-0',
+            'transition-colors duration-fast ease-ease',
+            p.is_active ? 'bg-ok' : 'bg-line-strong',
+          )}
+        >
+          <span
+            className={cn(
+              'inline-block h-4 w-4 rounded-full bg-white transition-transform duration-fast ease-ease',
+              p.is_active ? 'translate-x-6' : 'translate-x-1',
+            )}
+          />
+        </button>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      width: '130px',
+      render: (p) => (
+        <div className="flex items-center justify-end gap-0.5">
+          {canEditProduct && (
+            <IconButton
+              label={`Editar ${p.name}`}
+              tone="accent"
+              onClick={() => {
+                setEditingProduct(p);
+                setFormData({ ...p });
+                setIsProductModalOpen(true);
+              }}
+            >
+              <Edit3 className="w-4 h-4" />
+            </IconButton>
+          )}
+          <IconButton label={`Duplicar ${p.name}`}>
+            <Copy className="w-4 h-4" />
+          </IconButton>
+          <IconButton label={`Kardex de ${p.name}`}>
+            <History className="w-4 h-4" />
+          </IconButton>
+        </div>
+      ),
+    },
+  ];
+
  return (
-    <div className="p-6 bg-canvas h-[calc(100vh-56px)] overflow-y-auto pr-2 space-y-6 select-none transition-colors duration-fast ease-ease">
-      {/* 1. Header & Main Tab Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
+    <div className="h-full overflow-y-auto bg-canvas select-none">
+      <div className="max-w-[1600px] mx-auto p-6 space-y-5">
+      {/* Encabezado y pestañas */}
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <Package className="w-7 h-7 text-accent" />
-            Productos y Catálogo Maestro
-          </h1>
-          <p className="text-body text-ink-2 mt-1">
-            Gestión de artículos unitarios, fraccionados/pesables, serializados IMEI y etiquetas de código de barras
+          <h1 className="text-display text-ink">Productos</h1>
+          <p className="text-base text-ink-2 mt-1">
+            Artículos unitarios, a granel, serializados por IMEI y etiquetas de código de barras.
           </p>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex items-center bg-sunken p-1.5 rounded-md border border-line">
-          <button
- onClick={() => setActiveTab('catalog')}
- className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeTab === 'catalog' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <Package className="w-4 h-4" />
-            Catálogo Maestro
-          </button>
-          <button
- onClick={() => setActiveTab('serials')}
- className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeTab === 'serials' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <Cpu className="w-4 h-4" />
-            Seriales / IMEI
-          </button>
-          <button
- onClick={() => setActiveTab('categories')}
- className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeTab === 'categories' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            Categorías
-          </button>
-          <button
- onClick={() => setActiveTab('labels')}
- className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeTab === 'labels' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <Printer className="w-4 h-4" />
-            Imprimir Etiquetas
-          </button>
-        </div>
-      </div>
+        <nav className="flex rounded-md border border-line overflow-hidden" aria-label="Secciones de productos">
+          {([
+            { id: 'catalog',    label: 'Catálogo',   icon: <Package className="w-4 h-4" /> },
+            { id: 'serials',    label: 'Seriales',   icon: <Cpu className="w-4 h-4" /> },
+            { id: 'categories', label: 'Categorías', icon: <Layers className="w-4 h-4" /> },
+            { id: 'labels',     label: 'Etiquetas',  icon: <Printer className="w-4 h-4" /> },
+          ] as const).map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              aria-current={activeTab === t.id ? 'page' : undefined}
+              className={cn(
+                'h-9 px-4 flex items-center gap-2 text-body font-semibold',
+                'transition-colors duration-fast ease-ease',
+                activeTab === t.id
+                  ? 'bg-accent-soft text-accent-ink'
+                  : 'bg-raised text-ink-2 hover:text-ink',
+              )}
+            >
+              {t.icon}
+              {t.label}
+            </button>
+          ))}
+        </nav>
+      </header>
 
-      {/* TAB 1: PRODUCT CATALOG LIST */}
+      {/* Catálogo maestro */}
       {activeTab === 'catalog' && (
         <div className="space-y-4">
-          {/* Top Toolbar */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-raised p-4 rounded-md border border-line shadow-e1">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
+          {/* Los filtros van en una sola fila sobre la tabla */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[240px] max-w-md">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none" />
               <input
- type="text"
- value={searchQuery}
- onChange={(e) => setSearchQuery(e.target.value)}
- placeholder="Buscar por SKU, Código de Barras o Nombre..."
- className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar por SKU, código de barras o nombre…"
+                className="w-full h-9 pl-9 pr-3 bg-raised border border-line-strong rounded-md text-base text-ink hover:border-ink-3 focus:border-accent transition-colors duration-fast ease-ease"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Category Filter */}
-              <select
- value={categoryFilter}
- onChange={(e) => setCategoryFilter(e.target.value)}
- className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-semibold focus:outline-none"
-              >
-                <option value="ALL">Todas las Categorías</option>
-                <option value="Bebidas & Gaseosas">Bebidas & Gaseosas</option>
-                <option value="Lácteos & Fiambrería">Lácteos & Fiambrería</option>
-                <option value="Electrónica & Celulares">Electrónica & Celulares</option>
-                <option value="Golosinas & Snacks">Golosinas & Snacks</option>
-              </select>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              aria-label="Categoría"
+              className="h-9 px-2.5 bg-raised border border-line-strong rounded-md text-body font-semibold text-ink cursor-pointer hover:border-ink-3 transition-colors duration-fast ease-ease"
+            >
+              <option value="ALL">Todas las categorías</option>
+              <option value="Bebidas &amp; Gaseosas">Bebidas &amp; Gaseosas</option>
+              <option value="Lácteos &amp; Fiambrería">Lácteos &amp; Fiambrería</option>
+              <option value="Electrónica &amp; Celulares">Electrónica &amp; Celulares</option>
+              <option value="Golosinas &amp; Snacks">Golosinas &amp; Snacks</option>
+            </select>
 
-              {/* Unit Type Filter */}
-              <select
- value={unitTypeFilter}
- onChange={(e) => setUnitTypeFilter(e.target.value)}
- className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-semibold focus:outline-none"
-              >
-                <option value="ALL">Todos los Tipos</option>
-                <option value="UNIT">Unitario</option>
-                <option value="FRACTION">Fraccionado / Pesable</option>
-                <option value="SERIALIZED">Serializado / IMEI</option>
-              </select>
+            <select
+              value={unitTypeFilter}
+              onChange={(e) => setUnitTypeFilter(e.target.value)}
+              aria-label="Tipo de unidad"
+              className="h-9 px-2.5 bg-raised border border-line-strong rounded-md text-body font-semibold text-ink cursor-pointer hover:border-ink-3 transition-colors duration-fast ease-ease"
+            >
+              <option value="ALL">Todos los tipos</option>
+              <option value="UNIT">Unitario</option>
+              <option value="FRACTION">A granel</option>
+              <option value="SERIALIZED">Serializado</option>
+            </select>
 
-              {/* Stock Status Filter */}
-              <select
- value={stockStatusFilter}
- onChange={(e) => setStockStatusFilter(e.target.value)}
- className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-semibold focus:outline-none"
-              >
-                <option value="ALL">Todos los Stocks</option>
-                <option value="NORMAL">Stock Normal</option>
-                <option value="CRITICAL">Stock Crítico / Agotado</option>
-              </select>
+            <select
+              value={stockStatusFilter}
+              onChange={(e) => setStockStatusFilter(e.target.value)}
+              aria-label="Estado de stock"
+              className="h-9 px-2.5 bg-raised border border-line-strong rounded-md text-body font-semibold text-ink cursor-pointer hover:border-ink-3 transition-colors duration-fast ease-ease"
+            >
+              <option value="ALL">Todo el stock</option>
+              <option value="NORMAL">Stock normal</option>
+              <option value="CRITICAL">Bajo mínimo</option>
+            </select>
 
-              {canCreateProduct && (
-                <button
- onClick={() => {
- setEditingProduct(null);
- setIsProductModalOpen(true);
-                  }}
- className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  Nuevo Producto
-                </button>
-              )}
-            </div>
+            <div className="flex-1" />
+
+            {canCreateProduct && (
+              <Button
+                icon={<Plus className="w-4 h-4" />}
+                onClick={() => {
+                  setEditingProduct(null);
+                  setIsProductModalOpen(true);
+                }}
+              >
+                Nuevo producto
+              </Button>
+            )}
           </div>
 
-          {/* Structured Catalog Table */}
-          <div className="bg-raised rounded-md border border-line shadow-e1 overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-sunken text-ink-2 text-micro font-extrabold uppercase tracking-wider border-b border-line">
-                  <th className="p-4">Producto & Códigos</th>
-                  <th className="p-4">Tipo Unidad</th>
-                  <th className="p-4">Precios (Costo / Venta / Mayorista)</th>
-                  <th className="p-4">Stock Actual</th>
-                  <th className="p-4 text-center">Estado Venta</th>
-                  <th className="p-4 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line text-body">
-                {filteredProducts.map((p) => {
- const isLowStock = p.stock <= p.min_stock;
- const unitBadge = {
-                    UNIT: { label: 'Unitario', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft dark:text-accent-ink border-accent/30', icon: <Package className="w-3 h-3" /> },
-                    FRACTION: { label: 'Pesable / Granel', color: 'bg-ok-soft text-ok-ink dark:bg-ok-soft dark:text-ok-ink border-ok/30', icon: <Scale className="w-3 h-3" /> },
-                    SERIALIZED: { label: 'Serializado / IMEI', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft dark:text-accent-ink border-accent/30', icon: <Cpu className="w-3 h-3" /> },
-                  }[p.unit_type];
+          <DataTable
+            columns={catalogColumns}
+            rows={filteredProducts}
+            rowKey={(p) => p.id}
+            empty={
+              <EmptyState
+                icon={<Package className="w-6 h-6" />}
+                title="Sin coincidencias"
+                hint="Ajuste la búsqueda o los filtros para ver productos."
+              />
+            }
+          />
 
- return (
-                    <tr key={p.id} className="hover:bg-sunken transition-colors">
-                      <td className="p-4 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-md bg-sunken border border-line flex items-center justify-center font-bold text-ink-3">
-                          {p.unit_type === 'UNIT' ? <Package className="w-5 h-5 text-accent" /> : p.unit_type === 'FRACTION' ? <Scale className="w-5 h-5 text-ok" /> : <Cpu className="w-5 h-5 text-accent" />}
-                        </div>
-                        <div>
-                          <p className="font-bold text-ink">{p.name}</p>
-                          <span className="text-ink-3 font-mono text-micro block">{p.sku} • EAN: {p.barcode}</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-2.5 py-1 rounded-md text-micro font-bold border flex items-center gap-1.5 w-fit ${unitBadge.color}`}>
-                          {unitBadge.icon}
-                          {unitBadge.label}
-                        </span>
-                      </td>
-                      <td className="p-4 font-mono">
-                        <div className="text-micro">
-                          <span className="text-ink-3">Costo: <span className="font-bold text-ink-2">${p.cost_price.toFixed(2)}</span></span>
-                          <span className="mx-1">•</span>
-                          <span className="text-accent font-extrabold">P.Venta: ${p.sale_price.toFixed(2)}</span>
-                        </div>
-                        <span className="text-micro text-ok block font-semibold">
-                          Mayorista: ${p.wholesale_price.toFixed(2)} (Mín: {p.wholesale_min_qty} u)
-                        </span>
-                      </td>
-                      <td className="p-4 font-mono font-bold">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-body ${
- isLowStock ? 'bg-danger-soft text-danger-ink dark:bg-danger-soft dark:text-danger-ink animate-pulse' : 'text-ink'
-                        }`}>
-                          {isLowStock && <AlertTriangle className="w-3.5 h-3.5 text-danger" />}
-                          {p.stock} {p.unit_type === 'FRACTION' ? 'kg' : 'unid'}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center">
-                        <button
- onClick={() => handleToggleProductStatus(p.id)}
- className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
- p.is_active ? 'bg-emerald-500' : 'bg-sunken'
-                          }`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${p.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
-                        </button>
-                      </td>
-                      <td className="p-4 text-right space-x-1">
-                        {canEditProduct && (
-                          <button
- onClick={() => {
- setEditingProduct(p);
- setFormData({ ...p });
- setIsProductModalOpen(true);
-                            }}
- className="p-1.5 text-accent hover:bg-accent-soft rounded-md" title="Editar Producto"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                        )}
-                        <button className="p-1.5 text-warn hover:bg-warn-soft rounded-md" title="Duplicar">
-                          <Copy className="w-4 h-4" />
-                        </button>
-                        <button className="p-1.5 text-ink-2 hover:bg-sunken rounded-md" title="Kardex Individual">
-                          <History className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {/* Table Footer */}
-            <div className="p-4 bg-sunken border-t border-line flex items-center justify-between text-body text-ink-3">
-              <span>Mostrando {filteredProducts.length} de {products.length} productos registrados</span>
-              <div className="flex items-center gap-2">
-                <span>Registros por página:</span>
-                <select
- value={pageSize}
- onChange={(e) => setPageSize(Number(e.target.value))}
- className="px-2 py-1 bg-raised border border-line rounded-md text-body font-semibold"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-            </div>
+          <div className="flex items-center justify-between text-body text-ink-2">
+            <span>
+              Mostrando <span className="font-mono tnum text-ink">{filteredProducts.length}</span> de{' '}
+              <span className="font-mono tnum text-ink">{products.length}</span> productos
+            </span>
+            <label className="flex items-center gap-2">
+              Registros por página
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="h-8 px-2 bg-raised border border-line-strong rounded-md text-body font-semibold text-ink cursor-pointer"
+              >
+                {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
           </div>
         </div>
       )}
@@ -657,6 +687,7 @@ export const ProductsView: React.FC = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };
