@@ -21,6 +21,13 @@ const TICKET_LIMIT = 400;
 
 export type PaymentMethod = 'CASH' | 'CARD' | 'QR' | 'MIXED';
 
+/** Una forma de pago concreta dentro de un ticket. */
+export interface PaymentLine {
+  method: 'CASH' | 'CARD' | 'QR';
+  amount_received: number;
+  change_given: number;
+}
+
 export interface SoldItem {
   /** Identificador del producto en el catálogo: es lo que permite devolverlo. */
   id: number;
@@ -44,6 +51,9 @@ export interface SaleTicket {
   branch_id?: string;
   branch_name?: string;
   payment_method: PaymentMethod;
+  /** Desglose por forma de pago. En un ticket mixto es lo único que permite
+   *  saber cuánto entró en la gaveta y cuánto por pasarela. */
+  payments: PaymentLine[];
   total: number;
   cash_given: number;
   change: number;
@@ -65,6 +75,7 @@ const SEED: SaleTicket[] = [
     branch_id: 'branch-1',
     branch_name: 'Sucursal Central - Av. Principal #123',
     payment_method: 'CASH',
+    payments: [{ method: 'CASH', amount_received: 100.0, change_given: 26.0 }],
     total: 74.0,
     cash_given: 100.0,
     change: 26.0,
@@ -106,6 +117,7 @@ const SEED: SaleTicket[] = [
     branch_id: 'branch-2',
     branch_name: 'Sucursal Norte - Mall Plaza Local 45',
     payment_method: 'QR',
+    payments: [{ method: 'QR', amount_received: 144.9, change_given: 0 }],
     total: 144.9,
     cash_given: 144.9,
     change: 0,
@@ -132,6 +144,16 @@ interface SalesState {
   voidTicket: (id: string, reason: string, by: string) => SaleTicket | null;
   /** Vuelve a leer lo guardado: otra ventana de la misma caja pudo cobrar. */
   hydrate: () => void;
+  /**
+   * Efectivo que entró en la gaveta desde un instante dado.
+   *
+   * Se sumaba de la cola de sincronización, que se vacía al sincronizar: en
+   * cuanto las ventas subían al servidor, el esperado del arqueo caía y el
+   * cierre acusaba al cajero de un faltante que era la recaudación entera.
+   * Los tickets no se vacían, y un ticket anulado deja de contar porque su
+   * dinero volvió al cliente.
+   */
+  cashSince: (sinceIso: string) => number;
   ticketById: (id: string) => SaleTicket | undefined;
 }
 
@@ -169,6 +191,18 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     const stored = readPersisted<SaleTicket[]>(STORAGE_KEY);
     if (stored) set({ tickets: stored });
   },
+
+  cashSince: (sinceIso) =>
+    get()
+      .tickets.filter((t) => t.status === 'COMPLETED' && t.at >= sinceIso)
+      .reduce(
+        (total, t) =>
+          total +
+          t.payments
+            .filter((pay) => pay.method === 'CASH')
+            .reduce((sum, pay) => sum + pay.amount_received - pay.change_given, 0),
+        0,
+      ),
 
   ticketById: (id) => get().tickets.find((t) => t.id === id),
 }));

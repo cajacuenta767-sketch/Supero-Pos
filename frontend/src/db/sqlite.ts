@@ -37,7 +37,11 @@ export interface BlockB {
 }
 
 export interface BlockCPaymentItem {
-  payment_method: 'CASH' | 'CARD' | 'QR' | 'MIXED';
+  /* Una línea del desglose nunca es «mixto»: mixto es la etiqueta del ticket
+     entero, y significa justamente que hay varias líneas. Con `MIXED` aquí, un
+     pago sin método real pasaba la comprobación de tipos y la suma de efectivo
+     del arqueo lo ignoraba en silencio. */
+  payment_method: 'CASH' | 'CARD' | 'QR';
   amount_received: number;
   change_given: number;
 }

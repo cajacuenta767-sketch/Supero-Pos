@@ -283,6 +283,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
           selectedCustomer.id !== 'default-public' ? selectedCustomer.businessName : undefined,
         payment_method: paymentMethod,
         total,
+        payments: paymentBreakdown.map((pay) => ({
+          method: pay.payment_method,
+          amount_received: pay.amount_received,
+          change_given: pay.change_given,
+        })),
         cash_given: totalPaid,
         change: paymentMethod === 'CASH' || paymentMethod === 'MIXED' ? change : 0,
         items: items.map((item) => ({

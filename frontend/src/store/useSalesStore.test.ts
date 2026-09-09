@@ -7,6 +7,7 @@ const ticket = (id: string): Omit<SaleTicket, 'status'> => ({
   at: new Date().toISOString(),
   cashier_name: 'Ana Rojas',
   payment_method: 'CASH',
+  payments: [{ method: 'CASH', amount_received: 30, change_given: 6 }],
   total: 24,
   cash_given: 30,
   change: 6,
@@ -73,5 +74,49 @@ describe('useSalesStore', () => {
     const saved = useSalesStore.getState().recordSale(ticket('TK-6'));
     expect(saved.items[0].id).toBe(107);
     expect(saved.items[0].quantity).toBe(2);
+  });
+
+  describe('efectivo del turno', () => {
+    const conPagos = (id: string, at: string, pagos: SaleTicket['payments']) => {
+      const t = { ...ticket(id), at, payments: pagos };
+      return useSalesStore.getState().recordSale(t);
+    };
+
+    it('suma lo recibido menos el cambio, solo del efectivo', () => {
+      conPagos('TK-A', '2026-09-09T10:00:00.000Z', [
+        { method: 'CASH', amount_received: 100, change_given: 26 },
+      ]);
+      conPagos('TK-B', '2026-09-09T11:00:00.000Z', [
+        { method: 'QR', amount_received: 50, change_given: 0 },
+      ]);
+      expect(useSalesStore.getState().cashSince('2026-09-09T00:00:00.000Z')).toBe(74);
+    });
+
+    it('de un ticket mixto cuenta solo la parte en efectivo', () => {
+      conPagos('TK-C', '2026-09-09T12:00:00.000Z', [
+        { method: 'CASH', amount_received: 40, change_given: 5 },
+        { method: 'CARD', amount_received: 60, change_given: 0 },
+      ]);
+      expect(useSalesStore.getState().cashSince('2026-09-09T00:00:00.000Z')).toBe(35);
+    });
+
+    it('ignora lo cobrado antes de abrir el turno', () => {
+      conPagos('TK-D', '2026-09-08T20:00:00.000Z', [
+        { method: 'CASH', amount_received: 500, change_given: 0 },
+      ]);
+      conPagos('TK-E', '2026-09-09T09:00:00.000Z', [
+        { method: 'CASH', amount_received: 20, change_given: 0 },
+      ]);
+      expect(useSalesStore.getState().cashSince('2026-09-09T08:00:00.000Z')).toBe(20);
+    });
+
+    it('un ticket anulado deja de contar: su dinero volvió al cliente', () => {
+      conPagos('TK-F', '2026-09-09T10:00:00.000Z', [
+        { method: 'CASH', amount_received: 90, change_given: 0 },
+      ]);
+      expect(useSalesStore.getState().cashSince('2026-09-09T00:00:00.000Z')).toBe(90);
+      useSalesStore.getState().voidTicket('TK-F', 'Cobro duplicado', 'Ana');
+      expect(useSalesStore.getState().cashSince('2026-09-09T00:00:00.000Z')).toBe(0);
+    });
   });
 });

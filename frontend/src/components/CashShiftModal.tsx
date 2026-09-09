@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, Eye, Lock, Unlock } from 'lucide-react';
 import { usePosStore } from '../store/usePosStore';
-import { localDb } from '../db/sqlite';
+import { useSalesStore } from '../store/useSalesStore';
 import { Badge, Button, ImageUpload, Input, Modal, Money, Textarea, cn } from '../ui';
 
 interface CashShiftModalProps {
@@ -22,7 +22,12 @@ export const CashShiftModal: React.FC<CashShiftModalProps> = ({ isOpen, onClose 
   const isShiftOpen = cashShift !== null;
 
   const counted = parseFloat(closingAmount) || 0;
-  const cashSales = isShiftOpen ? localDb.getCashSalesTotal(cashShift.openedAt) : 0;
+  /* El efectivo del turno sale de los tickets, no de la cola de
+     sincronización: la cola se vacía al sincronizar, así que en cuanto las
+     ventas subían al servidor el esperado caía y el cierre acusaba al cajero de
+     un faltante que era la recaudación entera. */
+  const cashSince = useSalesStore((state) => state.cashSince);
+  const cashSales = isShiftOpen ? cashSince(cashShift.openedAt) : 0;
   const expected = isShiftOpen ? cashShift.initialFloat + cashSales : 0;
   const difference = counted - expected;
   const isBalanced = Math.abs(difference) < 0.01;
