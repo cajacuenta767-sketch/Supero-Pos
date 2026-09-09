@@ -1,6 +1,6 @@
 import { usePersistentState } from '../store/persist';
 import React, { useState } from 'react';
-import { ShoppingCart, Plus, Truck, Eye, X } from 'lucide-react';
+import { ShoppingCart, Plus, Truck, Eye, X, AlertCircle } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -102,6 +102,11 @@ export const PurchasesView: React.FC = () => {
   const [poError, setPoError] = useState<string | undefined>();
   const [isReceivingModalOpen, setIsReceivingModalOpen] = useState(false);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
+  /* Lo que se recibe de cada línea, por identificador de línea. El campo
+     «Recibido» del modal no estaba controlado: se tecleaba «3 de 10» y la
+     recepción sumaba las 10 igualmente y daba la orden por completada. El
+     almacén quedaba con siete unidades de papel que nunca entraron. */
+  const [receivedByLine, setReceivedByLine] = useState<Record<number, string>>({});
 
   // Receiving IMEI Scanning State
   const [scannedImeis, setScannedImeis] = useState<string[]>([]);
@@ -212,10 +217,38 @@ export const PurchasesView: React.FC = () => {
     return matchesSearch && matchesStatus && matchesTab;
   });
 
+  /** Lo que falta por recibir de una línea. */
+  const pendingOf = (item: POItem) => Math.max(0, item.ordered_qty - item.received_qty);
+
+  /** Lo que el operario declara de esta línea, acotado a lo que falta. */
+  const receivedNow = (item: POItem) => {
+    const raw = receivedByLine[item.id];
+    const value = raw === undefined || raw === '' ? pendingOf(item) : Number(raw);
+    if (!Number.isFinite(value) || value < 0) return 0;
+    return Math.min(value, pendingOf(item));
+  };
+
+  /* Los IMEI se cuentan contra lo que se está recibiendo ahora, no contra lo
+     pedido: en una recepción parcial de 3 de 10 teléfonos se piden 3 IMEI. */
   const serializedQty = selectedPO
     ? selectedPO.items
         .filter((i) => i.unit_type === 'SERIALIZED')
-        .reduce((sum, i) => sum + i.ordered_qty, 0)
+        .reduce((sum, i) => sum + receivedNow(i), 0)
+    : 0;
+
+  /* Con dos líneas serializadas no se sabe a cuál pertenece cada IMEI leído.
+     Antes se asignaban todos a la primera y la segunda entraba sin trazas. */
+  const serializedLines = selectedPO
+    ? selectedPO.items.filter((i) => i.unit_type === 'SERIALIZED' && receivedNow(i) > 0)
+    : [];
+
+  /** ¿Alguien ha tecleado más de lo que falta en alguna línea? */
+  const excessLine = selectedPO
+    ? selectedPO.items.some((i) => Number(receivedByLine[i.id] ?? pendingOf(i)) > pendingOf(i))
+    : false;
+
+  const totalReceivingNow = selectedPO
+    ? selectedPO.items.reduce((sum, i) => sum + receivedNow(i), 0)
     : 0;
 
   const cleanImei = (raw: string) => raw.trim().replace(/^IMEI[-\s]?/i, '');
@@ -305,6 +338,7 @@ export const PurchasesView: React.FC = () => {
   const closeReceiving = () => {
     setIsReceivingModalOpen(false);
     setSelectedPO(null);
+    setReceivedByLine({});
     setScannedImeis([]);
     setImeiInput('');
     setImeiAddError(undefined);
@@ -326,37 +360,64 @@ export const PurchasesView: React.FC = () => {
   };
 
   const receiveOrder = (po: PurchaseOrder) => {
-    setPurchaseOrders((prev) =>
-      prev.map((p) => (p.id === po.id ? { ...p, status: 'COMPLETED' as const } : p)),
-    );
+    /* Una orden ya completada no se vuelve a recibir: sumaría la mercancía dos
+       veces. Antes nada lo impedía y el botón seguía ahí. */
+    if (po.status === 'COMPLETED' || po.status === 'CANCELLED') {
+      toast(`La orden ${po.id} ya está ${STATUS_LABEL[po.status].toLowerCase()}.`, 'warning');
+      return;
+    }
+
+    const lines = po.items.map((item) => ({ item, qty: receivedNow(item) }));
+    const entering = lines.filter((l) => l.qty > 0);
+
+    if (entering.length === 0) {
+      toast('No hay ninguna cantidad que recibir.', 'warning');
+      return;
+    }
 
     /* Los IMEI escaneados entran al inventario de series: sin esto, el aparato
-       recibido no se podría vender, porque la venta ya los valida. */
-    const serialized = po.items.find((item) => item.unit_type === 'SERIALIZED');
-    if (serialized && scannedImeis.length > 0) {
-      registerSerials(serialized.product_id, scannedImeis);
+       recibido no se podría vender, porque la venta ya los valida. Se asignan a
+       la única línea serializada que se esté recibiendo; con dos no se sabría a
+       cuál pertenece cada lectura, así que el modal no deja llegar hasta aquí. */
+    if (serializedLines.length === 1 && scannedImeis.length > 0) {
+      registerSerials(serializedLines[0].product_id, scannedImeis);
     }
 
     /* Recibir mercadería suma existencias. Antes solo se marcaba la orden como
        completada: el stock no cambiaba, así que el inventario únicamente bajaba
-       —con las ventas— y nunca se reponía. */
+       —con las ventas— y nunca se reponía. Y sumaba siempre lo pedido, no lo
+       que el operario declaraba haber recibido. */
     applyMovements(
-      po.items.map((item) => ({
+      entering.map(({ item, qty }) => ({
         productId: item.product_id,
         type: 'PURCHASE' as const,
-        quantity: item.ordered_qty,
+        quantity: qty,
         reference: po.id,
         reason: `Recepción de ${po.supplier_name}`,
       })),
     );
-    // Mismo motivo que en `closeReceiving`: confirmar tampoco debe dejar la
-    // orden seleccionada, o al cerrarse la recepción aparece su detalle.
-    setIsReceivingModalOpen(false);
-    setSelectedPO(null);
-    setScannedImeis([]);
-    setImeiInput('');
-    setImeiAddError(undefined);
-    toast(`Orden ${po.id} recibida`, 'success');
+
+    const updatedItems = po.items.map((item) => {
+      const line = lines.find((l) => l.item.id === item.id);
+      return line ? { ...item, received_qty: item.received_qty + line.qty } : item;
+    });
+
+    /* Recibida en parte mientras quede algo pendiente: la orden sigue viva y se
+       puede volver a recibir el resto cuando llegue. */
+    const complete = updatedItems.every((item) => item.received_qty >= item.ordered_qty);
+    const nextStatus: PurchaseOrder['status'] = complete ? 'COMPLETED' : 'PARTIAL_RECEIVED';
+
+    setPurchaseOrders((prev) =>
+      prev.map((p) => (p.id === po.id ? { ...p, status: nextStatus, items: updatedItems } : p)),
+    );
+
+    closeReceiving();
+    toast(
+      complete
+        ? `Orden ${po.id} recibida por completo · ${totalReceivingNow} en inventario`
+        : `Orden ${po.id} recibida en parte · ${totalReceivingNow} en inventario, queda pendiente el resto`,
+      complete ? 'success' : 'info',
+    );
   };
 
   const columns: Array<Column<PurchaseOrder>> = [
@@ -584,8 +645,15 @@ export const PurchasesView: React.FC = () => {
             <Button
               variant="success"
               /* Un equipo serializado sin IMEI entra al inventario sin
-                 trazabilidad, que es justo lo que la serialización evita. */
-              disabled={serializedQty > 0 && scannedImeis.length !== serializedQty}
+                 trazabilidad, que es justo lo que la serialización evita. Y con
+                 dos líneas serializadas a la vez no se sabe a cuál pertenece
+                 cada lectura: se reciben por separado. */
+              disabled={
+                totalReceivingNow <= 0 ||
+                excessLine ||
+                serializedLines.length > 1 ||
+                (serializedQty > 0 && scannedImeis.length !== serializedQty)
+              }
               onClick={() => selectedPO && receiveOrder(selectedPO)}
             >
               Confirmar recepción
@@ -595,27 +663,53 @@ export const PurchasesView: React.FC = () => {
       >
         {selectedPO && (
           <div className="space-y-5">
+            {serializedLines.length > 1 && (
+              <div className="p-3 rounded-md bg-warn-soft border border-warn/25 flex items-start gap-2 text-body text-warn-ink">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                Esta orden trae {serializedLines.length} artículos con IMEI. Recíbalos de uno en
+                uno: si se leen todos juntos no hay forma de saber qué IMEI es de qué artículo.
+              </div>
+            )}
+
             <div className="space-y-2">
               <p className="text-micro uppercase text-ink-3">Cantidades recibidas</p>
               <div className="divide-y divide-line border border-line rounded-md">
-                {selectedPO.items.map((it) => (
-                  <div key={it.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
-                    <div className="flex-1 min-w-[180px]">
-                      <p className="text-base text-ink truncate">{it.name}</p>
-                      <p className="font-mono text-micro text-ink-3">
-                        pedido {it.ordered_qty} {it.unit_type === 'FRACTION' ? 'kg' : 'u.'}
-                      </p>
+                {selectedPO.items.map((it) => {
+                  const unidad = it.unit_type === 'FRACTION' ? 'kg' : 'u.';
+                  const pendiente = pendingOf(it);
+                  return (
+                    <div key={it.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+                      <div className="flex-1 min-w-[180px]">
+                        <p className="text-base text-ink truncate">{it.name}</p>
+                        <p className="font-mono text-micro text-ink-3">
+                          pedido {it.ordered_qty} {unidad}
+                          {it.received_qty > 0 && ` · ya recibido ${it.received_qty} ${unidad}`}
+                        </p>
+                      </div>
+                      <Input
+                        label="Recibido"
+                        type="number"
+                        max={pendiente}
+                        min={0}
+                        step={it.unit_type === 'FRACTION' ? 0.001 : 1}
+                        /* Controlado: el campo se tecleaba y no lo leía nadie. */
+                        value={receivedByLine[it.id] ?? String(pendiente)}
+                        onChange={(e) =>
+                          setReceivedByLine((prev) => ({ ...prev, [it.id]: e.target.value }))
+                        }
+                        /* No se puede recibir más de lo que falta: la mercancía
+                           de más no es de esta orden y entraría sin respaldo. */
+                        error={
+                          Number(receivedByLine[it.id] ?? pendiente) > pendiente
+                            ? `Faltan ${pendiente} ${unidad} por recibir`
+                            : undefined
+                        }
+                        disabled={pendiente === 0}
+                        className="w-40 [&_input]:font-mono [&_input]:text-center"
+                      />
                     </div>
-                    <Input
-                      label="Recibido"
-                      type="number"
-                      max={it.ordered_qty}
-                      min={0}
-                      defaultValue={it.ordered_qty}
-                      className="w-32 [&_input]:font-mono [&_input]:text-center"
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
