@@ -1,3 +1,4 @@
+import { usePersistentState } from '../store/persist';
 import React, { useState } from 'react';
 import {
   CreditCard,
@@ -98,7 +99,7 @@ export const FinanceView: React.FC = () => {
   );
 
   // Payment Accounts State
-  const [accounts, setAccounts] = useState<PaymentAccount[]>([
+  const [accounts, setAccounts] = usePersistentState<PaymentAccount[]>('cuentas', [
     {
       id: 'ACC-01',
       name: 'Caja 1 - Principal Mostrador',
@@ -154,41 +155,44 @@ export const FinanceView: React.FC = () => {
   ]);
 
   // Financial Audit Ledger (financial_transactions_log)
-  const [transactions, setTransactions] = useState<FinancialTransaction[]>([
-    {
-      id: 'TX-9004',
-      timestamp: '14/08/2026 12:10',
-      source_account: 'Caja 1 - Principal Mostrador',
-      dest_account: 'Banco Mercantil Santa Cruz',
-      amount: 500.0,
-      fee_deducted: 0,
-      operation_type: 'DEPOSIT_CASH_TO_BANK',
-      voucher_number: 'BOL-884920',
-      user_name: 'Juan Pérez',
-    },
-    {
-      id: 'TX-9003',
-      timestamp: '14/08/2026 11:45',
-      source_account: 'Cliente Final',
-      dest_account: 'Pasarela Digital QR BCP',
-      amount: 145.0,
-      fee_deducted: 2.18,
-      operation_type: 'POS_SALE_CREDIT',
-      voucher_number: 'QR-VAL-1029',
-      user_name: 'María Gómez',
-    },
-    {
-      id: 'TX-9002',
-      timestamp: '14/08/2026 09:30',
-      source_account: 'Caja 1 - Principal Mostrador',
-      dest_account: 'Proveedor Suministros',
-      amount: 35.5,
-      fee_deducted: 0,
-      operation_type: 'PETTY_CASH_EXPENSE',
-      voucher_number: 'REC-3011',
-      user_name: 'Juan Pérez',
-    },
-  ]);
+  const [transactions, setTransactions] = usePersistentState<FinancialTransaction[]>(
+    'movimientos',
+    [
+      {
+        id: 'TX-9004',
+        timestamp: '14/08/2026 12:10',
+        source_account: 'Caja 1 - Principal Mostrador',
+        dest_account: 'Banco Mercantil Santa Cruz',
+        amount: 500.0,
+        fee_deducted: 0,
+        operation_type: 'DEPOSIT_CASH_TO_BANK',
+        voucher_number: 'BOL-884920',
+        user_name: 'Juan Pérez',
+      },
+      {
+        id: 'TX-9003',
+        timestamp: '14/08/2026 11:45',
+        source_account: 'Cliente Final',
+        dest_account: 'Pasarela Digital QR BCP',
+        amount: 145.0,
+        fee_deducted: 2.18,
+        operation_type: 'POS_SALE_CREDIT',
+        voucher_number: 'QR-VAL-1029',
+        user_name: 'María Gómez',
+      },
+      {
+        id: 'TX-9002',
+        timestamp: '14/08/2026 09:30',
+        source_account: 'Caja 1 - Principal Mostrador',
+        dest_account: 'Proveedor Suministros',
+        amount: 35.5,
+        fee_deducted: 0,
+        operation_type: 'PETTY_CASH_EXPENSE',
+        voucher_number: 'REC-3011',
+        user_name: 'Juan Pérez',
+      },
+    ],
+  );
 
   // Deposit Form State (Caja -> Banco)
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);

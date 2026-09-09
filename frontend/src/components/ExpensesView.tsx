@@ -1,3 +1,4 @@
+import { usePersistentState } from '../store/persist';
 import React, { useState } from 'react';
 import { DollarSign, Plus, TrendingDown, Lock, RefreshCw } from 'lucide-react';
 import {
@@ -87,7 +88,7 @@ export const ExpensesView: React.FC = () => {
   const [fixedFund] = useState(500.0);
 
   // Mock Expenses Data
-  const [expenses, setExpenses] = useState<OperationalExpense[]>([
+  const [expenses, setExpenses] = usePersistentState<OperationalExpense[]>('gastos', [
     {
       id: 'EXP-5001',
       date: '14/08/2026 10:30',

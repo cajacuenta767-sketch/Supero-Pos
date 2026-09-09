@@ -1,26 +1,37 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { lineKey, useCartStore } from './useCartStore';
+import type { Product } from './useCatalogStore';
 
-const PHONE = {
+const PHONE: Product = {
   id: 101,
   sku: 'ELE-S23-001',
   barcode: '7750123456789',
   name: 'Smartphone Galaxy S23 Ultra',
-  unit_type: 'SERIALIZED' as const,
-  retail_price: 850,
+  category: 'Electrónica',
+  unit_type: 'SERIALIZED',
+  cost_price: 700,
+  sale_price: 850,
   wholesale_price: 800,
   wholesale_min_qty: 3,
+  stock: 12,
+  min_stock: 4,
+  is_active: true,
 };
 
-const CHEESE = {
+const CHEESE: Product = {
   id: 102,
   sku: 'AB-QSO-002',
   barcode: '7759876543210',
   name: 'Queso Criollo (a granel)',
-  unit_type: 'FRACTION' as const,
-  retail_price: 45,
+  category: 'Lácteos',
+  unit_type: 'FRACTION',
+  cost_price: 32,
+  sale_price: 45,
   wholesale_price: 40,
   wholesale_min_qty: 5,
+  stock: 45.5,
+  min_stock: 10,
+  is_active: true,
 };
 
 const reset = () =>

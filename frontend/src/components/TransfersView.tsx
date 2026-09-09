@@ -1,3 +1,4 @@
+import { usePersistentState } from '../store/persist';
 import React, { useState } from 'react';
 import { ArrowLeftRight, ArrowRight, Eye, Plus, Truck } from 'lucide-react';
 import {
@@ -85,7 +86,7 @@ export const TransfersView: React.FC = () => {
   const [transferNotes, setTransferNotes] = useState('');
 
   // Mock Transfer Guides Data
-  const [transfers, setTransfers] = useState<TransferGuide[]>([
+  const [transfers, setTransfers] = usePersistentState<TransferGuide[]>('traslados', [
     {
       id: 'TR-3001',
       date: '14/08/2026 10:15',

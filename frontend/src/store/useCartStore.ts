@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { fromCents, lineTotalCents, percentOf, sumCents, toCents } from '../utils/money';
+import type { Product as CatalogProduct } from './useCatalogStore';
 
 /**
  * Identidad de una línea del ticket.
@@ -46,20 +47,8 @@ interface CartState {
   qrAmount: number;
 
   // Actions
-  addItem: (
-    product: {
-      id: number;
-      sku: string;
-      barcode: string;
-      name: string;
-      unit_type: 'UNIT' | 'FRACTION' | 'SERIALIZED';
-      retail_price: number;
-      wholesale_price?: number;
-      wholesale_min_qty?: number;
-    },
-    quantity?: number,
-    serial_number?: string | null,
-  ) => void;
+  /** Acepta el producto tal y como vive en el catálogo compartido. */
+  addItem: (product: CatalogProduct, quantity?: number, serial_number?: string | null) => void;
   updateQuantity: (key: string, quantity: number) => void;
   updateItemSerial: (key: string, serial_number: string) => void;
   removeItem: (key: string) => void;
@@ -101,7 +90,11 @@ export const useCartStore = create<CartState>((set, get) => ({
         (i) => i.id === product.id && i.serial_number === serial_number,
       );
 
-      const wholesalePrice = product.wholesale_price || product.retail_price;
+      /* En el catálogo el precio al público se llama `sale_price`; dentro del
+         ticket se conserva como `retail_price`, que es el vocabulario del
+         carrito. La traducción vive aquí y en ningún otro sitio. */
+      const retailPrice = product.sale_price;
+      const wholesalePrice = product.wholesale_price || retailPrice;
       const wholesaleMinQty = product.wholesale_min_qty || 10;
 
       if (existingIndex > -1) {
@@ -111,7 +104,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 
         // Automatic Wholesale Price Trigger
         const isWholesale = wholesalePrice > 0 && newQty >= wholesaleMinQty;
-        const effectivePrice = isWholesale ? wholesalePrice : product.retail_price;
+        const effectivePrice = isWholesale ? wholesalePrice : retailPrice;
 
         const newSerials = serial_number
           ? [...(existing.selected_serials || []), serial_number]
@@ -129,7 +122,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       }
 
       const isWholesale = wholesalePrice > 0 && quantity >= wholesaleMinQty;
-      const effectivePrice = isWholesale ? wholesalePrice : product.retail_price;
+      const effectivePrice = isWholesale ? wholesalePrice : retailPrice;
 
       const newItem: CartItem = {
         id: product.id,
@@ -137,7 +130,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         barcode: product.barcode,
         name: product.name,
         unit_type: product.unit_type,
-        retail_price: product.retail_price,
+        retail_price: retailPrice,
         wholesale_price: wholesalePrice,
         wholesale_min_qty: wholesaleMinQty,
         unit_price: effectivePrice,

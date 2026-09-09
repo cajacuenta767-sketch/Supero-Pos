@@ -1,3 +1,4 @@
+import { usePersistentState } from '../store/persist';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users,
@@ -204,7 +205,7 @@ export const UsersView: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
 
   // State
-  const [usersList, setUsersList] = useState<UserItem[]>(INITIAL_MOCK_USERS);
+  const [usersList, setUsersList] = usePersistentState<UserItem[]>('usuarios', INITIAL_MOCK_USERS);
   const [_rolesList, setRolesList] = useState<{ id: string; name: string }[]>([]);
   const [branchesList, setBranchesList] = useState<BranchOption[]>([
     { id: 'Sucursal Central', name: 'Sucursal Central' },
@@ -322,7 +323,10 @@ export const UsersView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+    /* `setUsersList` viene de `usePersistentState`, que devuelve el `setState`
+       de React: es estable entre renders. Se declara porque el linter no puede
+       verlo a través de un hook propio, no porque cambie. */
+  }, [setUsersList]);
 
   const fetchRolesAndBranches = useCallback(async () => {
     try {

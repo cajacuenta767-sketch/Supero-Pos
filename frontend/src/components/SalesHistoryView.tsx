@@ -1,3 +1,4 @@
+import { usePersistentState } from '../store/persist';
 import React, { useState } from 'react';
 import {
   History,
@@ -96,7 +97,7 @@ export const SalesHistoryView: React.FC = () => {
   const [voidError, setVoidError] = useState('');
 
   // Mock Master Sales Tickets Data
-  const [tickets, setTickets] = useState<SaleTicket[]>([
+  const [tickets, setTickets] = usePersistentState<SaleTicket[]>('tickets', [
     {
       id: 'TK-10024',
       timestamp: '14/08/2026 14:15:22',

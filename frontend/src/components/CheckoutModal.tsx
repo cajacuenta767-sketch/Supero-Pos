@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, CreditCard, DollarSign, Layers, QrCode } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
+import { useCatalogStore } from '../store/useCatalogStore';
 import { usePosStore } from '../store/usePosStore';
 import { useSyncStore } from '../store/useSyncStore';
 import {
@@ -64,6 +65,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
 
   const { selectedCustomer, manualDiscount, resetPosCycle, setPendingSyncCount } = usePosStore();
   const toast = useToast();
+  const adjustStock = useCatalogStore((state) => state.adjustStock);
   const [isProcessing, setIsProcessing] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
 
@@ -226,6 +228,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
 
       // Execute Atomic ACID transaction in local SQLite database
       const result = localDb.processLocalSaleAtomic(salePayload);
+
+      /* Las existencias bajan al vender. Antes el catálogo del punto de venta
+         era una constante y el stock mostrado no cambiaba nunca, por mucho que
+         se vendiera. */
+      for (const item of items) {
+        adjustStock(item.id, -item.quantity);
+      }
 
       // Update Zustand sync queue state
       const pendingCount = localDb.getPendingCount();

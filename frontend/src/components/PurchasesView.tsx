@@ -1,3 +1,4 @@
+import { usePersistentState } from '../store/persist';
 import React, { useState } from 'react';
 import { ShoppingCart, Plus, Truck, ArrowDownRight, Eye, X } from 'lucide-react';
 import {
@@ -12,6 +13,7 @@ import {
   Money,
   PageHeader,
   ScanField,
+  Select,
   Tabs,
   Toolbar,
   ToolbarSelect,
@@ -19,6 +21,7 @@ import {
 } from '../ui';
 import type { Column, TabItem } from '../ui';
 import { imeiError, isValidImei } from '../utils/imei';
+import { useCatalogStore } from '../store/useCatalogStore';
 
 type SubTab = 'orders' | 'receivings' | 'returns';
 
@@ -76,6 +79,15 @@ export const PurchasesView: React.FC = () => {
 
   // Modals
   const [isPOModalOpen, setIsPOModalOpen] = useState(false);
+  const [poForm, setPoForm] = useState({
+    supplier_name: '',
+    supplier_tax_id: '',
+    branch: 'Almacén Central',
+    payment_terms: '30 días',
+    productId: 0,
+    quantity: 1,
+  });
+  const [poError, setPoError] = useState<string | undefined>();
   const [isReceivingModalOpen, setIsReceivingModalOpen] = useState(false);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
 
@@ -85,7 +97,7 @@ export const PurchasesView: React.FC = () => {
   const [imeiAddError, setImeiAddError] = useState<string | undefined>(undefined);
 
   // Mock Purchase Orders List
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([
+  const [purchaseOrders, setPurchaseOrders] = usePersistentState<PurchaseOrder[]>('compras', [
     {
       id: 'PO-2001',
       date: '12/08/2026',
@@ -195,6 +207,74 @@ export const PurchasesView: React.FC = () => {
    *  El detalle se muestra con `!!selectedPO && !isReceivingModalOpen`, así que
    *  cerrar la recepción dejando `selectedPO` puesto no devolvía a la lista:
    *  abría el detalle de la orden, como si se hubiera pulsado otra cosa. */
+  const catalog = useCatalogStore((state) => state.products);
+  const selectedPoProduct = catalog.find((p) => p.id === poForm.productId);
+
+  const closePOModal = () => {
+    setIsPOModalOpen(false);
+    setPoError(undefined);
+    setPoForm({
+      supplier_name: '',
+      supplier_tax_id: '',
+      branch: 'Almacén Central',
+      payment_terms: '30 días',
+      productId: 0,
+      quantity: 1,
+    });
+  };
+
+  /**
+   * Alta de orden de compra.
+   *
+   * Antes este modal solo mostraba un texto diciendo que «se conecta al módulo
+   * de compras del backend»: se pulsaba «Crear orden» y no ocurría nada.
+   */
+  const createPurchaseOrder = () => {
+    const supplier = poForm.supplier_name.trim();
+    if (!supplier) {
+      setPoError('Indique el proveedor.');
+      return;
+    }
+    if (!selectedPoProduct) {
+      setPoError('Elija un producto del catálogo.');
+      return;
+    }
+    if (poForm.quantity <= 0) {
+      setPoError('La cantidad debe ser mayor que cero.');
+      return;
+    }
+
+    const nextNumber = 2000 + purchaseOrders.length + 1;
+    setPurchaseOrders((prev) => [
+      {
+        id: `PO-${nextNumber}`,
+        date: new Date().toLocaleDateString('es-BO'),
+        supplier_name: supplier,
+        supplier_tax_id: poForm.supplier_tax_id.trim() || '—',
+        branch: poForm.branch,
+        items_count: poForm.quantity,
+        total: Number((selectedPoProduct.cost_price * poForm.quantity).toFixed(2)),
+        status: 'PENDING',
+        payment_terms: poForm.payment_terms,
+        items: [
+          {
+            id: selectedPoProduct.id,
+            sku: selectedPoProduct.sku,
+            name: selectedPoProduct.name,
+            ordered_qty: poForm.quantity,
+            received_qty: 0,
+            cost_price: selectedPoProduct.cost_price,
+            unit_type: selectedPoProduct.unit_type,
+          },
+        ],
+      },
+      ...prev,
+    ]);
+
+    toast(`Orden PO-${nextNumber} creada`, 'success');
+    closePOModal();
+  };
+
   const closeReceiving = () => {
     setIsReceivingModalOpen(false);
     setSelectedPO(null);
@@ -546,23 +626,101 @@ export const PurchasesView: React.FC = () => {
       {/* Alta de orden */}
       <Modal
         isOpen={isPOModalOpen}
-        onClose={() => setIsPOModalOpen(false)}
+        onClose={closePOModal}
         icon={<Plus className="w-4 h-4" />}
         title="Nueva orden de compra"
+        subtitle="Queda pendiente de recibir hasta que llegue la mercadería."
         size="md"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setIsPOModalOpen(false)}>
+            <Button variant="ghost" onClick={closePOModal}>
               Cancelar
             </Button>
-            <Button onClick={() => setIsPOModalOpen(false)}>Crear orden</Button>
+            <Button onClick={createPurchaseOrder} icon={<Plus className="w-4 h-4" />}>
+              Crear orden
+            </Button>
           </>
         }
       >
-        <p className="text-base text-ink-2 leading-relaxed">
-          El alta de órdenes se conecta al módulo de compras del backend. Los campos y su validación
-          se migran junto con el resto del módulo.
-        </p>
+        <div className="space-y-4">
+          <Input
+            label="Proveedor"
+            required
+            autoFocus
+            value={poForm.supplier_name}
+            onChange={(e) => setPoForm({ ...poForm, supplier_name: e.target.value })}
+            error={poError}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="NIT del proveedor"
+              value={poForm.supplier_tax_id}
+              onChange={(e) =>
+                setPoForm({ ...poForm, supplier_tax_id: e.target.value.replace(/\D/g, '') })
+              }
+              className="[&_input]:font-mono"
+            />
+            <Select
+              label="Destino"
+              value={poForm.branch}
+              onChange={(e) => setPoForm({ ...poForm, branch: e.target.value })}
+            >
+              <option>Almacén Central</option>
+              <option>Sucursal Central</option>
+              <option>Sucursal Norte</option>
+            </Select>
+          </div>
+
+          {/* El producto sale del catálogo compartido: no se teclea a mano, así
+              que la orden siempre referencia algo que existe. */}
+          <Select
+            label="Producto"
+            value={poForm.productId}
+            onChange={(e) => setPoForm({ ...poForm, productId: Number(e.target.value) })}
+          >
+            <option value={0}>Elija un producto…</option>
+            {catalog.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} · {p.sku}
+              </option>
+            ))}
+          </Select>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Cantidad"
+              type="number"
+              min={1}
+              step="1"
+              value={poForm.quantity}
+              onChange={(e) => setPoForm({ ...poForm, quantity: parseFloat(e.target.value) || 0 })}
+              className="[&_input]:font-mono [&_input]:text-right"
+            />
+            <Select
+              label="Condición de pago"
+              value={poForm.payment_terms}
+              onChange={(e) => setPoForm({ ...poForm, payment_terms: e.target.value })}
+            >
+              <option>Contado</option>
+              <option>15 días</option>
+              <option>30 días</option>
+              <option>60 días</option>
+            </Select>
+          </div>
+
+          {selectedPoProduct && poForm.quantity > 0 && (
+            <div className="flex items-center justify-between p-3 rounded-md bg-sunken border border-line">
+              <span className="text-body text-ink-2">
+                Total estimado al costo ({poForm.quantity} × {selectedPoProduct.cost_price})
+              </span>
+              <Money
+                value={selectedPoProduct.cost_price * poForm.quantity}
+                size="title"
+                className="text-ink"
+              />
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CreditCard,
   Lock,
@@ -18,6 +18,7 @@ import {
   User,
 } from 'lucide-react';
 import { useCartStore, lineKey } from '../store/useCartStore';
+import { useCatalogStore, type Product } from '../store/useCatalogStore';
 import { usePosStore } from '../store/usePosStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
@@ -31,103 +32,9 @@ import { CustomerModal } from './CustomerModal';
 import { SupervisorPinModal } from './SupervisorPinModal';
 import { Badge, Button, EmptyState, IconButton, Kbd, Money, cn } from '../ui';
 
-interface ProductItem {
-  id: number;
-  sku: string;
-  barcode: string;
-  name: string;
-  unit_type: 'UNIT' | 'FRACTION' | 'SERIALIZED';
-  retail_price: number;
-  wholesale_price: number;
-  wholesale_min_qty: number;
-  stock: number;
-  min_stock: number;
-  category: string;
-  image_url?: string;
-}
-
-const MASTER_POS_CATALOG: ProductItem[] = [
-  {
-    id: 101,
-    sku: 'ELE-S23-001',
-    barcode: '7750123456789',
-    name: 'Smartphone Galaxy S23 Ultra (128GB)',
-    unit_type: 'SERIALIZED',
-    retail_price: 850.0,
-    wholesale_price: 800.0,
-    wholesale_min_qty: 3,
-    stock: 12,
-    min_stock: 4,
-    category: 'Electrónica',
-  },
-  {
-    id: 102,
-    sku: 'AB-QSO-002',
-    barcode: '7759876543210',
-    name: 'Queso Criollo (a granel / kg)',
-    unit_type: 'FRACTION',
-    retail_price: 45.0,
-    wholesale_price: 40.0,
-    wholesale_min_qty: 5,
-    stock: 45.5,
-    min_stock: 10,
-    category: 'Abarrotes',
-  },
-  {
-    id: 103,
-    sku: 'ELE-AUD-003',
-    barcode: '7751112223334',
-    name: 'Audífonos Bluetooth Wireless Pro',
-    unit_type: 'UNIT',
-    retail_price: 35.0,
-    wholesale_price: 28.0,
-    wholesale_min_qty: 6,
-    stock: 30,
-    min_stock: 8,
-    category: 'Electrónica',
-  },
-  {
-    id: 104,
-    sku: 'AB-CAR-004',
-    barcode: '7754445556667',
-    name: 'Carne Lomo Fino (a granel / kg)',
-    unit_type: 'FRACTION',
-    retail_price: 68.0,
-    wholesale_price: 62.0,
-    wholesale_min_qty: 4,
-    stock: 25.0,
-    min_stock: 10,
-    category: 'Abarrotes',
-  },
-  {
-    id: 105,
-    sku: 'ELE-TAB-005',
-    barcode: '7757778889990',
-    name: 'Tablet Pro 11" 256GB WiFi',
-    unit_type: 'SERIALIZED',
-    retail_price: 620.0,
-    wholesale_price: 580.0,
-    wholesale_min_qty: 2,
-    stock: 8,
-    min_stock: 10,
-    category: 'Electrónica',
-  },
-  {
-    id: 106,
-    sku: 'AB-LAC-006',
-    barcode: '7753332221110',
-    name: 'Leche Entera 1 Litro (Caja)',
-    unit_type: 'UNIT',
-    retail_price: 8.5,
-    wholesale_price: 7.5,
-    wholesale_min_qty: 12,
-    stock: 120,
-    min_stock: 24,
-    category: 'Abarrotes',
-  },
-];
-
-const CATEGORIES = ['TODOS', 'Abarrotes', 'Electrónica', 'Bebidas', 'Lácteos'];
+/* Las categorías se derivan del propio catálogo: la lista fija que había antes
+   incluía «Bebidas» y «Lácteos», que ningún producto del POS usaba, y omitía las
+   que sí existían en la vista de productos. */
 
 export const PosView: React.FC = () => {
   const { user } = useAuthStore();
@@ -137,6 +44,18 @@ export const PosView: React.FC = () => {
 
   const { cashShift, selectedCustomer, manualDiscount, pendingSyncCount, setManualDiscount } =
     usePosStore();
+
+  /* Catálogo compartido: el mismo que edita la vista de Productos. Antes cada
+     una tenía el suyo, con nombres y precios distintos para el mismo artículo. */
+  const products = useCatalogStore((state) => state.products);
+  const sellable = useMemo(() => products.filter((p) => p.is_active), [products]);
+  const CATEGORIES = useMemo(
+    () =>
+      ['TODOS', ...new Set(sellable.map((p) => p.category))].sort((a, b) =>
+        a === 'TODOS' ? -1 : b === 'TODOS' ? 1 : a.localeCompare(b, 'es'),
+      ),
+    [sellable],
+  );
   const {
     items,
     addItem,
@@ -161,12 +80,8 @@ export const PosView: React.FC = () => {
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isSupervisorModalOpen, setIsSupervisorModalOpen] = useState(false);
   const [targetManualDiscount, setTargetManualDiscount] = useState(0);
-  const [pendingSerializedProduct, setPendingSerializedProduct] = useState<ProductItem | null>(
-    null,
-  );
-  const [pendingFractionalProduct, setPendingFractionalProduct] = useState<ProductItem | null>(
-    null,
-  );
+  const [pendingSerializedProduct, setPendingSerializedProduct] = useState<Product | null>(null);
+  const [pendingFractionalProduct, setPendingFractionalProduct] = useState<Product | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
   /* Sin turno abierto la terminal no vende: el modal se deriva del estado en
@@ -181,7 +96,7 @@ export const PosView: React.FC = () => {
     );
   };
 
-  const handleSelectProduct = (product: ProductItem) => {
+  const handleSelectProduct = (product: Product) => {
     if (cashShift === null) {
       setShiftModalDismissed(false);
       return;
@@ -199,7 +114,7 @@ export const PosView: React.FC = () => {
   /* Un solo camino de escaneo para los dos lectores: la pistola USB de la
      terminal fija y la cámara de una tablet de mostrador. */
   const handleScannedCode = (barcode: string) => {
-    const matched = MASTER_POS_CATALOG.find(
+    const matched = sellable.find(
       (p) => p.barcode === barcode || p.sku.toLowerCase() === barcode.toLowerCase(),
     );
     if (matched) {
@@ -255,7 +170,7 @@ export const PosView: React.FC = () => {
   };
 
   const q = searchQuery.toLowerCase();
-  const filteredCatalog = MASTER_POS_CATALOG.filter(
+  const filteredCatalog = sellable.filter(
     (p) =>
       (selectedCategory === 'TODOS' || p.category === selectedCategory) &&
       (p.name.toLowerCase().includes(q) ||
@@ -682,8 +597,8 @@ export const PosView: React.FC = () => {
 
                       <div className="pt-2 border-t border-line flex items-end justify-between gap-2">
                         <div>
-                          <Money value={product.retail_price} size="title" className="text-ink" />
-                          {product.wholesale_price < product.retail_price && (
+                          <Money value={product.sale_price} size="title" className="text-ink" />
+                          {product.wholesale_price < product.sale_price && (
                             <p className="text-body text-ok">
                               May. <Money value={product.wholesale_price} size="body" /> (≥
                               {product.wholesale_min_qty})
@@ -730,7 +645,7 @@ export const PosView: React.FC = () => {
       <DecimalQuantityModal
         isOpen={!!pendingFractionalProduct}
         productName={pendingFractionalProduct?.name || ''}
-        unitPrice={pendingFractionalProduct?.retail_price || 0}
+        unitPrice={pendingFractionalProduct?.sale_price || 0}
         onConfirm={(qty) => {
           if (!pendingFractionalProduct) return;
           addItem({ ...pendingFractionalProduct }, qty);

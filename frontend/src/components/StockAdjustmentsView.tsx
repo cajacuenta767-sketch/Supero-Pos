@@ -1,3 +1,4 @@
+import { usePersistentState } from '../store/persist';
 import React, { useState } from 'react';
 import { AlertTriangle, Calculator, Eye, Lock, Plus, Sliders } from 'lucide-react';
 import {
@@ -138,7 +139,7 @@ export const StockAdjustmentsView: React.FC = () => {
   ]);
 
   // Mock Adjustment Records
-  const [adjustments, setAdjustments] = useState<AdjustmentRecord[]>([
+  const [adjustments, setAdjustments] = usePersistentState<AdjustmentRecord[]>('ajustes', [
     {
       id: 'ADJ-4001',
       date: '14/08/2026 11:45',

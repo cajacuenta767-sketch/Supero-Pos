@@ -8,15 +8,19 @@ import {
   DescriptionList,
   EmptyState,
   IconButton,
+  Input,
   Modal,
   Money,
   PageHeader,
   Pagination,
+  Select,
   Tabs,
   Toolbar,
   ToolbarSelect,
+  useToast,
 } from '../ui';
 import type { Column, TabItem } from '../ui';
+import { usePersistentState } from '../store/persist';
 
 interface Customer {
   id: number;
@@ -78,6 +82,7 @@ const GROUP_TONE: Record<Customer['group'], 'neutral' | 'accent' | 'success' | '
 };
 
 export const ContactsView: React.FC = () => {
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('customers');
 
   const [customerSearch, setCustomerSearch] = useState('');
@@ -87,11 +92,21 @@ export const ContactsView: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
 
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    tax_id: '',
+    email: '',
+    phone: '',
+    address: '',
+    group: 'Minoristas' as Customer['group'],
+    credit_limit: 0,
+  });
+  const [contactError, setContactError] = useState<string | undefined>();
   const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
   const [detailSupplier, setDetailSupplier] = useState<Supplier | null>(null);
 
   // Mock Customers Data
-  const [customers] = useState<Customer[]>([
+  const [customers, setCustomers] = usePersistentState<Customer[]>('clientes', [
     {
       id: 1,
       name: 'Comercial Bolivia S.R.L.',
@@ -134,7 +149,7 @@ export const ContactsView: React.FC = () => {
   ]);
 
   // Mock Suppliers Data
-  const [suppliers] = useState<Supplier[]>([
+  const [suppliers, setSuppliers] = usePersistentState<Supplier[]>('proveedores', [
     {
       id: 1,
       company_name: 'Distribuidora Lácteos del Valle',
@@ -192,6 +207,89 @@ export const ContactsView: React.FC = () => {
 
   /* Un solo filtrado para una sola tabla: antes eran cuatro tablas casi
      idénticas, una por grupo de clientes. */
+  const closeContactModal = () => {
+    setIsCustomerModalOpen(false);
+    setContactError(undefined);
+    setContactForm({
+      name: '',
+      tax_id: '',
+      email: '',
+      phone: '',
+      address: '',
+      group: 'Minoristas',
+      credit_limit: 0,
+    });
+  };
+
+  /**
+   * Alta de cliente o proveedor.
+   *
+   * Antes este modal solo mostraba un texto diciendo que el formulario «se
+   * conecta al endpoint de contactos»: se pulsaba Guardar y no pasaba nada.
+   */
+  const saveContact = () => {
+    const name = contactForm.name.trim();
+    if (!name) {
+      setContactError('El nombre es obligatorio.');
+      return;
+    }
+    if (!contactForm.tax_id.trim()) {
+      setContactError('El NIT o carnet es obligatorio.');
+      return;
+    }
+
+    /* El NIT identifica fiscalmente: repetirlo genera dos fichas para la misma
+       empresa y descuadra las cuentas por cobrar. */
+    const duplicated =
+      activeTab === 'suppliers'
+        ? suppliers.some((sup) => sup.tax_id === contactForm.tax_id.trim())
+        : customers.some((c) => c.tax_id === contactForm.tax_id.trim());
+    if (duplicated) {
+      setContactError('Ya existe un contacto con ese NIT.');
+      return;
+    }
+
+    if (activeTab === 'suppliers') {
+      setSuppliers((prev) => [
+        {
+          id: Math.max(0, ...prev.map((x) => x.id)) + 1,
+          company_name: name,
+          contact_person: name,
+          tax_id: contactForm.tax_id.trim(),
+          email: contactForm.email.trim(),
+          phone: contactForm.phone.trim(),
+          whatsapp: contactForm.phone.trim(),
+          address: contactForm.address.trim(),
+          balance_payable: 0,
+          last_po_date: '—',
+          payment_terms: 'Contado',
+          bank_info: '—',
+        },
+        ...prev,
+      ]);
+    } else {
+      setCustomers((prev) => [
+        {
+          id: Math.max(0, ...prev.map((x) => x.id)) + 1,
+          name,
+          tax_id: contactForm.tax_id.trim(),
+          email: contactForm.email.trim(),
+          phone: contactForm.phone.trim(),
+          address: contactForm.address.trim(),
+          group: contactForm.group,
+          credit_limit: contactForm.credit_limit,
+          current_balance: 0,
+          is_active: true,
+          credit_enabled: contactForm.credit_limit > 0,
+        },
+        ...prev,
+      ]);
+    }
+
+    toast(activeTab === 'suppliers' ? 'Proveedor registrado' : 'Cliente registrado', 'success');
+    closeContactModal();
+  };
+
   const filteredCustomers = useMemo(() => {
     const q = customerSearch.toLowerCase();
     return customers.filter((c) => {
@@ -607,23 +705,92 @@ export const ContactsView: React.FC = () => {
       {/* Alta de contacto */}
       <Modal
         isOpen={isCustomerModalOpen}
-        onClose={() => setIsCustomerModalOpen(false)}
+        onClose={closeContactModal}
         icon={<Plus className="w-4 h-4" />}
         title={activeTab === 'suppliers' ? 'Nuevo proveedor' : 'Nuevo cliente'}
+        subtitle="Los datos quedan guardados en la terminal y se sincronizan cuando hay red."
         size="md"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setIsCustomerModalOpen(false)}>
+            <Button variant="ghost" onClick={closeContactModal}>
               Cancelar
             </Button>
-            <Button onClick={() => setIsCustomerModalOpen(false)}>Guardar</Button>
+            <Button onClick={saveContact} icon={<Plus className="w-4 h-4" />}>
+              Guardar
+            </Button>
           </>
         }
       >
-        <p className="text-base text-ink-2 leading-relaxed">
-          El formulario de alta se conecta al endpoint de contactos. Los campos y su validación se
-          migran junto con el resto del módulo.
-        </p>
+        <div className="space-y-4">
+          <Input
+            label={activeTab === 'suppliers' ? 'Razón social' : 'Nombre o razón social'}
+            required
+            autoFocus
+            value={contactForm.name}
+            onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+            error={contactError}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="NIT o carnet"
+              required
+              value={contactForm.tax_id}
+              onChange={(e) =>
+                setContactForm({ ...contactForm, tax_id: e.target.value.replace(/\D/g, '') })
+              }
+              hint="Solo dígitos."
+              className="[&_input]:font-mono"
+            />
+            <Input
+              label="Teléfono"
+              value={contactForm.phone}
+              onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
+              placeholder="+591 7…"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Correo"
+              type="email"
+              value={contactForm.email}
+              onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+            />
+            {activeTab === 'customers' && (
+              <Select
+                label="Grupo"
+                value={contactForm.group}
+                onChange={(e) =>
+                  setContactForm({ ...contactForm, group: e.target.value as Customer['group'] })
+                }
+              >
+                {(['Minoristas', 'Mayoristas', 'Corporativos', 'Frecuentes'] as const).map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </div>
+          <Input
+            label="Dirección"
+            value={contactForm.address}
+            onChange={(e) => setContactForm({ ...contactForm, address: e.target.value })}
+          />
+          {activeTab === 'customers' && (
+            <Input
+              label="Límite de crédito"
+              type="number"
+              min={0}
+              step="1"
+              value={contactForm.credit_limit || ''}
+              onChange={(e) =>
+                setContactForm({ ...contactForm, credit_limit: parseFloat(e.target.value) || 0 })
+              }
+              hint="Cero deja al cliente solo al contado."
+              className="[&_input]:font-mono [&_input]:text-right"
+            />
+          )}
+        </div>
       </Modal>
     </div>
   );

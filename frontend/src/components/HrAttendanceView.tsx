@@ -1,3 +1,4 @@
+import { usePersistentState } from '../store/persist';
 import React, { useMemo, useState } from 'react';
 import { Award, Calendar, Clock, FileText, Lock, Plus, UserCheck } from 'lucide-react';
 import {
@@ -97,7 +98,7 @@ export const HrAttendanceView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
 
   // Attendance Logs State
-  const [logs, setLogs] = useState<AttendanceLog[]>([
+  const [logs, setLogs] = usePersistentState<AttendanceLog[]>('fichajes', [
     {
       id: 'LOG-7001',
       timestamp: '14/08/2026 07:55',

@@ -54,24 +54,6 @@ const UNIT_ROWS = [
 ];
 import type { Column } from '../ui';
 
-interface Product {
-  id: number;
-  sku: string;
-  barcode: string;
-  name: string;
-  category: string;
-  brand: string;
-  unit_type: 'UNIT' | 'FRACTION' | 'SERIALIZED';
-  cost_price: number;
-  sale_price: number;
-  wholesale_price: number;
-  wholesale_min_qty: number;
-  stock: number;
-  min_stock: number;
-  is_active: boolean;
-  image_url?: string;
-}
-
 interface ProductSerial {
   id: number;
   product_name: string;
@@ -85,6 +67,7 @@ interface ProductSerial {
 import { useAuthStore } from '../store/useAuthStore';
 import { hasPermission } from '../utils/permissions';
 import { isPrintingAvailable, printProductLabels } from '../services/printing';
+import { useCatalogStore, type Product } from '../store/useCatalogStore';
 
 export const ProductsView: React.FC = () => {
   const { user } = useAuthStore();
@@ -127,73 +110,13 @@ export const ProductsView: React.FC = () => {
     image_url: undefined as string | undefined,
   });
 
-  // Mock Products List
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: 1,
-      sku: 'SKU-1001',
-      barcode: '7771234567890',
-      name: 'Coca Cola 2 Litros Retornable',
-      category: 'Bebidas & Gaseosas',
-      brand: 'Coca Cola',
-      unit_type: 'UNIT',
-      cost_price: 8.5,
-      sale_price: 12.0,
-      wholesale_price: 10.5,
-      wholesale_min_qty: 6,
-      stock: 45,
-      min_stock: 10,
-      is_active: true,
-    },
-    {
-      id: 2,
-      sku: 'SKU-1002',
-      barcode: '2000000000015',
-      name: 'Queso Criollo San Javier (Kg)',
-      category: 'Lácteos & Fiambrería',
-      brand: 'San Javier',
-      unit_type: 'FRACTION',
-      cost_price: 32.0,
-      sale_price: 45.0,
-      wholesale_price: 40.0,
-      wholesale_min_qty: 5,
-      stock: 12.45,
-      min_stock: 3.0,
-      is_active: true,
-    },
-    {
-      id: 3,
-      sku: 'SKU-1003',
-      barcode: '8806091234567',
-      name: 'Smartphone Samsung Galaxy A54 128GB',
-      category: 'Electrónica & Celulares',
-      brand: 'Samsung',
-      unit_type: 'SERIALIZED',
-      cost_price: 1400.0,
-      sale_price: 1850.0,
-      wholesale_price: 1750.0,
-      wholesale_min_qty: 3,
-      stock: 4,
-      min_stock: 2,
-      is_active: true,
-    },
-    {
-      id: 4,
-      sku: 'SKU-1004',
-      barcode: '7779876543210',
-      name: 'Galletas Wafer Chocolate 150g',
-      category: 'Golosinas & Snacks',
-      brand: 'Arcor',
-      unit_type: 'UNIT',
-      cost_price: 3.0,
-      sale_price: 5.0,
-      wholesale_price: 4.2,
-      wholesale_min_qty: 12,
-      stock: 2,
-      min_stock: 15,
-      is_active: true,
-    },
-  ]);
+  /* Catálogo compartido con el punto de venta. Antes esta vista tenía su propia
+     lista, con nombres, SKU y precios distintos para los mismos artículos: dar
+     de alta un producto aquí no lo hacía vendible allí. */
+  const products = useCatalogStore((state) => state.products);
+  const addProduct = useCatalogStore((state) => state.addProduct);
+  const updateProduct = useCatalogStore((state) => state.updateProduct);
+  const toggleActive = useCatalogStore((state) => state.toggleActive);
 
   // Mock Serials List
   const [serials] = useState<ProductSerial[]>([
@@ -298,24 +221,16 @@ export const ProductsView: React.FC = () => {
     return matchesSearch && matchesCategory && matchesUnitType && matchesStock;
   });
 
-  const handleToggleProductStatus = (id: number) => {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, is_active: !p.is_active } : p)));
-  };
+  const handleToggleProductStatus = (id: number) => toggleActive(id);
 
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.sku) return;
 
     if (editingProduct) {
-      setProducts((prev) =>
-        prev.map((p) => (p.id === editingProduct.id ? { ...p, ...formData } : p)),
-      );
+      updateProduct(editingProduct.id, formData);
     } else {
-      const newProd: Product = {
-        id: Date.now(),
-        ...formData,
-      };
-      setProducts((prev) => [newProd, ...prev]);
+      addProduct(formData);
     }
     setIsProductModalOpen(false);
   };
@@ -527,7 +442,9 @@ export const ProductsView: React.FC = () => {
               tone="accent"
               onClick={() => {
                 setEditingProduct(p);
-                setFormData({ ...p, image_url: p.image_url });
+                // `brand` es opcional en el catálogo y el formulario lo trata
+                // como cadena: se normaliza al cargar en vez de al guardar.
+                setFormData({ ...p, brand: p.brand ?? '', image_url: p.image_url });
                 setIsProductModalOpen(true);
               }}
             >
