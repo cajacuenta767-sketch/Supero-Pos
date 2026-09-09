@@ -236,6 +236,7 @@ export const SalesHistoryView: React.FC = () => {
     {
       key: 'id',
       header: 'Ticket',
+      card: 'title',
       width: '120px',
       render: (t) => <span className="font-mono text-body text-ink">{t.id}</span>,
     },
@@ -269,6 +270,7 @@ export const SalesHistoryView: React.FC = () => {
     {
       key: 'total',
       header: 'Total',
+      card: 'meta',
       align: 'right',
       width: '130px',
       render: (t) => (
@@ -292,6 +294,7 @@ export const SalesHistoryView: React.FC = () => {
     {
       key: 'actions',
       header: '',
+      card: 'hidden',
       align: 'right',
       width: '110px',
       render: (t) => (

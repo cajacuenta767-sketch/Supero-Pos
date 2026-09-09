@@ -12,7 +12,6 @@ import {
   Scan,
   ShieldAlert,
   Sun,
-  Upload,
 } from 'lucide-react';
 import { useThemeStore } from '../store/useThemeStore';
 import {
@@ -20,6 +19,7 @@ import {
   Button,
   Card,
   DataTable,
+  ImageUpload,
   Input,
   Meter,
   PageHeader,
@@ -68,6 +68,7 @@ export const SettingsView: React.FC = () => {
   const [phone, setPhone] = useState('+591 70012345');
   const [email, setEmail] = useState('contacto@superopos.com');
   const [currency, setCurrency] = useState('BOB');
+  const [logo, setLogo] = useState<string | null>(null);
 
   const [branches] = useState<Branch[]>([
     {
@@ -169,21 +170,14 @@ export const SettingsView: React.FC = () => {
           <div className="space-y-5">
             <Card title="Identidad de la empresa" icon={<Building2 className="w-4 h-4" />}>
               <div className="space-y-5">
-                <div className="flex flex-wrap items-center gap-4 p-4 rounded-md bg-sunken border border-line">
-                  <div className="w-20 h-20 shrink-0 rounded-md border border-dashed border-line-strong flex items-center justify-center text-ink-3">
-                    <Building2 className="w-7 h-7" />
-                  </div>
-                  <div className="flex-1 min-w-[220px] space-y-1">
-                    <p className="text-base font-semibold text-ink">Logotipo</p>
-                    <p className="text-body text-ink-2">
-                      Se imprime en la cabecera de tickets térmicos y facturas. PNG o JPG, máximo 2
-                      MB.
-                    </p>
-                  </div>
-                  <Button variant="secondary" icon={<Upload className="w-4 h-4" />}>
-                    Subir imagen
-                  </Button>
-                </div>
+                <ImageUpload
+                  value={logo}
+                  onChange={touch(setLogo)}
+                  label="Logotipo"
+                  hint="Se imprime en la cabecera de los tickets térmicos y las facturas."
+                  preview="lg"
+                  maxSize={400}
+                />
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <Input

@@ -167,6 +167,7 @@ export const TransfersView: React.FC = () => {
     {
       key: 'route',
       header: 'Origen y destino',
+      card: 'title',
       render: (t) => (
         <div className="min-w-0">
           <p className="text-body text-ink-2 truncate">{t.source_branch}</p>
@@ -193,12 +194,14 @@ export const TransfersView: React.FC = () => {
     {
       key: 'status',
       header: 'Estado',
+      card: 'meta',
       width: '180px',
       render: (t) => <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>,
     },
     {
       key: 'actions',
       header: '',
+      card: 'hidden',
       align: 'right',
       width: '110px',
       render: (t) => (

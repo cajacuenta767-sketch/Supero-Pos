@@ -12,17 +12,9 @@ import {
   User,
 } from 'lucide-react';
 import { useAuthStore, DEMO_BRANCHES } from '../store/useAuthStore';
+import { DEMO_ACCOUNTS, type DemoAccount } from '../config/demoUsers';
 import { useThemeStore } from '../store/useThemeStore';
 import { Badge, Button, IconButton, Input, Select, cn } from '../ui';
-
-type DemoUser = 'admin' | 'supervisor' | 'cajero' | 'almacenero';
-
-const DEMO_CREDENTIALS: Record<DemoUser, { user: string; pass: string; label: string }> = {
-  admin: { user: 'admin', pass: 'SuperoPOS2026', label: 'Admin' },
-  supervisor: { user: 'supervisor', pass: 'supervisor123', label: 'Supervisor' },
-  cajero: { user: 'cajero', pass: 'cajero123', label: 'Cajero' },
-  almacenero: { user: 'almacenero', pass: 'almacen123', label: 'Almacén' },
-};
 
 export const LoginView: React.FC = () => {
   const {
@@ -37,8 +29,11 @@ export const LoginView: React.FC = () => {
   } = useAuthStore();
   const { isDarkMode, toggleTheme } = useThemeStore();
 
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('SuperoPOS2026');
+  /* El formulario ya no llega relleno: traía la contraseña de administrador
+     escrita en el campo, así que el build de producción se instalaba con ella a
+     la vista. */
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -80,11 +75,11 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  const fillDemo = (kind: DemoUser) => {
+  const fillDemo = (account: DemoAccount) => {
     if (isLocked) return;
     setErrorMessage(null);
-    setUsername(DEMO_CREDENTIALS[kind].user);
-    setPassword(DEMO_CREDENTIALS[kind].pass);
+    setUsername(account.user);
+    setPassword(account.pass);
   };
 
   return (
@@ -135,11 +130,16 @@ export const LoginView: React.FC = () => {
       {/* Panel de acceso */}
       <div className="w-full lg:w-[480px] shrink-0 flex flex-col justify-center p-8 sm:p-12">
         <div className="flex items-center justify-between mb-8">
-          <div className="lg:hidden flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-accent text-white flex items-center justify-center font-bold text-title">
-              S
+          <div className="lg:hidden min-w-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 shrink-0 rounded-md bg-accent text-white flex items-center justify-center font-bold text-title">
+                S
+              </div>
+              <div className="min-w-0">
+                <p className="text-title text-ink leading-tight">SUPERO POS</p>
+                <p className="text-micro uppercase text-ink-3">Vender sin mirar la pantalla</p>
+              </div>
             </div>
-            <p className="text-title text-ink">SUPERO POS</p>
           </div>
           <div className="hidden lg:block">
             <h1 className="text-display text-ink">Iniciar sesión</h1>
@@ -261,26 +261,30 @@ export const LoginView: React.FC = () => {
           </Button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-line">
-          <p className="text-micro uppercase text-ink-3 mb-2.5">Acceso rápido de demostración</p>
-          <div className="grid grid-cols-4 gap-2">
-            {(Object.keys(DEMO_CREDENTIALS) as DemoUser[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => fillDemo(k)}
-                disabled={isLocked}
-                className={cn(
-                  'h-9 rounded-md border border-line bg-raised text-body font-semibold text-ink-2',
-                  'hover:border-accent hover:text-accent transition-colors duration-fast ease-ease',
-                  'disabled:opacity-40 disabled:cursor-not-allowed',
-                )}
-              >
-                {DEMO_CREDENTIALS[k].label}
-              </button>
-            ))}
+        {/* Solo en modo demostración: en producción `DEMO_ACCOUNTS` está vacío y
+            este bloque no llega a renderizarse ni sus cadenas al bundle. */}
+        {DEMO_ACCOUNTS.length > 0 && (
+          <div className="mt-8 pt-6 border-t border-line">
+            <p className="text-micro uppercase text-ink-3 mb-2.5">Acceso rápido de demostración</p>
+            <div className="grid grid-cols-4 gap-2">
+              {DEMO_ACCOUNTS.map((account) => (
+                <button
+                  key={account.user}
+                  type="button"
+                  onClick={() => fillDemo(account)}
+                  disabled={isLocked}
+                  className={cn(
+                    'h-9 rounded-md border border-line bg-raised text-body font-semibold text-ink-2',
+                    'hover:border-accent hover:text-accent transition-colors duration-fast ease-ease',
+                    'disabled:opacity-40 disabled:cursor-not-allowed',
+                  )}
+                >
+                  {account.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -221,6 +221,7 @@ export const ContactsView: React.FC = () => {
     {
       key: 'name',
       header: 'Cliente',
+      card: 'title',
       render: (c) => (
         <div className="min-w-0">
           <p className="text-base font-semibold text-ink truncate">{c.name}</p>
@@ -231,6 +232,7 @@ export const ContactsView: React.FC = () => {
     {
       key: 'group',
       header: 'Grupo',
+      card: 'meta',
       width: '140px',
       render: (c) => <Badge tone={GROUP_TONE[c.group]}>{c.group}</Badge>,
     },
@@ -265,6 +267,7 @@ export const ContactsView: React.FC = () => {
     {
       key: 'actions',
       header: '',
+      card: 'hidden',
       align: 'right',
       width: '110px',
       render: (c) => (
@@ -288,6 +291,7 @@ export const ContactsView: React.FC = () => {
     {
       key: 'company',
       header: 'Proveedor',
+      card: 'title',
       render: (s) => (
         <div className="min-w-0">
           <p className="text-base font-semibold text-ink truncate">{s.company_name}</p>

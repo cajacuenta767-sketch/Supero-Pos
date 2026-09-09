@@ -285,3 +285,202 @@ frontend/src/
 ├── index.css                   ← importa tokens, base, fuentes
 └── ../tailwind.config.js       ← escala + tokens semánticos
 ```
+
+---
+
+## 11. Entrega 8 — Evidencia fotográfica, escaneo y validación de códigos
+
+Las entregas 1–7 dejaron los quince apartados migrados y responsive. Esta cierra otra cosa: los
+**campos latentes**. `image_url` en productos y `receipt_attached` en gastos existían en el modelo y
+no guardaban nada — un booleano que decía «hay comprobante» sin comprobante detrás. El patrón se
+repetía en el arqueo, en las mermas y en la recepción de mercadería.
+
+### Piezas nuevas en `src/ui/`
+
+| Pieza | Qué resuelve |
+|---|---|
+| `PhotoThumb` | Miniatura ampliable de una foto justificante. En una celda de tabla una foto es ilegible: sirve para saber que existe; al pulsarla se abre a tamaño completo, que es cuando se audita |
+| `SignaturePad` | Lienzo de firma por eventos de puntero — dedo, ratón y lápiz sin ramas por dispositivo. Dibuja a la densidad real de la pantalla y exporta PNG transparente, para que la tinta no dependa del tema en que se firmó |
+| `ScanField` | Campo de texto con visor de cámara. El botón solo aparece si el navegador admite `BarcodeDetector`: donde no funciona, no hay botón muerto |
+
+Y `src/utils/imei.ts`, con el dígito de control por Luhn.
+
+### Qué cambia en cada apartado
+
+| Apartado | Antes | Ahora |
+|---|---|---|
+| **Productos** | «Auto» generaba `'777' + 9 dígitos` = **12 dígitos**, un EAN-13 que ningún lector acepta | 12 dígitos de datos + su dígito de control, con validación en vivo y previsualización del código real bajo el campo |
+| **Gastos** | `receipt_attached: !!refNumber` | Foto del comprobante, reducida en el navegador antes de guardar, y miniatura ampliable en la columna Comprobante |
+| **Turno de caja** | Arqueo ciego que no se comparaba con nada | Dos pasos: se cuenta y se fotografía el efectivo; solo entonces se revela el desglose esperado y el descuadre. La cifra contada queda bloqueada al revelar — si se pudiera retocar, dejaría de ser ciego |
+| **Ajuste de stock** | Merma justificada solo con texto | Foto del producto o del estante, visible en el detalle del ajuste |
+| **Compras** | Un campo de texto suelto para los IMEI | Escaneo por lote con cámara o pistola, contador «n de N», IMEI validado por Luhn, chips retirables y recepción bloqueada hasta cuadrar |
+| **Cobro** | — | Conforme de entrega firmado, obligatorio en ventas a empresa desde 500 Bs. Se guarda en `block_a.customer_signature` |
+| **IMEI (POS)** | Longitud mínima de 5 caracteres | Validación por Luhn cuando son 15 dígitos; otras series de fábrica se aceptan tal cual, porque no todo producto serializado es un teléfono |
+
+### Tres fallos reales que salieron al probarlo
+
+No estaban en la lista: aparecieron al usar la aplicación, y ninguno era visible con `grep`.
+
+1. **`Modal` perdía el foco en cada tecla.** Su efecto de foco atrapado dependía de `onClose`, que casi
+   siempre llega como función anónima y cambia de identidad en cada render del padre. Teclear una
+   letra desmontaba el efecto: devolvía el foco al elemento que abrió el modal y luego lo llevaba al
+   botón «Cerrar». En la recepción de compras, la segunda tecla ya no llegaba al campo y el `Enter`
+   activaba el botón de la fila de debajo. Afectaba a **todos** los formularios en modal.
+   Ahora `onClose` pasa por una referencia y el efecto depende solo de si el modal está abierto.
+2. **El foco inicial iba al botón «Cerrar».** Casi todos estos modales son formularios; aterrizar en
+   «Cerrar» obliga a tabular antes de escribir, y anulaba los `autoFocus` de los campos. Ahora va al
+   primer campo, y al primer elemento solo si no hay ninguno.
+3. **Clave de React duplicada en el carrito.** Un producto serializado genera una línea por número de
+   serie, todas con el mismo `id`, y la lista usaba `key={item.id}`. La identidad de la línea es el
+   par id + serie, igual que en el store.
+
+Queda anotado, sin tocar: `updateQuantity`, `updateItemSerial` y `removeItem` del carrito operan solo
+por `id`, así que con dos líneas del mismo producto serializado actúan sobre las dos a la vez. Es
+lógica de store y está fuera del alcance de este plan.
+
+### Un desbordamiento que solo se vio mirando
+
+Al añadir la miniatura, Gastos empezó a desbordar horizontalmente **la página entera** entre 768 y
+1280px. La tabla estaba bien contenida —su envoltorio recortaba— y ningún elemento sin recortar
+sobresalía. El culpable era un `<span class="sr-only">` dentro de la miniatura vacía: `sr-only` es
+`position: absolute`, y dentro de una tabla más ancha que su contenedor se posiciona contra el bloque
+raíz y alarga el scroll del documento. El rótulo pasó a `aria-label`.
+
+Es el mismo tipo de fallo que el responsive del principio: invisible a `grep`, invisible a `tsc`, y
+solo detectable ejecutando y midiendo.
+
+### Verificación
+
+`tsc --noEmit`, `lint`, `format:check` y `build` limpios · 112 comprobaciones (14 apartados × 4
+anchos × 2 temas) sin desbordamiento ni errores de consola · flujos nuevos recorridos uno a uno en
+1440px y 390px · los dígitos de control de EAN-13 e IMEI contrastados con códigos publicados.
+
+---
+
+## 12. Auditoría de seguridad y corrección integral
+
+Tras cerrar el rediseño se leyó el código completo —frontend, backend, Electron y
+esquema de Prisma— buscando qué más había. Apareció bastante más de lo previsto, y
+lo grave no estaba en la capa de presentación.
+
+### Lo que no debía llegar a producción
+
+**La API no estaba autenticada.** `RolesGuard` leía el rol de la cabecera
+`x-user-role` cuando no había usuario en la petición, y **ningún** controlador
+aplicaba `JwtAuthGuard`, así que `request.user` nunca existía. En la práctica:
+
+```
+curl -H "X-User-Role: ADMIN" https://api/api/v1/users
+```
+
+devolvía la lista de usuarios sin token. Lo mismo para ventas, caja, inventario y
+sincronización. Toda la infraestructura JWT existía y no protegía nada. El
+decorador `CurrentUser` repetía el patrón: aceptaba `x-user-id` y `x-branch-id`, y
+sin ellos devolvía `role: 'ADMIN'`.
+
+*Corrección:* el rol sale solo del token verificado; los guardias pasan a globales
+(`APP_GUARD`) y abrir una ruta exige el decorador `@Public()`, visible en la
+revisión. Antes, proteger un controlador dependía de acordarse.
+
+**Se podían perder ventas sin dejar rastro.** El servidor devolvía
+`success: true` incondicional aunque fallaran transacciones, y el cliente borra de
+su cola local lo que el servidor confirma. Una venta que no se guardó desaparecía
+de los dos lados. En paralelo, los tickets que agotaban sus cinco reintentos
+pasaban a `FAILED` y dejaban de contarse: el indicador bajaba a cero y nadie se
+enteraba.
+
+*Corrección:* la respuesta lleva `processed_ids` y solo se borra lo confirmado;
+hay contador propio de fallidas y aviso rojo en la cabecera.
+
+**Credenciales en el binario.** Cuatro cuentas estaban compiladas en el bundle, y
+el camino que las activaba era «el backend no responde»: bastaba dejar la terminal
+sin red para entrar como administrador. El formulario llegaba además con la
+contraseña escrita en el campo. El PIN de supervisor era la cadena `'1234'` en el
+store y el modal **lo anunciaba en pantalla**.
+
+*Corrección:* todo depende de `VITE_DEMO_MODE`, que Vite resuelve al compilar, de
+modo que en un build real las cadenas no existen — y la CI lo comprueba.
+
+**Electron abierto de par en par.** `nodeIntegration: true` con
+`contextIsolation: false`: cualquier inyección en la interfaz ejecutaba código con
+acceso al sistema de archivos. Sin guardas de navegación y sin CSP.
+
+*Corrección:* precargador con `contextBridge`, `sandbox: true`, guardas de
+navegación y CSP por cabecera.
+
+### La impresión nunca imprimió
+
+El módulo componía un `Buffer`, el manejador IPC respondía `{ success: true }` y
+**ninguna línea escribía esos bytes en un dispositivo**. Además, ninguna parte de
+la interfaz llegaba a invocar ese IPC: el camino estaba desconectado de punta a
+punta y el cajero creía que su ticket había salido. El botón «Imprimir etiquetas»
+tampoco tenía acción.
+
+*Corrección:* envío real por red (RAW 9100) o nodo de dispositivo, ancho de papel
+respetado, página de códigos declarada —sin ella «Audífonos» sale roto—, método de
+pago traducido y códigos de barras dibujados por la impresora con `GS k`, que es
+la única forma de que se puedan escanear.
+
+### Dinero
+
+| Dónde | Qué pasaba |
+|---|---|
+| `setPaymentMethod` | Llamaba a `getTotal()` **sin descuentos**: con cliente VIP, «Efectivo» precargaba de más y el vuelto salía mal |
+| `getTotalPaid` | Igual con tarjeta y QR |
+| Todo el carrito | Flotantes rematados con `toFixed(4)`; `isPaymentCovered` necesitaba una tolerancia de 0,001 para tapar el error |
+| `sales` local | Un solo método de pago por venta: una venta mixta se contaba entera como efectivo y descuadraba el arqueo |
+| Sincronización | `tax: 0` fijo en todas las ventas |
+
+*Corrección:* nuevo `utils/money` con aritmética en céntimos enteros y redondeo al
+par; los descuentos vigentes viven en el propio carrito; tabla `sale_payments` con
+el desglose real; IVA calculado desde el total.
+
+### Integridad en el servidor
+
+- El número de ticket usaba **8 caracteres** del UUID: hacia los 77.000 tickets,
+  dos ventas distintas colisionaban con más del 50 % de probabilidad y una se
+  descartaba como duplicada.
+- `resolveForeignKeys` **creaba** lo que no encontraba: una sucursal errónea
+  mandaba la venta a la caja de otra tienda, y un cajero desconocido creaba un
+  usuario con rol Admin y `passwordHash: 'hash_placeholder'`.
+- El cuerpo del lote se tipaba con una **interfaz**; las interfaces desaparecen al
+  compilar, así que el `ValidationPipe` global no validaba nada en el endpoint por
+  el que entra el dinero.
+
+### Trazabilidad
+
+De tres teléfonos vendidos en una línea se guardaba **un solo IMEI**; los otros dos
+vivían únicamente en `sync_queue`, que se borra al sincronizar. Se perdía justo lo
+que justifica serializar un producto.
+
+### Pruebas
+
+No había ninguna en el frontend y la CI no ejecutaba una línea de código: tipos,
+formato, lint y empaquetado dicen que compila, no que calcula bien. Las cuatro
+suites del backend existían desde el principio y **ningún workflow las corría**;
+una llevaba tiempo rota sin que nadie lo notara.
+
+Ahora hay **55 pruebas** sobre lo que más duele: aritmética de dinero, identidad de
+líneas serializadas, descuentos acumulativos, cobertura del pago, matriz de
+permisos, dígitos de control de EAN-13 e IMEI y composición del ticket térmico.
+La CI corre ambos lados y falla si vuelve un secreto por defecto, la autorización
+por cabecera o una credencial de demostración en el build.
+
+### Lo que queda anotado, no resuelto
+
+Conviene decirlo con claridad en lugar de darlo por cerrado:
+
+- **El PIN de supervisor sigue comprobándose en el cliente.** Cuatro dígitos
+  comparados en el equipo son diez mil combinaciones: es un control operativo, no
+  una barrera criptográfica. Ya no hay secreto en el bundle y la comprobación pasa
+  por un único punto, para que el día que exista un endpoint de autorización solo
+  haya que cambiar ahí.
+- **La impresión no se ha probado contra hardware.** El compositor tiene pruebas y
+  el transporte está escrito, pero nadie ha visto salir un ticket de una impresora
+  física en esta sesión.
+- **Falta aplicar la migración.** El esquema cambió (`sale_payments`,
+  `Sale.customerSignature`, índices); hay una migración baseline generada en
+  `backend/prisma/migrations/`, pero requiere una base de datos para ejecutarse.
+- **`JWT_SECRET` debe definirse antes de desplegar**: sin él la API ya no arranca
+  en producción, que es el comportamiento correcto pero rompe un despliegue que
+  hoy dependiera del valor por defecto.

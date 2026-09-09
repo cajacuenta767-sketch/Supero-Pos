@@ -38,6 +38,20 @@ export const Modal: React.FC<ModalProps> = ({
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  /* `onClose` suele llegar como función anónima desde el padre, así que cambia
+     de identidad en cada render suyo. Si estuviera en las dependencias del
+     efecto, teclear una letra en un formulario del modal lo desmontaría y
+     volvería a montar: devolvía el foco al elemento que abrió el modal y luego
+     lo llevaba al primer botón del panel, con lo que el segundo carácter ya no
+     llegaba al campo. Por eso pasa por una referencia y el efecto depende solo
+     de si el modal está abierto. */
+  const onCloseRef = useRef(onClose);
+  const dismissableRef = useRef(dismissable);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    dismissableRef.current = dismissable;
+  }, [onClose, dismissable]);
+
   // Esc cierra + el foco queda atrapado dentro del panel.
   useEffect(() => {
     if (!isOpen) return;
@@ -50,12 +64,17 @@ export const Modal: React.FC<ModalProps> = ({
         ) ?? [],
       );
 
-    focusables()[0]?.focus();
+    /* El primer foco va al primer campo, no al botón de cerrar: casi todos
+       estos modales son formularios, y aterrizar en «Cerrar» obliga a tabular
+       antes de escribir. Sin campos —una confirmación— se usa el primero que
+       haya. */
+    const initial = focusables();
+    (initial.find((el) => /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) ?? initial[0])?.focus();
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && dismissable) {
+      if (e.key === 'Escape' && dismissableRef.current) {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab') return;
@@ -77,7 +96,7 @@ export const Modal: React.FC<ModalProps> = ({
       document.removeEventListener('keydown', onKey);
       previous?.focus?.();
     };
-  }, [isOpen, onClose, dismissable]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

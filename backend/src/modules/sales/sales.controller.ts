@@ -1,11 +1,9 @@
-import { Controller, Post, Get, Param, Body, Query, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { SalesService, CheckoutPayload } from './sales.service';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { RolesGuard } from '../../common/guards/roles.guard';
 import { CurrentUser, UserContext } from '../../common/decorators/current-user.decorator';
 
-@Controller('api/v1/sales')
-@UseGuards(RolesGuard)
+@Controller('sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
@@ -33,8 +31,7 @@ export class SalesController {
   }
 }
 
-@Controller('api/v1/reports')
-@UseGuards(RolesGuard)
+@Controller('reports')
 export class ReportsController {
   constructor(private readonly salesService: SalesService) {}
 

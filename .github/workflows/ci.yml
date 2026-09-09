@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Una sola ejecución por rama: un push nuevo cancela el anterior.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verificar frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Comprobar tipos
+        run: npx tsc --noEmit
+
+      - name: Formato
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      # La cadena no ejecutaba una sola línea del código: tipos, formato, lint y
+      # empaquetado dicen que compila, no que calcula bien.
+      - name: Pruebas
+        run: npm test
+
+      - name: Compilar
+        run: npm run build
+
+      - name: Comprobar que el build no lleva credenciales de demostración
+        # Sin VITE_DEMO_MODE, Vite elimina el bloque entero. Si alguna cadena
+        # sobrevive, es que el modo demostración se coló en un build real.
+        run: |
+          if grep -rqE 'SuperoPOS2026|supervisor123|cajero123|almacen123' dist/; then
+            echo "::error::El build contiene credenciales de demostración."
+            grep -rlE 'SuperoPOS2026|supervisor123|cajero123|almacen123' dist/
+            exit 1
+          fi
+          echo "Build limpio de credenciales."
+
+  backend:
+    name: Verificar backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Generar cliente Prisma
+        run: npx prisma generate
+
+      - name: Comprobar tipos
+        run: npx tsc --noEmit
+
+      # Las cuatro suites existían desde el principio y ningún workflow las
+      # ejecutaba: una llevaba tiempo rota sin que nadie lo notara.
+      - name: Pruebas
+        run: npx jest --ci
+
+      - name: Comprobar que no hay secretos por defecto en el código
+        run: |
+          # Se busca un valor por defecto real —una asignación o un `||`—, no la
+          # mención del problema en un comentario, que es documentación útil.
+          if grep -rnE "(JWT_SECRET *(\|\||\?\?) *['\"])|secretOrKey *: *['\"]" src/; then
+            echo "::error::Hay un secreto JWT por defecto en el código."
+            exit 1
+          fi
+          if grep -rq "headers\['x-user-role'\]" src/; then
+            echo "::error::El rol se está leyendo de una cabecera HTTP."
+            exit 1
+          fi
+          echo "Sin secretos por defecto ni autorización por cabecera." 
+
+  hygiene:
+    name: Higiene del repositorio
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Esto es exactamente lo que se coló al versionar node_modules: un BOM
+      # en .gitignore anuló la regla y nadie lo vio hasta el diff del PR.
+      - name: Ningún artefacto de dependencias o build versionado
+        run: |
+          intrusos=$(git ls-files | grep -E '(^|/)(node_modules|dist|dist-demo|dist-electron|build)/' || true)
+          if [ -n "$intrusos" ]; then
+            echo "::error::Hay archivos versionados que deberían estar ignorados:"
+            echo "$intrusos" | head -20
+            echo "Total: $(echo "$intrusos" | wc -l)"
+            exit 1
+          fi
+          echo "Sin artefactos versionados."
+
+      - name: Sin BOM ni UTF-16 en los archivos de configuración
+        run: |
+          fallos=0
+          for f in $(git ls-files '*.json' '*.js' '*.cjs' '*.ts' '*.yml' '*.yaml' '.gitignore' '.*rc*'); do
+            if [ -f "$f" ] && head -c 3 "$f" | od -An -tx1 | grep -qE 'ef bb bf|ff fe|fe ff'; then
+              echo "::error file=$f::Marca de orden de bytes o codificación UTF-16 detectada"
+              fallos=1
+            fi
+          done
+          exit $fallos

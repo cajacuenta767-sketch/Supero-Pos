@@ -198,6 +198,7 @@ export const HrAttendanceView: React.FC = () => {
     {
       key: 'employee',
       header: 'Empleado',
+      card: 'title',
       render: (l) => (
         <div className="min-w-0">
           <p className="text-base font-semibold text-ink truncate">{l.employee_name}</p>
@@ -237,6 +238,7 @@ export const HrAttendanceView: React.FC = () => {
     {
       key: 'status',
       header: 'Estado',
+      card: 'meta',
       align: 'right',
       width: '150px',
       render: (l) => (

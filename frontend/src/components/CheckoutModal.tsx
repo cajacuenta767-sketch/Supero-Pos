@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, CreditCard, DollarSign, Layers, QrCode } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { usePosStore } from '../store/usePosStore';
@@ -14,13 +14,22 @@ import {
   BlockDItem,
 } from '../db/sqlite';
 import { syncWorker } from '../services/syncWorker';
-import { Button, Input, Modal, Money, cn } from '../ui';
+import {
+  cartItemsToTicketLines,
+  openCashDrawer,
+  printSaleTicket,
+  isPrintingAvailable,
+} from '../services/printing';
+import { Badge, Button, Input, Modal, Money, SignaturePad, cn, useToast } from '../ui';
 
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
+
+/** A partir de este importe, una venta a empresa exige conforme firmado. */
+const SIGNATURE_THRESHOLD = 500;
 
 const generateUUID = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -54,7 +63,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   } = useCartStore();
 
   const { selectedCustomer, manualDiscount, resetPosCycle, setPendingSyncCount } = usePosStore();
+  const toast = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [signature, setSignature] = useState<string | null>(null);
+
+  /* Al abrir el cobro se siembran los importes desde el total vigente. El
+     estado inicial del carrito ya no trae efectivo precargado —eran 900 fijos
+     de la demostración—, así que sin esto el campo abría en cero y «Finalizar
+     venta» salía deshabilitado hasta teclear el importe a mano. */
+  useEffect(() => {
+    if (isOpen) setPaymentMethod(paymentMethod);
+    // Solo al abrir: cambiar de método ya reasigna los importes por su cuenta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -65,6 +86,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   const totalPaid = getTotalPaid();
   const change = getChange(customerDiscountRate, manualDiscount);
   const isCovered = isPaymentCovered(customerDiscountRate, manualDiscount);
+
+  // El conforme se pide cuando la venta sale a nombre de una empresa: es la que
+  // puede reclamar después. Al público general no se le pide firma por 20 Bs.
+  const isNamedCustomer = Boolean(selectedCustomer?.id && selectedCustomer.id !== 'default-public');
+  const needsSignature = isNamedCustomer && total >= SIGNATURE_THRESHOLD;
+  const canFinish = isCovered && (!needsSignature || Boolean(signature));
 
   const handleProcessPayment = () => {
     if (!isCovered) return;
@@ -161,6 +188,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
         shift_id,
         cashier_id,
         customer_id,
+        customer_signature: signature ?? undefined,
       };
 
       const block_b: BlockB = {
@@ -209,16 +237,54 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       // Trigger background sync worker to process FIFO queue if online
       syncWorker.triggerManualSync();
 
+      /* La impresión va después de que la venta esté registrada y nunca la
+         revierte: si la impresora falla, el cobro sigue siendo válido y lo que
+         se dice es que no salió el ticket, no que la venta se perdió. */
+      if (isPrintingAvailable()) {
+        void (async () => {
+          const outcome = await printSaleTicket({
+            ticketNumber: transaction_id.slice(0, 8).toUpperCase(),
+            dateText: new Date(timestamp).toLocaleString('es-BO'),
+            companyName: 'Supero POS',
+            companyNit: '1029384029',
+            cashierName: selectedCustomer ? undefined : undefined,
+            customerName:
+              selectedCustomer.id !== 'default-public' ? selectedCustomer.businessName : undefined,
+            paperWidth: '80mm',
+            items: cartItemsToTicketLines(items),
+            subtotal,
+            discount: discountAmount,
+            total,
+            payments: paymentBreakdown.map((p) => ({
+              method: p.payment_method,
+              amountReceived: p.amount_received,
+              changeGiven: p.change_given,
+            })),
+          });
+
+          if (!outcome.printed) {
+            toast(`Venta registrada, pero no se imprimió el ticket: ${outcome.reason}`, 'warning');
+          } else if (paymentBreakdown.some((p) => p.payment_method === 'CASH')) {
+            await openCashDrawer();
+          }
+        })();
+      }
+
       setTimeout(() => {
         setIsProcessing(false);
         clearCart();
         resetPosCycle();
+        setSignature(null);
         onSuccess();
         onClose();
       }, 400);
     } catch (error) {
+      /* Antes esto era un `alert()` del navegador: bloquea la terminal, no se
+         puede leer con el cajón abierto y en modo quiosco parece que la
+         aplicación se ha roto. El sistema de avisos ya existía. */
       const reason = error instanceof Error ? error.message : String(error);
-      alert('Error en la transacción local: ' + reason);
+      console.error('Fallo al registrar la venta local:', error);
+      toast(`No se pudo registrar la venta: ${reason}`, 'danger');
       setIsProcessing(false);
     }
   };
@@ -256,7 +322,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
             variant="success"
             size="lg"
             loading={isProcessing}
-            disabled={!isCovered}
+            disabled={!canFinish}
             onClick={handleProcessPayment}
             icon={!isProcessing ? <CheckCircle2 className="w-4 h-4" /> : undefined}
           >
@@ -285,6 +351,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
             <Money value={total} size="display" className="text-ink" />
           </div>
         </div>
+
+        {/* El panel de firma queda por debajo del pliegue en una pantalla de
+            portátil: sin este aviso arriba, «Finalizar venta» aparece
+            deshabilitado sin motivo visible. */}
+        {needsSignature && !signature && (
+          <div className="flex items-start gap-2 p-3 rounded-md bg-warn-soft border border-warn/30 text-body text-warn-ink">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            Venta a empresa sobre 500 Bs: pida el conforme firmado más abajo antes de finalizar.
+          </div>
+        )}
 
         {/* Método de pago */}
         <div className="space-y-2">
@@ -398,6 +474,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                 )}
               </span>
             </div>
+          </div>
+        )}
+
+        {isNamedCustomer && (
+          <div className="space-y-2 p-4 rounded-lg bg-sunken border border-line">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-micro uppercase text-ink-2">Conforme de entrega</p>
+              <Badge tone={needsSignature ? 'warning' : 'neutral'}>
+                {needsSignature ? 'Obligatorio' : 'Opcional'}
+              </Badge>
+            </div>
+            <SignaturePad
+              value={signature}
+              onChange={setSignature}
+              label={`Firma de ${selectedCustomer.businessName}`}
+              hint={
+                needsSignature
+                  ? 'Sobre 500 Bs a nombre de una empresa, la firma queda con el ticket. Sin ella no se puede finalizar.'
+                  : 'Queda archivada con el ticket si el cliente firma.'
+              }
+            />
           </div>
         )}
 

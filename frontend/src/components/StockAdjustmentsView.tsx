@@ -8,8 +8,10 @@ import {
   EmptyState,
   IconButton,
   Input,
+  ImageUpload,
   Modal,
   PageHeader,
+  PhotoThumb,
   Select,
   Tabs,
   Textarea,
@@ -66,6 +68,8 @@ interface AdjustmentRecord {
   user_name: string;
   status: 'DRAFT' | 'APPLIED' | 'CANCELLED';
   items: AdjustmentItem[];
+  /** Foto del estante o del producto dañado que justifica el ajuste. */
+  evidence_photo?: string;
 }
 
 interface AdjustmentItem {
@@ -97,6 +101,7 @@ export const StockAdjustmentsView: React.FC = () => {
   // Losses Form State
   const [lossReason, setLossReason] = useState('Vencido');
   const [lossNotes, setLossNotes] = useState('');
+  const [lossPhoto, setLossPhoto] = useState<string | null>(null);
   const [supervisorPin, setSupervisorPin] = useState('');
 
   // Blind Audit State
@@ -193,9 +198,11 @@ export const StockAdjustmentsView: React.FC = () => {
       user_name: 'Administrador',
       status: 'APPLIED',
       items: [],
+      evidence_photo: lossPhoto ?? undefined,
     };
     setAdjustments((prev) => [record, ...prev]);
     setLossNotes('');
+    setLossPhoto(null);
     setSupervisorPin('');
     setIsLossModalOpen(false);
     toast('Merma registrada', 'success');
@@ -217,12 +224,14 @@ export const StockAdjustmentsView: React.FC = () => {
     {
       key: 'type',
       header: 'Tipo',
+      card: 'meta',
       width: '180px',
       render: (a) => <Badge tone={TYPE_TONE[a.type]}>{TYPE_LABEL[a.type]}</Badge>,
     },
     {
       key: 'reason',
       header: 'Motivo',
+      card: 'title',
       render: (a) => <span className="text-body text-ink-2 truncate">{a.reason || '—'}</span>,
     },
     {
@@ -260,6 +269,7 @@ export const StockAdjustmentsView: React.FC = () => {
     {
       key: 'actions',
       header: '',
+      card: 'hidden',
       align: 'right',
       width: '60px',
       render: (a) => (
@@ -452,6 +462,16 @@ export const StockAdjustmentsView: React.FC = () => {
                 { label: 'Almacén', value: selectedRecord.branch },
                 { label: 'Estado', value: STATUS_LABEL[selectedRecord.status] },
                 { label: 'Motivo', value: selectedRecord.reason || '—', wide: true },
+                {
+                  label: 'Evidencia',
+                  value: (
+                    <PhotoThumb
+                      src={selectedRecord.evidence_photo}
+                      alt={`Evidencia del ajuste ${selectedRecord.id}`}
+                      size="md"
+                    />
+                  ),
+                },
               ]}
             />
             {selectedRecord.items.length > 0 && (
@@ -521,6 +541,14 @@ export const StockAdjustmentsView: React.FC = () => {
             value={lossNotes}
             onChange={(e) => setLossNotes(e.target.value)}
             placeholder="Qué producto, cuánto y por qué…"
+          />
+          <ImageUpload
+            value={lossPhoto}
+            onChange={setLossPhoto}
+            label="Foto del producto o del estante"
+            hint="Con foto, el supervisor decide sin bajar al almacén."
+            preview="lg"
+            maxSize={1200}
           />
           <Input
             label="PIN de supervisor"

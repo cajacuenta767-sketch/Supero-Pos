@@ -8,8 +8,10 @@ import {
   EmptyState,
   Input,
   Meter,
+  ImageUpload,
   Modal,
   Money,
+  PhotoThumb,
   PageHeader,
   Select,
   StatTile,
@@ -52,6 +54,8 @@ interface OperationalExpense {
   ref_number?: string;
   user_name: string;
   receipt_attached: boolean;
+  /** Foto del comprobante. `receipt_attached` decía que existía; esto lo guarda. */
+  receipt_photo?: string;
 }
 
 export const ExpensesView: React.FC = () => {
@@ -76,6 +80,7 @@ export const ExpensesView: React.FC = () => {
     'Caja Chica',
   );
   const [refNumber, setRefNumber] = useState('');
+  const [receiptPhoto, setReceiptPhoto] = useState<string | null>(null);
   const [supervisorPin, setSupervisorPin] = useState('');
 
   // Petty Cash Fund State
@@ -158,13 +163,15 @@ export const ExpensesView: React.FC = () => {
         amount: value,
         ref_number: refNumber || undefined,
         user_name: 'Administrador',
-        receipt_attached: !!refNumber,
+        receipt_attached: !!refNumber || !!receiptPhoto,
+        receipt_photo: receiptPhoto ?? undefined,
       },
       ...prev,
     ]);
     setDescription('');
     setAmount('');
     setRefNumber('');
+    setReceiptPhoto(null);
     setSupervisorPin('');
     setIsExpenseModalOpen(false);
     toast('Gasto registrado', 'success');
@@ -180,6 +187,7 @@ export const ExpensesView: React.FC = () => {
     {
       key: 'concept',
       header: 'Concepto',
+      card: 'title',
       render: (e) => (
         <div className="min-w-0">
           <p className="text-base text-ink truncate">{e.description}</p>
@@ -208,6 +216,7 @@ export const ExpensesView: React.FC = () => {
     {
       key: 'amount',
       header: 'Importe',
+      card: 'meta',
       align: 'right',
       width: '130px',
       render: (e) => <Money value={e.amount} size="base" className="text-ink" />,
@@ -217,9 +226,13 @@ export const ExpensesView: React.FC = () => {
       header: 'Comprobante',
       align: 'right',
       width: '140px',
+      card: 'meta',
       render: (e) =>
         e.receipt_attached ? (
-          <span className="font-mono text-body text-ink-3">{e.ref_number}</span>
+          <span className="inline-flex items-center gap-2">
+            <span className="font-mono text-body text-ink-3">{e.ref_number ?? '—'}</span>
+            <PhotoThumb src={e.receipt_photo} alt={`Comprobante de ${e.description}`} />
+          </span>
         ) : (
           <Badge tone="warning">Sin adjuntar</Badge>
         ),
@@ -441,6 +454,15 @@ export const ExpensesView: React.FC = () => {
               className="[&_input]:font-mono"
             />
           </div>
+
+          <ImageUpload
+            value={receiptPhoto}
+            onChange={setReceiptPhoto}
+            label="Foto del comprobante"
+            hint="El papel térmico se borra en meses; la foto no."
+            preview="lg"
+            maxSize={1200}
+          />
 
           {account === 'Caja Chica' && parseFloat(amount) > pettyRemaining && (
             <p className="flex items-start gap-1.5 text-body text-danger">

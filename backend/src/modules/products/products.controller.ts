@@ -1,10 +1,8 @@
-import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Param } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { RolesGuard } from '../../common/guards/roles.guard';
 
-@Controller('api/v1/products')
-@UseGuards(RolesGuard)
+@Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 

@@ -278,6 +278,7 @@ export const FinanceView: React.FC = () => {
     {
       key: 'op',
       header: 'Operación',
+      card: 'title',
       width: '200px',
       render: (t) => (
         <Badge tone={OPERATION_TONE[t.operation_type]}>{OPERATION_LABEL[t.operation_type]}</Badge>
@@ -299,6 +300,7 @@ export const FinanceView: React.FC = () => {
     {
       key: 'amount',
       header: 'Monto',
+      card: 'meta',
       align: 'right',
       width: '130px',
       render: (t) => <Money value={t.amount} size="base" className="text-ink" />,
