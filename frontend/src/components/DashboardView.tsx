@@ -2,13 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
-  Banknote,
   BarChart3,
   Calendar,
-  CreditCard,
   LineChart as LineChartIcon,
   Package,
-  QrCode,
   RefreshCw,
   ShoppingCart,
   Wallet,
@@ -26,6 +23,7 @@ import {
   cn,
 } from '../ui';
 import type { Column } from '../ui';
+import { useCatalogStore, MOVEMENT_LABEL } from '../store/useCatalogStore';
 
 /* Datos de demostración deterministas: un generador congruencial con semilla
  fija. Con Math.random la serie se regeneraba en cada render y el gráfico
@@ -41,28 +39,6 @@ interface TrendPoint {
   amount: number;
   tickets: number;
 }
-
-const CRITICAL_STOCK = [
-  { sku: 'EL-CAB-005', name: 'Cables USB-C Carga Rápida 2m', stock: 0, min: 5, unit: 'u.' },
-  { sku: 'EL-AUD-012', name: 'Auriculares Bluetooth Pro', stock: 1, min: 4, unit: 'u.' },
-  { sku: 'AB-QSO-002', name: 'Queso Criollo (a granel)', stock: 1.25, min: 5, unit: 'kg' },
-  { sku: 'AB-ARZ-001', name: 'Arroz Extra (Bolsa 5 kg)', stock: 2, min: 8, unit: 'u.' },
-  { sku: 'AB-LAC-006', name: 'Leche Entera 1 Litro (Caja)', stock: 3, min: 10, unit: 'u.' },
-];
-
-const RECENT_SALES = [
-  { ticket: 'TK-10024', time: '14:22', cashier: 'Juan Pérez', method: 'Efectivo', total: 145.8 },
-  { ticket: 'TK-10023', time: '14:10', cashier: 'Juan Pérez', method: 'Tarjeta', total: 320.0 },
-  { ticket: 'TK-10022', time: '13:45', cashier: 'María Gómez', method: 'QR', total: 85.5 },
-  { ticket: 'TK-10021', time: '13:12', cashier: 'Juan Pérez', method: 'Efectivo', total: 42.3 },
-  { ticket: 'TK-10020', time: '12:50', cashier: 'María Gómez', method: 'Tarjeta', total: 270.4 },
-];
-
-const METHOD_ICON: Record<string, React.ReactNode> = {
-  Efectivo: <Banknote className="w-3.5 h-3.5" />,
-  Tarjeta: <CreditCard className="w-3.5 h-3.5" />,
-  QR: <QrCode className="w-3.5 h-3.5" />,
-};
 
 /* ── Gráfico de tendencia ────────────────────────────────────────────────
    Una sola serie: el título la nombra, no hace falta leyenda. Un solo eje.
@@ -261,6 +237,31 @@ export const DashboardView: React.FC = () => {
   const [kind, setKind] = useState<'line' | 'bar'>('line');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  /* El stock crítico sale del catálogo, no de una lista fija que hablaba de
+     productos inexistentes —«Cables USB-C», «Arroz Extra»— mientras ignoraba los
+     que sí estaban por debajo del mínimo. */
+  const products = useCatalogStore((state) => state.products);
+  const movements = useCatalogStore((state) => state.movements);
+
+  const criticalStock = useMemo(
+    () =>
+      products
+        .filter((p) => p.is_active && p.stock <= p.min_stock)
+        .sort((a, b) => a.stock - b.stock)
+        .map((p) => ({
+          sku: p.sku,
+          name: p.name,
+          stock: p.stock,
+          min: p.min_stock,
+          unit: p.unit_type === 'FRACTION' ? 'kg' : 'u.',
+        })),
+    [products],
+  );
+
+  /* Movimientos reales de inventario en lugar de una lista inventada: es lo que
+     de verdad ha pasado en esta terminal. */
+  const recentMovements = useMemo(() => movements.slice(0, 6), [movements]);
+
   const trend = useMemo<TrendPoint[]>(() => {
     const rnd = seeded(20260814);
     return Array.from({ length: 30 }, (_, i) => ({
@@ -276,7 +277,46 @@ export const DashboardView: React.FC = () => {
     window.setTimeout(() => setIsRefreshing(false), 600);
   };
 
-  const stockColumns: Array<Column<(typeof CRITICAL_STOCK)[number]>> = [
+  const movementColumns: Array<Column<(typeof recentMovements)[number]>> = [
+    {
+      key: 'product',
+      header: 'Producto',
+      card: 'title',
+      render: (m) => (
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-ink truncate">{m.productName}</p>
+          <p className="text-micro text-ink-3">{MOVEMENT_LABEL[m.type]}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'quantity',
+      header: 'Cantidad',
+      align: 'right',
+      width: '120px',
+      card: 'meta',
+      render: (m) => (
+        <span
+          className={cn(
+            'font-mono tnum text-base font-semibold',
+            m.quantity < 0 ? 'text-danger' : 'text-ok',
+          )}
+        >
+          {m.quantity > 0 ? '+' : ''}
+          {m.quantity}
+        </span>
+      ),
+    },
+    {
+      key: 'after',
+      header: 'Queda',
+      align: 'right',
+      width: '100px',
+      render: (m) => <span className="font-mono tnum text-body text-ink-2">{m.stockAfter}</span>,
+    },
+  ];
+
+  const stockColumns: Array<Column<(typeof criticalStock)[number]>> = [
     {
       key: 'product',
       header: 'Producto',
@@ -311,39 +351,6 @@ export const DashboardView: React.FC = () => {
           {r.min} {r.unit}
         </span>
       ),
-    },
-  ];
-
-  const salesColumns: Array<Column<(typeof RECENT_SALES)[number]>> = [
-    {
-      key: 'ticket',
-      header: 'Ticket',
-      width: '110px',
-      render: (r) => <span className="font-mono text-body text-ink">{r.ticket}</span>,
-    },
-    {
-      key: 'time',
-      header: 'Hora',
-      width: '70px',
-      render: (r) => <span className="font-mono tnum text-ink-2">{r.time}</span>,
-    },
-    {
-      key: 'cashier',
-      header: 'Cajero',
-      render: (r) => <span className="text-ink-2 truncate">{r.cashier}</span>,
-    },
-    {
-      key: 'method',
-      header: 'Método',
-      width: '120px',
-      render: (r) => <Badge icon={METHOD_ICON[r.method]}>{r.method}</Badge>,
-    },
-    {
-      key: 'total',
-      header: 'Total',
-      align: 'right',
-      width: '110px',
-      render: (r) => <Money value={r.total} size="base" className="text-ink" />,
     },
   ];
 
@@ -421,7 +428,7 @@ export const DashboardView: React.FC = () => {
           />
           <StatTile
             label="Stock crítico"
-            value={CRITICAL_STOCK.length}
+            value={criticalStock.length}
             hint="productos bajo mínimo"
             icon={<Package className="w-4 h-4" />}
             tone="warning"
@@ -495,7 +502,7 @@ export const DashboardView: React.FC = () => {
             <DataTable
               caption="Productos por debajo de su stock mínimo"
               columns={stockColumns}
-              rows={CRITICAL_STOCK}
+              rows={criticalStock}
               rowKey={(r) => r.sku}
               dense
               className="border-0 rounded-none"
@@ -504,20 +511,26 @@ export const DashboardView: React.FC = () => {
           </Card>
 
           <Card
-            title="Últimas ventas"
-            subtitle="Turno en curso"
+            title="Últimos movimientos"
+            subtitle="Entradas y salidas de esta terminal"
             icon={<ShoppingCart className="w-4 h-4" />}
             padding="none"
           >
+            {/* Movimientos reales del kardex. Antes era una lista de ventas
+                inventada que no cambiaba por mucho que se vendiera. */}
             <DataTable
-              caption="Últimos movimientos que requieren atención"
-              columns={salesColumns}
-              rows={RECENT_SALES}
-              rowKey={(r) => r.ticket}
+              caption="Últimos movimientos de inventario registrados en la terminal"
+              columns={movementColumns}
+              rows={recentMovements}
+              rowKey={(m) => m.id}
               dense
               className="border-0 rounded-none"
               empty={
-                <EmptyState icon={<ShoppingCart className="w-6 h-6" />} title="Sin ventas aún" />
+                <EmptyState
+                  icon={<ShoppingCart className="w-6 h-6" />}
+                  title="Sin movimientos aún"
+                  hint="Las ventas, recepciones y ajustes aparecen aquí."
+                />
               }
             />
           </Card>

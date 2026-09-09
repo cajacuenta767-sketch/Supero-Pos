@@ -1,4 +1,3 @@
-import { usePersistentState } from '../store/persist';
 import React, { useState } from 'react';
 import {
   History,
@@ -40,6 +39,10 @@ import { useViewShortcuts } from '../hooks/useViewShortcuts';
 import { useDebounced } from '../hooks/useDebounced';
 import type { Column } from '../ui';
 import { buildCsv, downloadCsv } from '../utils/exportCsv';
+import { useCatalogStore } from '../store/useCatalogStore';
+import { verifySupervisorPin } from '../utils/supervisorPin';
+import { useSalesStore } from '../store/useSalesStore';
+import type { SaleTicket } from '../store/useSalesStore';
 
 const METHOD_LABEL: Record<SaleTicket['payment_method'], string> = {
   CASH: 'Efectivo',
@@ -55,34 +58,11 @@ const METHOD_ICON: Record<SaleTicket['payment_method'], React.ReactNode> = {
   MIXED: <Layers className="w-3.5 h-3.5" />,
 };
 
-interface SoldItem {
-  id: number;
-  sku: string;
-  name: string;
-  quantity: number;
-  unit_price: number;
-  subtotal: number;
-  serials?: string[];
-  unit_type: 'UNIT' | 'FRACTION' | 'SERIALIZED';
-}
-
-interface SaleTicket {
-  id: string; // Correlative ticket number e.g. TK-10024
-  timestamp: string;
-  cashier_name: string;
-  payment_method: 'CASH' | 'CARD' | 'QR' | 'MIXED';
-  total: number;
-  cash_given: number;
-  change: number;
-  status: 'COMPLETED' | 'CANCELLED';
-  items: SoldItem[];
-  cancellation_reason?: string;
-  cancelled_at?: string;
-  cancelled_by?: string;
-}
-
 export const SalesHistoryView: React.FC = () => {
   const toast = useToast();
+  const catalog = useCatalogStore((state) => state.products);
+  const applyMovements = useCatalogStore((state) => state.applyMovements);
+  const releaseSerials = useCatalogStore((state) => state.releaseSerials);
 
   /* F2 lleva el foco al buscador. */
   useViewShortcuts({});
@@ -105,85 +85,11 @@ export const SalesHistoryView: React.FC = () => {
   const [supervisorPin, setSupervisorPin] = useState('');
   const [voidError, setVoidError] = useState('');
 
-  // Mock Master Sales Tickets Data
-  const [tickets, setTickets] = usePersistentState<SaleTicket[]>('tickets', [
-    {
-      id: 'TK-10024',
-      timestamp: '14/08/2026 14:15',
-      cashier_name: 'Juan Pérez',
-      payment_method: 'CASH',
-      total: 864.0,
-      cash_given: 900.0,
-      change: 36.0,
-      status: 'COMPLETED',
-      items: [
-        {
-          id: 1,
-          sku: 'SKU-1001',
-          name: 'Coca Cola 2 Litros Retornable',
-          quantity: 2,
-          unit_price: 12.0,
-          subtotal: 24.0,
-          unit_type: 'UNIT',
-        },
-        {
-          id: 3,
-          sku: 'SKU-1003',
-          name: 'Smartphone Samsung Galaxy A54 128GB',
-          quantity: 1,
-          unit_price: 1850.0,
-          subtotal: 1850.0,
-          serials: ['IMEI-358492019482712'],
-          unit_type: 'SERIALIZED',
-        },
-      ],
-    },
-    {
-      id: 'TK-10023',
-      timestamp: '14/08/2026 13:40',
-      cashier_name: 'María Gómez',
-      payment_method: 'QR',
-      total: 145.0,
-      cash_given: 145.0,
-      change: 0.0,
-      status: 'COMPLETED',
-      items: [
-        {
-          id: 2,
-          sku: 'SKU-1002',
-          name: 'Queso Criollo San Javier (Kg)',
-          quantity: 3.22,
-          unit_price: 45.0,
-          subtotal: 145.0,
-          unit_type: 'FRACTION',
-        },
-      ],
-    },
-    {
-      id: 'TK-10022',
-      timestamp: '14/08/2026 11:20',
-      cashier_name: 'Juan Pérez',
-      payment_method: 'CARD',
-      total: 35.0,
-      cash_given: 35.0,
-      change: 0.0,
-      status: 'CANCELLED',
-      cancellation_reason: 'Error de tipeo en producto a solicitud del cliente',
-      cancelled_at: '14/08/2026 11:25',
-      cancelled_by: 'Administrador (Pin 1234)',
-      items: [
-        {
-          id: 4,
-          sku: 'SKU-1004',
-          name: 'Galletas Wafer Chocolate 150g',
-          quantity: 7,
-          unit_price: 5.0,
-          subtotal: 35.0,
-          unit_type: 'UNIT',
-        },
-      ],
-    },
-  ]);
+  /* El historial es el mismo que alimenta el cobro. Antes esta vista llevaba
+     su propia lista de tres ventas de agosto que nunca ocurrieron, y las ventas
+     reales de la jornada no aparecían aquí jamás. */
+  const tickets = useSalesStore((state) => state.tickets);
+  const voidTicket = useSalesStore((state) => state.voidTicket);
 
   const handleConfirmVoidTicket = (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,32 +97,76 @@ export const SalesHistoryView: React.FC = () => {
       setVoidError('Debe ingresar un motivo obligatorio para la anulación.');
       return;
     }
-    if (supervisorPin !== '1234' && supervisorPin !== '0000') {
-      setVoidError('PIN de supervisor incorrecto (Pruebe PIN: 1234).');
-      return;
+    /* El PIN solo se pide a quien no tiene el permiso: con `can_void_sale` el
+       campo ni siquiera se dibuja. Se comprobaba igual, así que el PIN vacío
+       fallaba y un administrador —el único autorizado a anular sin PIN— no
+       podía anular nada, sin ningún mensaje que lo explicara.
+
+       Antes esta vista comparaba con '1234' escrito aquí mismo y el mensaje de
+       error anunciaba el PIN. La comprobación pasa por el único punto que la
+       tiene, igual que los descuentos del punto de venta. */
+    if (!canVoidSaleDirect) {
+      const check = verifySupervisorPin(supervisorPin);
+      if (!check.authorized) {
+        setVoidError(check.message);
+        return;
+      }
     }
 
     if (selectedTicket) {
-      // 1. Update ticket status to CANCELLED
-      setTickets((prev) =>
-        prev.map((t) =>
-          t.id === selectedTicket.id
-            ? {
-                ...t,
-                status: 'CANCELLED',
-                cancellation_reason: voidReason,
-                cancelled_at: formatDateTime(new Date()),
-                cancelled_by: 'Supervisor (PIN Autorizado)',
-              }
-            : t,
-        ),
+      /* Anular es un solo hecho: cambia el estado del ticket y devuelve la
+         mercancía. Si el ticket ya estaba anulado, el store lo rechaza y no se
+         devuelve nada dos veces. */
+      const voided = voidTicket(
+        selectedTicket.id,
+        voidReason,
+        `${user?.name ?? 'Supervisor'}${canVoidSaleDirect ? '' : ' (PIN autorizado)'}`,
       );
 
-      // 2. Revert inventory stock & free IMEIs automatically in log
-      console.log(
-        `[KARDEX] Devolución atómica de inventario ejecutada para el ticket ${selectedTicket.id}`,
+      if (!voided) {
+        setVoidError('Este ticket ya estaba anulado.');
+        return;
+      }
+
+      /* Devolución real al inventario. Antes esto escribía en consola
+         «Devolución atómica de inventario ejecutada» y el aviso decía «stock
+         devuelto», sin devolver nada: la mercancía anulada quedaba descontada
+         para siempre. Y buscaba el producto por SKU contra un catálogo donde
+         ninguno de esos SKU existía, así que nunca encontraba nada. */
+      const returned = applyMovements(
+        voided.items
+          .map((item) => {
+            /* El identificador del catálogo es lo fiable; el SKU y el nombre
+               son el respaldo para tickets antiguos. */
+            const product =
+              catalog.find((p) => p.id === item.id) ??
+              catalog.find((p) => p.sku === item.sku || p.name === item.name);
+            return product
+              ? {
+                  productId: product.id,
+                  type: 'SALE_RETURN' as const,
+                  quantity: item.quantity,
+                  reference: voided.id,
+                  reason: voidReason,
+                }
+              : null;
+          })
+          .filter((m): m is NonNullable<typeof m> => m !== null),
       );
-      toast(`Ticket ${selectedTicket.id} anulado · stock devuelto`, 'success');
+
+      // Las series vuelven a estar disponibles: el aparato no salió de la tienda.
+      const serials = voided.items.flatMap((item) => item.serials ?? []);
+      if (serials.length > 0) releaseSerials(serials);
+
+      const perdidas = voided.items.length - returned.length;
+      toast(
+        returned.length > 0
+          ? `Ticket ${voided.id} anulado · ${returned.length} ${returned.length === 1 ? 'línea devuelta' : 'líneas devueltas'} al inventario` +
+              (perdidas > 0 ? ` · ${perdidas} sin equivalencia en el catálogo` : '')
+          : `Ticket ${voided.id} anulado · ninguna línea coincide con el catálogo actual`,
+        perdidas > 0 || returned.length === 0 ? 'warning' : 'success',
+      );
+      setSelectedTicket(null);
     }
 
     setIsVoidModalOpen(false);
@@ -227,14 +177,28 @@ export const SalesHistoryView: React.FC = () => {
 
   /* Dos ejes de filtro distintos: periodo y estado. Antes se mezclaban en una
      sola fila, como si fueran opciones del mismo conjunto. */
+  /* El selector de periodo existía y no filtraba nada: se elegía «Hoy» y la
+     tabla seguía mostrando el histórico completo. */
+  const periodStart = (() => {
+    const from = new Date();
+    from.setHours(0, 0, 0, 0);
+    if (dateFilter === 'TODAY') return from.getTime();
+    if (dateFilter === 'WEEK') return from.getTime() - 6 * 24 * 3600 * 1000;
+    if (dateFilter === 'MONTH') return from.getTime() - 29 * 24 * 3600 * 1000;
+    return 0;
+  })();
+
   const filteredTickets = tickets.filter((t) => {
     const q = searchQueryDebounced.toLowerCase();
     const matchesSearch =
       t.id.toLowerCase().includes(q) ||
       t.cashier_name.toLowerCase().includes(q) ||
+      (t.customer_name ?? '').toLowerCase().includes(q) ||
       t.items.some((i) => i.name.toLowerCase().includes(q));
     const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const at = new Date(t.at).getTime();
+    const matchesPeriod = Number.isNaN(at) || at >= periodStart;
+    return matchesSearch && matchesStatus && matchesPeriod;
   });
 
   const completed = filteredTickets.filter((t) => t.status === 'COMPLETED');
@@ -251,7 +215,7 @@ export const SalesHistoryView: React.FC = () => {
     const csv = buildCsv<SaleTicket>(
       [
         { header: 'Ticket', value: (t) => t.id },
-        { header: 'Fecha y hora', value: (t) => t.timestamp },
+        { header: 'Fecha y hora', value: (t) => formatDateTime(t.at) },
         { header: 'Cajero', value: (t) => t.cashier_name },
         { header: 'Método de pago', value: (t) => METHOD_LABEL[t.payment_method] },
         { header: 'Total', value: (t) => t.total.toFixed(2) },
@@ -285,7 +249,12 @@ export const SalesHistoryView: React.FC = () => {
       key: 'date',
       header: 'Fecha y hora',
       width: '170px',
-      render: (t) => <span className="font-mono tnum text-body text-ink-2">{t.timestamp}</span>,
+      /* Se ordena por el instante, no por el texto: «14/08/2026» ordenado como
+         cadena pone el 14 de agosto antes que el 2 de septiembre. */
+      sortValue: (t) => t.at,
+      render: (t) => (
+        <span className="font-mono tnum text-body text-ink-2">{formatDateTime(t.at)}</span>
+      ),
     },
     {
       key: 'cashier',
@@ -458,7 +427,7 @@ export const SalesHistoryView: React.FC = () => {
         onClose={() => setSelectedTicket(null)}
         icon={<History className="w-4 h-4" />}
         title={selectedTicket ? `Ticket ${selectedTicket.id}` : ''}
-        subtitle={selectedTicket?.timestamp}
+        subtitle={selectedTicket ? formatDateTime(selectedTicket.at) : undefined}
         size="lg"
         footer={
           <Button variant="ghost" onClick={() => setSelectedTicket(null)}>

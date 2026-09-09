@@ -30,7 +30,7 @@ import { CheckoutModal } from './CheckoutModal';
 import { CashShiftModal } from './CashShiftModal';
 import { CustomerModal } from './CustomerModal';
 import { SupervisorPinModal } from './SupervisorPinModal';
-import { Badge, Button, EmptyState, IconButton, Kbd, Money, cn } from '../ui';
+import { Badge, Button, EmptyState, IconButton, Kbd, Money, cn, useToast } from '../ui';
 
 /* Las categorías se derivan del propio catálogo: la lista fija que había antes
    incluía «Bebidas» y «Lácteos», que ningún producto del POS usaba, y omitía las
@@ -42,6 +42,7 @@ export const PosView: React.FC = () => {
   const canAccessPos = hasPermission(userRole, 'can_access_pos');
   const canApplyDiscount = hasPermission(userRole, 'can_apply_discount');
 
+  const toast = useToast();
   const { cashShift, selectedCustomer, manualDiscount, pendingSyncCount, setManualDiscount } =
     usePosStore();
 
@@ -101,6 +102,23 @@ export const PosView: React.FC = () => {
       setShiftModalDismissed(false);
       return;
     }
+
+    /* Sin existencias no se vende. Antes se podía añadir al ticket un producto
+       agotado, y la venta lo dejaba en negativo sin que nadie se enterara hasta
+       el siguiente conteo. */
+    const yaEnTicket = items
+      .filter((i) => i.id === product.id)
+      .reduce((sum, i) => sum + i.quantity, 0);
+    if (product.stock - yaEnTicket <= 0) {
+      toast(
+        product.stock <= 0
+          ? `«${product.name}» está agotado`
+          : `Solo quedan ${product.stock} de «${product.name}», ya en el ticket`,
+        'warning',
+      );
+      return;
+    }
+
     if (product.unit_type === 'SERIALIZED') {
       setPendingSerializedProduct(product);
     } else if (product.unit_type === 'FRACTION') {

@@ -273,6 +273,8 @@ interface CatalogState {
   markSerialsSold: (serialNumbers: string[], ticketId: string) => void;
   /** Alta de series al recibir mercadería. */
   registerSerials: (productId: number, serialNumbers: string[]) => void;
+  /** Devuelve series al almacén: el aparato no llegó a salir de la tienda. */
+  releaseSerials: (serialNumbers: string[]) => void;
   findByBarcode: (barcode: string) => Product | undefined;
   /** Solo lo vendible: activo y con existencias registradas. */
   sellableProducts: () => Product[];
@@ -390,6 +392,23 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       const serials = state.serials.map((s) =>
         target.has(s.serialNumber)
           ? { ...s, status: 'SOLD' as const, ticketId, updatedAt: new Date().toISOString() }
+          : s,
+      );
+      writePersisted(SERIALS_KEY, serials);
+      return { serials };
+    }),
+
+  releaseSerials: (serialNumbers) =>
+    set((state) => {
+      const target = new Set(serialNumbers.map((n) => n.trim()));
+      const serials = state.serials.map((s) =>
+        target.has(s.serialNumber)
+          ? {
+              ...s,
+              status: 'IN_STOCK' as const,
+              ticketId: undefined,
+              updatedAt: new Date().toISOString(),
+            }
           : s,
       );
       writePersisted(SERIALS_KEY, serials);

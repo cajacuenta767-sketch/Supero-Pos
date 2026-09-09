@@ -4,6 +4,8 @@ import { useCartStore } from '../store/useCartStore';
 import { useCatalogStore } from '../store/useCatalogStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { usePosStore } from '../store/usePosStore';
+import { useSalesStore } from '../store/useSalesStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { useSyncStore } from '../store/useSyncStore';
 import {
   localDb,
@@ -68,6 +70,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   const toast = useToast();
   const applyMovements = useCatalogStore((state) => state.applyMovements);
   const markSerialsSold = useCatalogStore((state) => state.markSerialsSold);
+  const recordSale = useSalesStore((state) => state.recordSale);
+  const cashier = useAuthStore((state) => state.user);
   const settings = useSettingsStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
@@ -117,7 +121,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       const branch_id = 'branch-01';
       const register_id = 'caja-1';
       const shift_id = 'shift-01';
-      const cashier_id = 'user-01';
+      /* El cajero es quien tiene la sesión abierta. Estaba fijo en
+         `user-01`, así que toda venta de toda terminal se atribuía al mismo
+         empleado y el historial no servía para pedir cuentas a nadie. */
+      const cashier_id = cashier?.username ?? 'desconocido';
+      /* Un único número de ticket para el kardex, las series, el impreso y
+         el historial: si cada uno lo deriva por su cuenta, no se cruzan. */
+      const ticketNumber = `TK-${transaction_id.slice(0, 8).toUpperCase()}`;
       const customer_id =
         selectedCustomer?.id && selectedCustomer.id !== 'default-public'
           ? String(selectedCustomer.id)
@@ -244,7 +254,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
          después a quién se le entregó este aparato concreto. */
       const soldSerials = items.flatMap((item) => item.selected_serials ?? []);
       if (soldSerials.length > 0) {
-        markSerialsSold(soldSerials, transaction_id.slice(0, 8).toUpperCase());
+        markSerialsSold(soldSerials, ticketNumber);
       }
 
       /* Las existencias bajan al vender, con su asiento en el kardex local. */
@@ -253,9 +263,39 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
           productId: item.id,
           type: 'SALE' as const,
           quantity: -item.quantity,
-          reference: transaction_id.slice(0, 8).toUpperCase(),
+          reference: ticketNumber,
         })),
       );
+
+      /* El ticket entra en el historial. Antes Informes leía una lista
+         inventada dentro de su propia vista: se cobraba aquí y la venta no
+         aparecía nunca allí. */
+      recordSale({
+        id: ticketNumber,
+        at: timestamp,
+        cashier_name: cashier?.name ?? cashier?.username ?? 'Sin identificar',
+        customer_name:
+          selectedCustomer.id !== 'default-public' ? selectedCustomer.businessName : undefined,
+        payment_method: paymentMethod,
+        total,
+        cash_given: totalPaid,
+        change: paymentMethod === 'CASH' || paymentMethod === 'MIXED' ? change : 0,
+        items: items.map((item) => ({
+          id: item.id,
+          sku: item.sku,
+          name: item.name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          subtotal: item.subtotal,
+          serials:
+            item.selected_serials && item.selected_serials.length > 0
+              ? item.selected_serials
+              : item.serial_number
+                ? [item.serial_number]
+                : undefined,
+          unit_type: item.unit_type,
+        })),
+      });
 
       // Update Zustand sync queue state
       const pendingCount = localDb.getPendingCount();
@@ -273,7 +313,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       if (isPrintingAvailable()) {
         void (async () => {
           const outcome = await printSaleTicket({
-            ticketNumber: transaction_id.slice(0, 8).toUpperCase(),
+            ticketNumber,
             dateText: new Date(timestamp).toLocaleString('es-BO'),
             companyName: settings.companyName,
             companyNit: settings.companyNit,
