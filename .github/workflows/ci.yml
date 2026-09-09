@@ -90,7 +90,9 @@ jobs:
 
       - name: Comprobar que no hay secretos por defecto en el código
         run: |
-          if grep -rq 'super_secret_jwt_key' src/; then
+          # Se busca un valor por defecto real —una asignación o un `||`—, no la
+          # mención del problema en un comentario, que es documentación útil.
+          if grep -rnE "(JWT_SECRET *(\|\||\?\?) *['\"])|secretOrKey *: *['\"]" src/; then
             echo "::error::Hay un secreto JWT por defecto en el código."
             exit 1
           fi

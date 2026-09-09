@@ -1,10 +1,10 @@
 /**
  * Secreto de firma de los tokens.
  *
- * Antes había un valor por defecto en el código —`super_secret_jwt_key_2026`—
- * en dos ficheros. Ese valor está publicado en el repositorio: con él,
- * cualquiera firma un token de administrador. Ahora la ausencia de la variable
- * detiene el arranque en lugar de degradar la seguridad en silencio.
+ * Antes había un secreto por defecto escrito en el código, en dos ficheros. Un
+ * valor así queda publicado en el repositorio, y con él cualquiera firma un
+ * token de administrador. Ahora la ausencia de la variable detiene el arranque
+ * en lugar de degradar la seguridad en silencio.
  *
  * En desarrollo se permite un secreto efímero distinto en cada arranque: sirve
  * para trabajar y no se puede filtrar porque no existe en ningún fichero.
