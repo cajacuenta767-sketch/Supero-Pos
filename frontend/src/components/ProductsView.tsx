@@ -12,9 +12,41 @@ import {
   Copy,
   AlertTriangle,
   FolderPlus,
-  Scan,
 } from 'lucide-react';
-import { Badge, Button, DataTable, EmptyState, IconButton, Money, cn } from '../ui';
+import {
+  Badge,
+  Button,
+  Card,
+  Modal,
+  DataTable,
+  EmptyState,
+  IconButton,
+  Input,
+  Money,
+  Select,
+  Toolbar,
+  cn,
+} from '../ui';
+
+type LabelSize = '50x25' | '40x20';
+
+/* Medidas físicas del adhesivo a 96 ppp: no escalan con la ventana. */
+const LABEL_PX: Record<LabelSize, { w: number; h: number }> = {
+  '50x25': { w: 189, h: 94 },
+  '40x20': { w: 151, h: 76 },
+};
+
+const CATEGORY_ROWS = [
+  { name: 'Bebidas y gaseosas', products: 42 },
+  { name: 'Lácteos y fiambrería', products: 28 },
+  { name: 'Electrónica y celulares', products: 63 },
+  { name: 'Golosinas y snacks', products: 51 },
+];
+
+const UNIT_ROWS = [
+  { from: 'Caja de 24', to: 'Pieza individual', factor: 24 },
+  { from: 'Kilogramo', to: 'Gramo', factor: 1000 },
+];
 import type { Column } from '../ui';
 
 interface Product {
@@ -235,6 +267,83 @@ export const ProductsView: React.FC = () => {
     }
     setIsProductModalOpen(false);
   };
+
+  const [labelProductSku, setLabelProductSku] = useState('SKU-1001');
+  const [labelSize, setLabelSize] = useState<LabelSize>('50x25');
+  const [labelCopies, setLabelCopies] = useState(12);
+
+  const selectedLabelProduct = products.find((p) => p.sku === labelProductSku) ?? products[0];
+
+  const filteredSerials = serials.filter(
+    (s) =>
+      s.serial_number.includes(serialSearch) ||
+      s.product_name.toLowerCase().includes(serialSearch.toLowerCase()),
+  );
+
+  const serialColumns: Array<Column<(typeof serials)[number]>> = [
+    {
+      key: 'product',
+      header: 'Producto',
+      render: (s) => (
+        <span className="text-base font-semibold text-ink truncate">{s.product_name}</span>
+      ),
+    },
+    {
+      key: 'serial',
+      header: 'Número de serie / IMEI',
+      width: '260px',
+      render: (s) => <span className="font-mono text-body text-ink">{s.serial_number}</span>,
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      width: '140px',
+      render: (s) => (
+        <Badge tone={s.status === 'IN_STOCK' ? 'success' : 'accent'}>
+          {s.status === 'IN_STOCK' ? 'En stock' : 'Vendido'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'ticket',
+      header: 'Ticket vinculado',
+      render: (s) => <span className="font-mono text-body text-ink-2">{s.ticket_id ?? '—'}</span>,
+    },
+  ];
+
+  const categoryColumns: Array<Column<(typeof CATEGORY_ROWS)[number]>> = [
+    {
+      key: 'name',
+      header: 'Categoría',
+      render: (c) => <span className="text-base font-semibold text-ink">{c.name}</span>,
+    },
+    {
+      key: 'count',
+      header: 'Productos',
+      align: 'right',
+      width: '120px',
+      render: (c) => <span className="font-mono tnum text-ink-2">{c.products}</span>,
+    },
+  ];
+
+  const unitColumns: Array<Column<(typeof UNIT_ROWS)[number]>> = [
+    {
+      key: 'conv',
+      header: 'Conversión',
+      render: (u) => (
+        <span className="text-base text-ink">
+          {u.from} <span className="text-ink-3">→</span> {u.to}
+        </span>
+      ),
+    },
+    {
+      key: 'factor',
+      header: 'Factor',
+      align: 'right',
+      width: '110px',
+      render: (u) => <span className="font-mono tnum text-ink">{u.factor}</span>,
+    },
+  ];
 
   const UNIT_META = {
     UNIT: { label: 'Unitario', tone: 'accent' as const, icon: <Package className="w-3 h-3" /> },
@@ -527,374 +636,294 @@ export const ProductsView: React.FC = () => {
 
         {/* TAB 2: SERIALS / IMEI MANAGER */}
         {activeTab === 'serials' && (
-          <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
-              <div>
-                <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                  <Cpu className="w-5 h-5 text-accent" /> Control Forense de Seriales & IMEIs
-                </h3>
-                <p className="text-body text-ink-3">
-                  Búsqueda rápida y estado de garantía de equipos con número de serie único
-                </p>
-              </div>
-
-              <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
-                <input
-                  type="text"
-                  value={serialSearch}
-                  onChange={(e) => setSerialSearch(e.target.value)}
-                  placeholder="Escanear o buscar número de serie/IMEI..."
-                  className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body font-mono"
+          <div className="space-y-4">
+            <Toolbar
+              search={serialSearch}
+              onSearchChange={setSerialSearch}
+              searchPlaceholder="Escanear o buscar número de serie / IMEI…"
+            />
+            <DataTable
+              columns={serialColumns}
+              rows={filteredSerials}
+              rowKey={(s) => s.id}
+              empty={
+                <EmptyState
+                  icon={<Cpu className="w-6 h-6" />}
+                  title="Sin series que coincidan"
+                  hint="Escanee un IMEI o busque por nombre de producto."
                 />
-              </div>
-            </div>
-
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-sunken text-ink-2 text-micro font-extrabold uppercase tracking-wider border-b border-line">
-                  <th className="p-4">Producto Maestro</th>
-                  <th className="p-4">Número de Serie / IMEI</th>
-                  <th className="p-4 text-center">Estado del Serial</th>
-                  <th className="p-4">Ticket / Cliente Vinculado</th>
-                  <th className="p-4 text-right">Última Actualización</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line text-body font-mono">
-                {serials
-                  .filter(
-                    (s) =>
-                      s.serial_number.includes(serialSearch) ||
-                      s.product_name.toLowerCase().includes(serialSearch.toLowerCase()),
-                  )
-                  .map((s) => (
-                    <tr key={s.id} className="hover:bg-sunken">
-                      <td className="p-4 font-bold text-ink font-sans">{s.product_name}</td>
-                      <td className="p-4 font-bold text-accent">{s.serial_number}</td>
-                      <td className="p-4 text-center font-sans">
-                        <span
-                          className={`px-2.5 py-1 rounded-md text-micro font-bold border ${
-                            s.status === 'IN_STOCK'
-                              ? 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30'
-                              : 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30'
-                          }`}
-                        >
-                          {s.status === 'IN_STOCK' ? 'EN STOCK' : 'VENDIDO'}
-                        </span>
-                      </td>
-                      <td className="p-4 font-sans text-ink-2">
-                        {s.ticket_id
-                          ? `${s.ticket_id} • ${s.customer_name}`
-                          : 'Sin asignar (En Tienda)'}
-                      </td>
-                      <td className="p-4 text-right text-ink-3 text-micro">{s.updated_at}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+              }
+            />
           </div>
         )}
 
-        {/* TAB 3: CATEGORIES & BRANDS */}
         {activeTab === 'categories' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4">
-              <div className="flex items-center justify-between border-b border-line pb-3">
-                <h3 className="font-extrabold text-base text-ink">Categorías Comerciales</h3>
-                <button className="px-3 py-1.5 bg-accent text-white font-bold text-body rounded-md flex items-center gap-1">
-                  <FolderPlus className="w-3.5 h-3.5" /> Nueva Categoría
-                </button>
-              </div>
-              <div className="space-y-2 text-body">
-                {[
-                  'Bebidas & Gaseosas',
-                  'Lácteos & Fiambrería',
-                  'Electrónica & Celulares',
-                  'Golosinas & Snacks',
-                ].map((cat, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 bg-sunken rounded-md border border-line flex items-center justify-between font-bold"
-                  >
-                    <span>{cat}</span>
-                    <span className="text-ink-3 font-mono text-micro">Activa</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+            <Card
+              title="Categorías"
+              subtitle="Agrupan el catálogo y filtran el punto de venta."
+              icon={<Layers className="w-4 h-4" />}
+              action={
+                <Button size="sm" variant="secondary" icon={<FolderPlus className="w-3.5 h-3.5" />}>
+                  Nueva
+                </Button>
+              }
+              padding="none"
+            >
+              <DataTable
+                columns={categoryColumns}
+                rows={CATEGORY_ROWS}
+                rowKey={(c) => c.name}
+                dense
+                className="border-0 rounded-none"
+              />
+            </Card>
 
-            <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4">
-              <div className="flex items-center justify-between border-b border-line pb-3">
-                <h3 className="font-extrabold text-base text-ink">
-                  Unidades de Medida y Conversiones
-                </h3>
-                <button className="px-3 py-1.5 bg-accent text-white font-bold text-body rounded-md">
-                  + Nueva Unidad
-                </button>
-              </div>
-              <div className="space-y-2 text-body">
-                <div className="p-3 bg-sunken rounded-md border border-line flex items-center justify-between">
-                  <span className="font-bold">Caja x 24 Unidades → Pieza Individual</span>
-                  <span className="font-mono text-accent font-bold">Factor 24</span>
-                </div>
-                <div className="p-3 bg-sunken rounded-md border border-line flex items-center justify-between">
-                  <span className="font-bold">Kilogramo (Kg) → Gramos (g)</span>
-                  <span className="font-mono text-accent font-bold">Factor 1000</span>
-                </div>
-              </div>
-            </div>
+            <Card
+              title="Unidades y conversiones"
+              subtitle="Permiten comprar en caja y vender por pieza."
+              icon={<Scale className="w-4 h-4" />}
+              action={
+                <Button size="sm" variant="secondary" icon={<Plus className="w-3.5 h-3.5" />}>
+                  Nueva
+                </Button>
+              }
+              padding="none"
+            >
+              <DataTable
+                columns={unitColumns}
+                rows={UNIT_ROWS}
+                rowKey={(u) => u.from}
+                dense
+                className="border-0 rounded-none"
+              />
+            </Card>
           </div>
         )}
 
-        {/* TAB 4: BARCODE LABEL GENERATOR */}
         {activeTab === 'labels' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4">
-              <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <Scan className="w-5 h-5 text-accent" /> Configuración de Plantilla Térmica
-              </h3>
-
-              <div className="space-y-3 text-body">
-                <div>
-                  <label className="font-bold text-ink-2">Seleccionar Producto</label>
-                  <select className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-semibold">
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.barcode})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-bold text-ink-2">Formato de Etiqueta</label>
-                    <select className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-bold">
-                      <option value="50x25">Térmica 50x25 mm</option>
-                      <option value="40x30">Térmica 40x30 mm</option>
-                      <option value="LETTER">Hoja Carta (30 por página)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="font-bold text-ink-2">Cantidad a Imprimir</label>
-                    <input
-                      type="number"
-                      defaultValue={24}
-                      className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-mono font-bold"
-                    />
-                  </div>
-                </div>
-
-                <button className="w-full py-3 bg-accent hover:bg-accent-hover text-white rounded-md font-extrabold flex items-center justify-center gap-2 shadow-e2 transition-all">
-                  <Printer className="w-4 h-4" /> Enviar a Impresora Térmica POS
-                </button>
-              </div>
-            </div>
-
-            {/* Real-time Label Preview */}
-            <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4 flex flex-col items-center justify-center">
-              <span className="text-body font-extrabold text-ink-3 uppercase tracking-widest">
-                Vista Previa de Etiqueta Térmica
-              </span>
-
-              {/* Thermal Label Mockup */}
-              <div className="w-64 p-4 bg-white text-black border-2 border-dashed border-gray-400 rounded-md text-center space-y-2 shadow-e1">
-                <span className="font-black text-body block tracking-wide uppercase">
-                  SUPERO POS ENTERPRISE
-                </span>
-                <p className="font-bold text-body line-clamp-1">{products[0]?.name}</p>
-                <div className="py-2 bg-black text-white font-mono text-micro font-bold tracking-widest rounded">
-                  ||||| | |||||| |||| | |||||
-                </div>
-                <span className="font-mono text-micro block">{products[0]?.barcode}</span>
-                <span className="font-black text-base text-accent-ink block">
-                  ${products[0]?.sale_price.toFixed(2)}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* PRODUCT FORM MODAL (ProductFormModal) */}
-        {isProductModalOpen && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-2xl overflow-hidden space-y-4">
-              <div className="p-5 border-b border-line flex items-center justify-between">
-                <h3 className="font-extrabold text-base text-ink">
-                  {editingProduct
-                    ? 'Editar Producto del Catálogo'
-                    : 'Crear Nuevo Producto en Catálogo Maestro'}
-                </h3>
-                <button
-                  onClick={() => setIsProductModalOpen(false)}
-                  className="text-ink-3 hover:text-ink-2"
+          <div className="flex flex-col xl:flex-row gap-5 items-start">
+            <Card
+              title="Etiqueta"
+              icon={<Printer className="w-4 h-4" />}
+              className="flex-1 min-w-0"
+            >
+              <div className="space-y-4">
+                <Select
+                  label="Producto"
+                  value={labelProductSku}
+                  onChange={(e) => setLabelProductSku(e.target.value)}
                 >
-                  ✕
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveProduct} className="p-5 space-y-4 text-body">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-bold text-ink-2">Código SKU *</label>
-                    <div className="flex gap-2 mt-1">
-                      <input
-                        type="text"
-                        required
-                        value={formData.sku}
-                        onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                        placeholder="SKU-1001"
-                        className="w-full p-2 bg-sunken border border-line rounded-md font-mono font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={generateSKU}
-                        className="px-3 bg-accent-soft text-accent font-bold rounded-md text-micro"
-                        title="Generar SKU"
-                      >
-                        Auto
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="font-bold text-ink-2">Código de Barras (EAN-13)</label>
-                    <div className="flex gap-2 mt-1">
-                      <input
-                        type="text"
-                        value={formData.barcode}
-                        onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                        placeholder="7771234567890"
-                        className="w-full p-2 bg-sunken border border-line rounded-md font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={generateEAN13}
-                        className="px-3 bg-ok-soft text-ok font-bold rounded-md text-micro"
-                        title="Generar EAN13"
-                      >
-                        EAN
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="font-bold text-ink-2">Nombre Comercial del Producto *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Ej. Coca Cola 2 Litros Retornable"
-                    className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-semibold"
+                  {products.map((p) => (
+                    <option key={p.id} value={p.sku}>
+                      {p.name}
+                    </option>
+                  ))}
+                </Select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Select
+                    label="Tamaño"
+                    hint="Medida física del papel adhesivo."
+                    value={labelSize}
+                    onChange={(e) => setLabelSize(e.target.value as LabelSize)}
+                  >
+                    <option value="50x25">50 × 25 mm · estante</option>
+                    <option value="40x20">40 × 20 mm · producto pequeño</option>
+                  </Select>
+                  <Input
+                    label="Copias"
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={labelCopies}
+                    onChange={(e) => setLabelCopies(parseInt(e.target.value) || 1)}
+                    className="[&_input]:font-mono"
                   />
                 </div>
+                <Button icon={<Printer className="w-4 h-4" />}>Imprimir {labelCopies}</Button>
+              </div>
+            </Card>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-bold text-ink-2">Tipo de Unidad *</label>
-                    <select
-                      value={formData.unit_type}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          unit_type: e.target.value as typeof formData.unit_type,
-                        })
-                      }
-                      className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-bold"
-                    >
-                      <option value="UNIT">Pieza Estándar (UNIT)</option>
-                      <option value="FRACTION">Pesable / Granel (FRACTION)</option>
-                      <option value="SERIALIZED">Serializado / IMEI (SERIALIZED)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="font-bold text-ink-2">Categoría</label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-semibold"
-                    >
-                      <option value="Bebidas & Gaseosas">Bebidas & Gaseosas</option>
-                      <option value="Lácteos & Fiambrería">Lácteos & Fiambrería</option>
-                      <option value="Electrónica & Celulares">Electrónica & Celulares</option>
-                      <option value="Golosinas & Snacks">Golosinas & Snacks</option>
-                    </select>
-                  </div>
+            {/* Al ancho real del adhesivo: es una medida física y no escala. */}
+            <div className="shrink-0 space-y-2">
+              <p className="text-micro uppercase text-ink-2">Vista previa · {labelSize} mm</p>
+              <div
+                className="bg-white text-black border border-line-strong rounded-sm p-2 flex flex-col items-center justify-center gap-1"
+                style={{ width: LABEL_PX[labelSize].w, height: LABEL_PX[labelSize].h }}
+              >
+                <span className="text-[9px] font-semibold text-center leading-tight line-clamp-2">
+                  {selectedLabelProduct?.name ?? ''}
+                </span>
+                <div className="flex items-end gap-[1px] h-6">
+                  {Array.from({ length: 28 }, (_, i) => (
+                    <span
+                      key={i}
+                      className="bg-black"
+                      style={{ width: i % 3 === 0 ? 2 : 1, height: '100%' }}
+                    />
+                  ))}
                 </div>
-
-                {/* Financial & Prices Section */}
-                <div className="p-3 bg-sunken rounded-md border border-line space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-ink">
-                      Precios & Margen de Rentabilidad (CPP)
-                    </span>
-                    <span className="text-body font-extrabold text-ok bg-ok-soft px-2 py-0.5 rounded-md border border-ok/30">
-                      Margen Utilidad: {profitMargin}%
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="font-bold text-ink-2 text-micro">Costo Base (CPP) $</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={formData.cost_price}
-                        onChange={(e) =>
-                          setFormData({ ...formData, cost_price: Number(e.target.value) })
-                        }
-                        className="w-full mt-1 p-2 bg-raised border border-line rounded-md font-mono font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-bold text-accent text-micro">Precio Minorista $</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={formData.sale_price}
-                        onChange={(e) =>
-                          setFormData({ ...formData, sale_price: Number(e.target.value) })
-                        }
-                        className="w-full mt-1 p-2 bg-raised border border-line rounded-md font-mono font-extrabold text-accent"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-bold text-ok text-micro">Precio Mayorista $</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={formData.wholesale_price}
-                        onChange={(e) =>
-                          setFormData({ ...formData, wholesale_price: Number(e.target.value) })
-                        }
-                        className="w-full mt-1 p-2 bg-raised border border-line rounded-md font-mono font-bold"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsProductModalOpen(false)}
-                    className="px-4 py-2 bg-sunken text-ink rounded-md font-bold"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md font-extrabold shadow"
-                  >
-                    Guardar Producto
-                  </button>
-                </div>
-              </form>
+                <span className="font-mono text-[8px]">{selectedLabelProduct?.barcode ?? ''}</span>
+                <span className="font-mono text-[11px] font-bold">
+                  ${selectedLabelProduct?.sale_price.toFixed(2) ?? '0.00'}
+                </span>
+              </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Alta y edición de producto */}
+      <Modal
+        isOpen={isProductModalOpen}
+        onClose={() => setIsProductModalOpen(false)}
+        icon={<Package className="w-4 h-4" />}
+        title={editingProduct ? 'Editar producto' : 'Nuevo producto'}
+        subtitle={editingProduct?.name}
+        size="lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setIsProductModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button form="product-form" type="submit">
+              Guardar
+            </Button>
+          </>
+        }
+      >
+        <form id="product-form" onSubmit={handleSaveProduct} className="space-y-5">
+          <section className="space-y-3">
+            <p className="text-micro uppercase text-ink-3">Identificación</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="flex items-end gap-2">
+                <Input
+                  label="Código SKU"
+                  required
+                  value={formData.sku}
+                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                  placeholder="SKU-1001"
+                  className="flex-1 [&_input]:font-mono"
+                />
+                <Button type="button" variant="secondary" onClick={generateSKU}>
+                  Auto
+                </Button>
+              </div>
+              <div className="flex items-end gap-2">
+                <Input
+                  label="Código de barras EAN-13"
+                  value={formData.barcode}
+                  onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                  placeholder="7771234567890"
+                  className="flex-1 [&_input]:font-mono"
+                />
+                <Button type="button" variant="secondary" onClick={generateEAN13}>
+                  Auto
+                </Button>
+              </div>
+              <Input
+                label="Nombre del producto"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="lg:col-span-2"
+              />
+            </div>
+          </section>
+
+          <section className="space-y-3 pt-4 border-t border-line">
+            <p className="text-micro uppercase text-ink-3">Tipo y stock</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <Select
+                label="Tipo de unidad"
+                value={formData.unit_type}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    unit_type: e.target.value as typeof formData.unit_type,
+                  })
+                }
+              >
+                <option value="UNIT">Unitario</option>
+                <option value="FRACTION">A granel</option>
+                <option value="SERIALIZED">Serializado con IMEI</option>
+              </Select>
+              <Input
+                label="Stock actual"
+                type="number"
+                step="0.001"
+                value={formData.stock}
+                onChange={(e) =>
+                  setFormData({ ...formData, stock: parseFloat(e.target.value) || 0 })
+                }
+                className="[&_input]:font-mono [&_input]:text-right"
+              />
+              <Input
+                label="Stock mínimo"
+                hint="Por debajo, el producto se marca en ámbar."
+                type="number"
+                value={formData.min_stock}
+                onChange={(e) =>
+                  setFormData({ ...formData, min_stock: parseFloat(e.target.value) || 0 })
+                }
+                className="[&_input]:font-mono [&_input]:text-right"
+              />
+            </div>
+          </section>
+
+          <section className="space-y-3 pt-4 border-t border-line">
+            <p className="text-micro uppercase text-ink-3">Precios</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <Input
+                label="Costo"
+                type="number"
+                step="0.01"
+                value={formData.cost_price}
+                onChange={(e) =>
+                  setFormData({ ...formData, cost_price: parseFloat(e.target.value) || 0 })
+                }
+                className="[&_input]:font-mono [&_input]:text-right"
+              />
+              <Input
+                label="Precio de venta"
+                type="number"
+                step="0.01"
+                value={formData.sale_price}
+                onChange={(e) =>
+                  setFormData({ ...formData, sale_price: parseFloat(e.target.value) || 0 })
+                }
+                className="[&_input]:font-mono [&_input]:text-right"
+              />
+              <Input
+                label="Precio mayorista"
+                type="number"
+                step="0.01"
+                value={formData.wholesale_price}
+                onChange={(e) =>
+                  setFormData({ ...formData, wholesale_price: parseFloat(e.target.value) || 0 })
+                }
+                className="[&_input]:font-mono [&_input]:text-right"
+              />
+            </div>
+
+            <div className="flex items-center justify-between px-4 h-12 rounded-md bg-sunken border border-line">
+              <span className="text-base text-ink-2">Margen sobre el costo</span>
+              <span
+                className={cn(
+                  'font-mono tnum text-title font-semibold',
+                  parseFloat(profitMargin) >= 20
+                    ? 'text-ok'
+                    : parseFloat(profitMargin) > 0
+                      ? 'text-warn'
+                      : 'text-danger',
+                )}
+              >
+                {profitMargin}%
+              </span>
+            </div>
+          </section>
+        </form>
+      </Modal>
     </div>
   );
 };

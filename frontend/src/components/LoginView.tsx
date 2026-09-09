@@ -135,11 +135,16 @@ export const LoginView: React.FC = () => {
       {/* Panel de acceso */}
       <div className="w-full lg:w-[480px] shrink-0 flex flex-col justify-center p-8 sm:p-12">
         <div className="flex items-center justify-between mb-8">
-          <div className="lg:hidden flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-accent text-white flex items-center justify-center font-bold text-title">
-              S
+          <div className="lg:hidden min-w-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 shrink-0 rounded-md bg-accent text-white flex items-center justify-center font-bold text-title">
+                S
+              </div>
+              <div className="min-w-0">
+                <p className="text-title text-ink leading-tight">SUPERO POS</p>
+                <p className="text-micro uppercase text-ink-3">Vender sin mirar la pantalla</p>
+              </div>
             </div>
-            <p className="text-title text-ink">SUPERO POS</p>
           </div>
           <div className="hidden lg:block">
             <h1 className="text-display text-ink">Iniciar sesión</h1>

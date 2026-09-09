@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -13,7 +13,18 @@ import {
   ShoppingCart,
   Wallet,
 } from 'lucide-react';
-import { Badge, Button, Card, DataTable, EmptyState, Money, Select, StatTile, cn } from '../ui';
+import {
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  Money,
+  Select,
+  Skeleton,
+  StatTile,
+  cn,
+} from '../ui';
 import type { Column } from '../ui';
 
 /* Datos de demostración deterministas: un generador congruencial con semilla
@@ -66,6 +77,15 @@ const TrendChart: React.FC<{
   kind: 'line' | 'bar';
 }> = ({ data, metric, kind }) => {
   const [hover, setHover] = useState<number | null>(null);
+  /* El viewBox escala, pero los rótulos del eje no: bajo 1024px se amontonan,
+     así que se muestra uno cada 10 días en lugar de cada 5. */
+  const [tickEvery, setTickEvery] = useState(5);
+  useEffect(() => {
+    const apply = () => setTickEvery(window.innerWidth < 1024 ? 10 : 5);
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, []);
 
   const W = 1000;
   const H = 260;
@@ -161,7 +181,7 @@ const TrendChart: React.FC<{
 
         {/* Eje X: un rótulo cada cinco días */}
         {data.map((d, i) =>
-          i % 5 === 0 || i === data.length - 1 ? (
+          i % tickEvery === 0 || i === data.length - 1 ? (
             <text
               key={d.day}
               x={x(i)}
@@ -454,7 +474,14 @@ export const DashboardView: React.FC = () => {
             </div>
           }
         >
-          <TrendChart data={trend} metric={metric} kind={kind} />
+          {isRefreshing ? (
+            <div className="space-y-3">
+              <Skeleton variant="tile" className="h-[260px]" />
+              <Skeleton variant="text" className="h-9" />
+            </div>
+          ) : (
+            <TrendChart data={trend} metric={metric} kind={kind} />
+          )}
         </Card>
 
         {/* Atención inmediata */}
