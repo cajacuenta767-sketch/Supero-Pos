@@ -7,14 +7,16 @@ import { IS_DEMO_MODE } from '../config/env';
  * modal lo anunciaba en pantalla, así que cualquier cajero se autorizaba sus
  * propios descuentos y anulaciones.
  *
- * Qué NO resuelve esto, y conviene tener claro: un PIN de cuatro dígitos
- * comparado en el cliente es débil por construcción —hay diez mil
- * combinaciones y el código está en el equipo—. Lo que hace este módulo es
- * quitar el secreto en claro del bundle y dejar un único punto por el que pasa
- * la autorización, para que el día que exista un endpoint de autorización en el
- * servidor solo haya que cambiar aquí. Mientras tanto, la comprobación local es
- * un control operativo, no una barrera criptográfica, y toda autorización viaja
- * en el ticket para que el servidor pueda re-verificarla.
+ * Con red, quien decide es el servidor: el PIN viaja, se compara contra su
+ * hash y vuelve un sí o un no con el nombre de quien autorizó. El número no
+ * está en el equipo, así que leerlo del bundle ya no sirve de nada.
+ *
+ * Sin red queda la comprobación local, que es un control operativo y no una
+ * barrera criptográfica: un PIN de cuatro dígitos comparado en el cliente tiene
+ * diez mil combinaciones y el código está en la caja. Se conserva porque una
+ * tienda sin conexión tiene que poder anular un ticket mal cobrado, y toda
+ * autorización viaja en el ticket para que el servidor la re-verifique al
+ * sincronizar.
  */
 
 /** Comparación en tiempo constante: una comparación normal se corta en el primer
@@ -45,6 +47,10 @@ const configuredPin = (): string | null => {
 export interface PinCheck {
   authorized: boolean;
   message: string;
+  /** Quién autorizó, cuando lo decidió el servidor. */
+  authorizedBy?: string;
+  /** `true` cuando se resolvió sin red, con la comprobación local. */
+  offline?: boolean;
 }
 
 export const verifySupervisorPin = (input: string): PinCheck => {
@@ -63,4 +69,53 @@ export const verifySupervisorPin = (input: string): PinCheck => {
   }
 
   return { authorized: true, message: 'Autorización concedida.' };
+};
+
+/**
+ * Autorización contra el servidor, con la comprobación local como respaldo.
+ *
+ * Es la que deben usar las pantallas. `verifySupervisorPin` se queda para el
+ * camino sin red y para las pruebas.
+ */
+export const authorizeSupervisor = async (
+  input: string,
+  action: string,
+  terminalId: string,
+): Promise<PinCheck> => {
+  try {
+    const { apiClient } = await import('../services/api.client');
+    const { data } = await apiClient.post('/auth/verify-pin', {
+      pin: input.trim(),
+      terminalId,
+      action,
+    });
+    return {
+      authorized: true,
+      message: `Autorizado por ${data?.authorizedBy?.name ?? 'un supervisor'}.`,
+      authorizedBy: data?.authorizedBy?.name,
+    };
+  } catch (error) {
+    const response = (error as { response?: { status?: number; data?: { message?: string } } })
+      .response;
+
+    /* El servidor contestó y dijo que no: se le hace caso. Reintentar en local
+       sería darle al cajero una segunda oportunidad con reglas más flojas. */
+    if (response?.status === 401 || response?.status === 403 || response?.status === 429) {
+      return {
+        authorized: false,
+        message: response.data?.message ?? 'PIN de supervisor incorrecto.',
+      };
+    }
+
+    /* No hubo respuesta —sin red, servidor caído—: se resuelve en la terminal,
+       y se dice, porque no es la misma garantía. */
+    const local = verifySupervisorPin(input);
+    return {
+      ...local,
+      offline: true,
+      message: local.authorized
+        ? 'Autorizado sin conexión · se re-verificará al sincronizar.'
+        : local.message,
+    };
+  }
 };

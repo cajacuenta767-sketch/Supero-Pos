@@ -40,9 +40,10 @@ import { useDebounced } from '../hooks/useDebounced';
 import type { Column } from '../ui';
 import { buildCsv, downloadCsv } from '../utils/exportCsv';
 import { useCatalogStore } from '../store/useCatalogStore';
-import { verifySupervisorPin } from '../utils/supervisorPin';
+import { authorizeSupervisor } from '../utils/supervisorPin';
 import { useSalesStore } from '../store/useSalesStore';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { usePosStore } from '../store/usePosStore';
 import type { SaleTicket } from '../store/useSalesStore';
 
 const METHOD_LABEL: Record<SaleTicket['payment_method'], string> = {
@@ -72,6 +73,9 @@ export const SalesHistoryView: React.FC = () => {
   const canVoidSaleDirect = hasPermission(userRole, 'can_void_sale');
   /* Exigir PIN para anular se configura en Ajustes · Seguridad. */
   const requirePinForVoids = useSettingsStore((state) => state.requirePinForVoids);
+  /* La caja desde la que se pide: el servidor bloquea por terminal tras cinco
+     intentos, y sin identificarla el bloqueo sería global. */
+  const registerName = usePosStore((state) => state.cashShift?.registerName ?? 'sin-turno');
 
   const [searchQuery, setSearchQuery] = useState('');
   /* El filtro corría en cada pulsación sobre la lista entera. */
@@ -94,7 +98,7 @@ export const SalesHistoryView: React.FC = () => {
   const tickets = useSalesStore((state) => state.tickets);
   const voidTicket = useSalesStore((state) => state.voidTicket);
 
-  const handleConfirmVoidTicket = (e: React.FormEvent) => {
+  const handleConfirmVoidTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!voidReason) {
       setVoidError('Debe ingresar un motivo obligatorio para la anulación.');
@@ -108,12 +112,16 @@ export const SalesHistoryView: React.FC = () => {
        Antes esta vista comparaba con '1234' escrito aquí mismo y el mensaje de
        error anunciaba el PIN. La comprobación pasa por el único punto que la
        tiene, igual que los descuentos del punto de venta. */
+    /* Quien decide es el servidor, que compara contra el hash del PIN. Antes se
+       comparaba aquí contra un valor del bundle. */
+    let authorizedBy: string | undefined;
     if (!canVoidSaleDirect && requirePinForVoids) {
-      const check = verifySupervisorPin(supervisorPin);
+      const check = await authorizeSupervisor(supervisorPin, 'void_sale', registerName);
       if (!check.authorized) {
         setVoidError(check.message);
         return;
       }
+      authorizedBy = check.authorizedBy;
     }
 
     if (selectedTicket) {
@@ -123,7 +131,9 @@ export const SalesHistoryView: React.FC = () => {
       const voided = voidTicket(
         selectedTicket.id,
         voidReason,
-        `${user?.name ?? 'Supervisor'}${canVoidSaleDirect ? '' : ' (PIN autorizado)'}`,
+        authorizedBy
+          ? `${user?.name ?? 'Operador'} · autorizado por ${authorizedBy}`
+          : (user?.name ?? 'Supervisor'),
       );
 
       if (!voided) {

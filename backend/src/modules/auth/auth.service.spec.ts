@@ -26,6 +26,7 @@ describe('AuthService (Sprint 1 QA & Auth Engine)', () => {
   const mockPrismaService = {
     user: {
       findFirst: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
     },
   };
@@ -115,5 +116,83 @@ describe('AuthService (Sprint 1 QA & Auth Engine)', () => {
     await expect(
       service.login({ username: 'admin', password: 'SuperoPOS2026' }),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  describe('authorizeWithPin', () => {
+    const supervisor = {
+      id: 'usr-sup',
+      username: 'supervisor',
+      fullName: 'María López',
+      supervisorPinHash: '',
+    };
+
+    beforeEach(async () => {
+      supervisor.supervisorPinHash = await argon2.hash('4821', { type: argon2.argon2id });
+      mockPrismaService.user.findMany.mockResolvedValue([supervisor]);
+      /* El bloqueo por terminal es estado del servicio y sobrevive entre
+         pruebas: cada una parte de una caja distinta. */
+    });
+
+    it('autoriza con el PIN correcto y dice quién lo autorizó', async () => {
+      const result = await service.authorizeWithPin('4821', 'caja-a1', 'void_sale');
+      expect(result.authorized).toBe(true);
+      expect(result.authorizedBy.name).toBe('María López');
+      expect(result.action).toBe('void_sale');
+    });
+
+    it('el PIN nunca vuelve en la respuesta', async () => {
+      const result = await service.authorizeWithPin('4821', 'caja-a2', 'discount');
+      expect(JSON.stringify(result)).not.toContain('4821');
+    });
+
+    it('rechaza el PIN incorrecto sin decir de quién es cada PIN', async () => {
+      await expect(service.authorizeWithPin('0000', 'caja-b1', 'discount')).rejects.toThrow(
+        UnauthorizedException,
+      );
+      try {
+        await service.authorizeWithPin('0000', 'caja-b1', 'discount');
+      } catch (e) {
+        const body = (e as UnauthorizedException).getResponse() as Record<string, unknown>;
+        expect(body.message).toBe('PIN de supervisor incorrecto.');
+        expect(JSON.stringify(body)).not.toContain('María');
+      }
+    });
+
+    it('bloquea la terminal tras cinco intentos: cuatro dígitos son diez mil combinaciones', async () => {
+      for (let i = 0; i < 5; i++) {
+        await expect(service.authorizeWithPin('9999', 'caja-c1', 'discount')).rejects.toThrow();
+      }
+      await expect(service.authorizeWithPin('4821', 'caja-c1', 'discount')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('el bloqueo es de esa terminal, no de todas', async () => {
+      for (let i = 0; i < 5; i++) {
+        await expect(service.authorizeWithPin('9999', 'caja-d1', 'discount')).rejects.toThrow();
+      }
+      await expect(service.authorizeWithPin('4821', 'caja-d2', 'discount')).resolves.toMatchObject({
+        authorized: true,
+      });
+    });
+
+    it('un acierto limpia los intentos fallidos previos', async () => {
+      await expect(service.authorizeWithPin('9999', 'caja-e1', 'discount')).rejects.toThrow();
+      await service.authorizeWithPin('4821', 'caja-e1', 'discount');
+      for (let i = 0; i < 4; i++) {
+        await expect(service.authorizeWithPin('9999', 'caja-e1', 'discount')).rejects.toThrow();
+      }
+      // Si el acierto no hubiera limpiado, el quinto fallo ya habría bloqueado.
+      await expect(service.authorizeWithPin('4821', 'caja-e1', 'discount')).resolves.toMatchObject({
+        authorized: true,
+      });
+    });
+
+    it('sin ningún supervisor con PIN puesto, no autoriza a nadie', async () => {
+      mockPrismaService.user.findMany.mockResolvedValue([]);
+      await expect(service.authorizeWithPin('4821', 'caja-f1', 'discount')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
   });
 });

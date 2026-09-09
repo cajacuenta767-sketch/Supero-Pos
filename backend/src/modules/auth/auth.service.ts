@@ -215,6 +215,100 @@ export class AuthService {
     return argon2.hash(password, { type: argon2.argon2id });
   }
 
+  /* ── Autorización por PIN de supervisor ───────────────────────────────── */
+
+  /**
+   * Intentos fallidos de PIN, por terminal.
+   *
+   * Un PIN de cuatro dígitos tiene diez mil combinaciones: sin freno, un script
+   * las recorre en segundos. El bloqueo va por terminal y no por usuario porque
+   * quien pide la autorización es la caja, no una cuenta concreta.
+   */
+  private pinAttempts = new Map<string, LockoutState>();
+  private readonly MAX_PIN_ATTEMPTS = 5;
+  private readonly PIN_LOCKOUT_MS = 10 * 60 * 1000;
+
+  async hashSupervisorPin(pin: string): Promise<string> {
+    return argon2.hash(pin, { type: argon2.argon2id });
+  }
+
+  /**
+   * Autoriza una operación sensible contra el PIN de un supervisor.
+   *
+   * Antes esto se comparaba en el navegador contra un valor del bundle: un
+   * cajero con las herramientas del navegador leía el PIN y se autorizaba sus
+   * propios descuentos y anulaciones. Ahora el número nunca sale del servidor
+   * —solo se guarda su hash— y la terminal recibe un sí o un no.
+   *
+   * No se dice qué supervisor lo autorizó cuando falla: eso revelaría qué
+   * cuentas tienen PIN configurado.
+   */
+  async authorizeWithPin(pin: string, terminalId: string, action: string) {
+    const key = terminalId.trim().toLowerCase() || 'sin-terminal';
+    const state = this.pinAttempts.get(key) ?? { count: 0, lockedUntil: null };
+
+    if (state.lockedUntil && state.lockedUntil > new Date()) {
+      const seconds = Math.ceil((state.lockedUntil.getTime() - Date.now()) / 1000);
+      throw new ForbiddenException({
+        success: false,
+        status_code: 403,
+        message: `Demasiados intentos. Vuelva a probar en ${Math.ceil(seconds / 60)} minutos.`,
+        retryAfterSeconds: seconds,
+      });
+    }
+
+    /* Solo autorizan quienes tienen PIN puesto y están de alta. */
+    const candidates = await this.prisma.user.findMany({
+      where: { isActive: true, supervisorPinHash: { not: null } },
+      select: { id: true, username: true, fullName: true, supervisorPinHash: true },
+    });
+
+    let authorizedBy: { id: string; username: string; fullName: string } | null = null;
+    for (const candidate of candidates) {
+      /* Se recorren todos aunque ya haya coincidencia: cortar antes deja que el
+         tiempo de respuesta diga en qué posición estaba el supervisor. */
+      const ok = await this.verifyPassword(candidate.supervisorPinHash as string, pin);
+      if (ok && !authorizedBy) {
+        authorizedBy = {
+          id: candidate.id,
+          username: candidate.username,
+          fullName: candidate.fullName,
+        };
+      }
+    }
+
+    if (candidates.length === 0) {
+      // Se consume el mismo tiempo que una verificación real.
+      await this.verifyPassword(await this.getDecoyHash(), pin);
+    }
+
+    if (!authorizedBy) {
+      state.count += 1;
+      if (state.count >= this.MAX_PIN_ATTEMPTS) {
+        state.lockedUntil = new Date(Date.now() + this.PIN_LOCKOUT_MS);
+      }
+      this.pinAttempts.set(key, state);
+      throw new UnauthorizedException({
+        success: false,
+        status_code: 401,
+        message: 'PIN de supervisor incorrecto.',
+        remainingAttempts: Math.max(0, this.MAX_PIN_ATTEMPTS - state.count),
+      });
+    }
+
+    this.pinAttempts.delete(key);
+
+    return {
+      success: true,
+      authorized: true,
+      /* Quién autorizó qué y desde dónde: es la mitad del valor de exigir PIN. */
+      authorizedBy: { id: authorizedBy.id, name: authorizedBy.fullName },
+      action,
+      terminalId,
+      authorizedAt: new Date().toISOString(),
+    };
+  }
+
   getFailedAttemptsCount(username: string): number {
     const key = username.toLowerCase().trim();
     return this.failedAttemptsMap.get(key)?.count || 0;

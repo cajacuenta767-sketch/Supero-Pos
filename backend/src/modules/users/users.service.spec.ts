@@ -65,7 +65,12 @@ describe('UsersService', () => {
       const result = await service.findAll();
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(1);
-      expect(result.data[0].passwordHash).toBeUndefined();
+      /* El tipo de retorno ya omite los secretos —nombrarlos aquí no
+         compilaría—, así que se comprueba sobre el objeto en crudo que
+         tampoco viajan en tiempo de ejecución. */
+      const crudo = result.data[0] as unknown as Record<string, unknown>;
+      expect(crudo.passwordHash).toBeUndefined();
+      expect(crudo.supervisorPinHash).toBeUndefined();
       expect(result.data[0].username).toBe('jperez');
       expect(result.data[0].role.name).toBe('CAJERO');
     });
@@ -76,7 +81,9 @@ describe('UsersService', () => {
       const result = await service.findOne('user-uuid-1');
       expect(result.success).toBe(true);
       expect(result.data.id).toBe('user-uuid-1');
-      expect(result.data.passwordHash).toBeUndefined();
+      const crudo = result.data as unknown as Record<string, unknown>;
+      expect(crudo.passwordHash).toBeUndefined();
+      expect(crudo.supervisorPinHash).toBeUndefined();
     });
 
     it('should throw NotFoundException if user does not exist', async () => {

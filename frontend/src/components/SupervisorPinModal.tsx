@@ -15,20 +15,32 @@ interface SupervisorPinModalProps {
 const PinForm: React.FC<{
   targetDiscountPercentage: number;
   onAuthorized: () => void;
-}> = ({ targetDiscountPercentage, onAuthorized }) => {
+  onChecking: (checking: boolean) => void;
+}> = ({ targetDiscountPercentage, onAuthorized, onChecking }) => {
   const { setManualDiscount } = usePosStore();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+  /* La autorización va al servidor: mientras viaja, el botón no puede aceptar
+     un segundo envío ni quedarse mudo. */
+  const [checking, setChecking] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = setManualDiscount(targetDiscountPercentage, pin);
-    if (!result.success) {
-      setError(result.message);
-      return;
+    if (checking) return;
+    setChecking(true);
+    onChecking(true);
+    try {
+      const result = await setManualDiscount(targetDiscountPercentage, pin);
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+      setError('');
+      onAuthorized();
+    } finally {
+      setChecking(false);
+      onChecking(false);
     }
-    setError('');
-    onAuthorized();
   };
 
   return (
@@ -61,32 +73,43 @@ export const SupervisorPinModal: React.FC<SupervisorPinModalProps> = ({
   targetDiscountPercentage,
   onClose,
   onSuccess,
-}) => (
-  <Modal
-    isOpen={isOpen}
-    onClose={onClose}
-    icon={<ShieldCheck className="w-4 h-4" />}
-    title="Autorización de supervisor"
-    size="sm"
-    footer={
-      <>
-        <Button variant="ghost" onClick={onClose}>
-          Cancelar
-        </Button>
-        <Button form="pin-form" type="submit" variant="danger" icon={<Check className="w-4 h-4" />}>
-          Autorizar
-        </Button>
-      </>
-    }
-  >
-    {isOpen && (
-      <PinForm
-        targetDiscountPercentage={targetDiscountPercentage}
-        onAuthorized={() => {
-          onSuccess();
-          onClose();
-        }}
-      />
-    )}
-  </Modal>
-);
+}) => {
+  const [checking, setChecking] = useState(false);
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      icon={<ShieldCheck className="w-4 h-4" />}
+      title="Autorización de supervisor"
+      size="sm"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            form="pin-form"
+            type="submit"
+            variant="danger"
+            disabled={checking}
+            icon={<Check className="w-4 h-4" />}
+          >
+            {checking ? 'Comprobando…' : 'Autorizar'}
+          </Button>
+        </>
+      }
+    >
+      {isOpen && (
+        <PinForm
+          onChecking={setChecking}
+          targetDiscountPercentage={targetDiscountPercentage}
+          onAuthorized={() => {
+            onSuccess();
+            onClose();
+          }}
+        />
+      )}
+    </Modal>
+  );
+};

@@ -58,12 +58,50 @@ jobs:
           fi
           echo "Build limpio de credenciales."
 
+      - name: Comprobar que el PIN de supervisor no viaja en el build
+        # El PIN de demostración vive tras `IS_DEMO_MODE`, que Vite dobla a
+        # falso en un build real. Si la variable o su valor por defecto siguen
+        # ahí, la autorización volvería a decidirse en el navegador con un
+        # secreto que cualquiera lee desde las herramientas del desarrollador.
+        run: |
+          if grep -rq 'VITE_DEMO_SUPERVISOR_PIN' dist/; then
+            echo "::error::El build lleva el PIN de demostración."
+            grep -rl 'VITE_DEMO_SUPERVISOR_PIN' dist/
+            exit 1
+          fi
+          if ! grep -rq 'auth/verify-pin' dist/; then
+            echo "::error::El build no llama al endpoint de autorización del servidor."
+            exit 1
+          fi
+          echo "La autorización por PIN la decide el servidor."
+
   backend:
     name: Verificar backend
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+
+    # Una base de verdad: las migraciones se daban por buenas sin haberse
+    # aplicado nunca, así que un esquema que no arranca se descubría al
+    # desplegar y no aquí.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: supero_pos_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/supero_pos_ci?schema=public
 
     steps:
       - uses: actions/checkout@v4
@@ -82,6 +120,37 @@ jobs:
 
       - name: Comprobar tipos
         run: npx tsc --noEmit
+
+      # El backend no tenía configuración de ESLint: `npm run lint` fallaba con
+      # un error de configuración y nadie lo ejecutaba.
+      - name: Lint
+        run: npx eslint src --ext .ts --max-warnings 20
+
+      - name: Aplicar migraciones sobre PostgreSQL
+        run: npx prisma migrate deploy
+
+      # Que el esquema del código y el de la base coincidan: una migración
+      # olvidada rompe el despliegue, no la revisión.
+      - name: Comprobar que no falta ninguna migración
+        run: |
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code && echo "El esquema de la base coincide con el del código."
+
+      # Sin siembra, una instalación nueva no tiene con qué iniciar sesión.
+      - name: Sembrar una instalación nueva
+        env:
+          SEED_ADMIN_PASSWORD: contrasena-solo-para-la-integracion-continua
+          SEED_SUPERVISOR_PIN: '135790'
+        run: npm run prisma:seed
+
+      # Idempotente: volver a sembrar no debe duplicar ni pisar nada.
+      - name: Sembrar por segunda vez
+        env:
+          SEED_ADMIN_PASSWORD: contrasena-solo-para-la-integracion-continua
+          SEED_SUPERVISOR_PIN: '135790'
+        run: npm run prisma:seed
 
       # Las cuatro suites existían desde el principio y ningún workflow las
       # ejecutaba: una llevaba tiempo rota sin que nadie lo notara.

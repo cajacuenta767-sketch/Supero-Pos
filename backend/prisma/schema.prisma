@@ -29,6 +29,11 @@ model User {
   email        String    @unique
   phone        String?
   passwordHash String
+  // PIN de supervisor, con el mismo tratamiento que la contraseña: se guarda el
+  // hash, nunca el número. Antes la autorización se comparaba en el cliente
+  // contra un valor del bundle, así que un cajero con las herramientas del
+  // navegador se autorizaba sus propios descuentos y anulaciones.
+  supervisorPinHash String?
   roleId       String
   branchId     String
   isActive     Boolean   @default(true)

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { verifySupervisorPin } from '../utils/supervisorPin';
+import { authorizeSupervisor } from '../utils/supervisorPin';
 import { useCartStore } from './useCartStore';
 import { readPersisted, writePersisted } from './persist';
 import { localId } from '../utils/ids';
@@ -49,7 +49,10 @@ interface PosState {
   openCashShift: (initialFloat: number, registerId?: string, registerName?: string) => void;
   closeCashShift: (countedCash: number, notes?: string) => void;
   setCustomer: (customer: Customer) => void;
-  setManualDiscount: (discount: number, pinInput?: string) => { success: boolean; message: string };
+  setManualDiscount: (
+    discount: number,
+    pinInput?: string,
+  ) => Promise<{ success: boolean; message: string }>;
   setPendingSyncCount: (count: number) => void;
   resetPosCycle: () => void;
 }
@@ -93,7 +96,7 @@ const initialShift = (): CashShift | null => {
   return seeded;
 };
 
-export const usePosStore = create<PosState>((set) => ({
+export const usePosStore = create<PosState>((set, get) => ({
   /* El turno es la unidad contable de la jornada. Antes vivía en estado plano:
      se cerraba la caja, se recargaba la terminal y volvía a aparecer abierto con
      los valores de demostración —y el arqueo, que calcula el efectivo esperado
@@ -136,15 +139,21 @@ export const usePosStore = create<PosState>((set) => ({
       .setDiscounts(customer.discountPercentage, useCartStore.getState().manualDiscountPercentage);
   },
 
-  setManualDiscount: (discount, pinInput) => {
+  setManualDiscount: async (discount, pinInput) => {
     /* Los descuentos por encima del 10 % exigen autorización. El PIN ya no vive
-       en el store —era la cadena '1234' en el bundle—: la comprobación está en
-       utils/supervisorPin, que es el único punto por el que pasa. */
-    /* La exigencia del PIN se configura en Ajustes · Seguridad. El interruptor
+       en el store —era la cadena '1234' en el bundle— ni se compara aquí: lo
+       decide el servidor contra su hash, con la comprobación local solo cuando
+       no hay red.
+
+       La exigencia del PIN se configura en Ajustes · Seguridad. El interruptor
        existía y no lo leía nadie: el PIN se pedía siempre, estuviera apagado o
        encendido. */
     if (discount > 10 && useSettingsStore.getState().requirePinForDiscounts) {
-      const check = verifySupervisorPin(pinInput ?? '');
+      const check = await authorizeSupervisor(
+        pinInput ?? '',
+        'discount',
+        get().cashShift?.registerName ?? 'sin-turno',
+      );
       if (!check.authorized) {
         return { success: false, message: check.message };
       }

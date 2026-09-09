@@ -14,11 +14,19 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Helper to exclude passwordHash from User output object
+   * Quita del usuario todo lo que no debe salir de la base.
+   *
+   * Antes solo apartaba `passwordHash`. Al añadir el PIN de supervisor, su
+   * hash habría viajado en la respuesta de cada endpoint de usuarios: un hash
+   * de un número de seis dígitos se rompe sin esfuerzo con una tabla, así que
+   * publicarlo equivale a publicar el PIN.
+   *
+   * Se listan los campos secretos en un sitio para que añadir uno nuevo al
+   * modelo obligue a decidir aquí si sale o no.
    */
-  private sanitizeUser(user: any) {
+  private sanitizeUser<T extends Record<string, unknown>>(user: T | null) {
     if (!user) return null;
-    const { passwordHash, ...sanitized } = user;
+    const { passwordHash: _password, supervisorPinHash: _pin, ...sanitized } = user;
     return sanitized;
   }
 
