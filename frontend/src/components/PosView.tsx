@@ -17,7 +17,7 @@ import {
   Unlock,
   User,
 } from 'lucide-react';
-import { useCartStore } from '../store/useCartStore';
+import { useCartStore, lineKey } from '../store/useCartStore';
 import { usePosStore } from '../store/usePosStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
@@ -384,96 +384,101 @@ export const PosView: React.FC = () => {
               />
             ) : (
               <div className="divide-y divide-line">
-                {items.map((item) => (
-                  <div
-                    /* Un producto serializado genera una línea por número de
-                       serie, todas con el mismo `id`: la identidad de la línea
-                       es el par id + serie, igual que en el store. */
-                    key={`${item.id}-${item.serial_number ?? ''}`}
-                    className={cn(
-                      'min-h-16 px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 bg-raised',
-                      flashId === item.id && 'animate-scan-flash',
-                    )}
-                  >
-                    <div className="flex-1 min-w-[160px] space-y-0.5">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-base font-semibold text-ink">{item.name}</span>
-                        {item.is_wholesale_applied && (
-                          <Badge tone="success" icon={<Sparkles className="w-3 h-3" />}>
-                            Mayorista
-                          </Badge>
-                        )}
-                        {item.unit_type === 'SERIALIZED' && <Badge tone="warning">IMEI</Badge>}
-                        {item.unit_type === 'FRACTION' && <Badge tone="accent">Granel</Badge>}
-                      </div>
-
-                      <div className="flex items-center gap-2 text-body text-ink-2">
-                        <span className="font-mono">{item.sku}</span>
-                        <span className="text-ink-3">·</span>
-                        <Money value={item.unit_price} size="body" /> c/u
-                        {item.is_wholesale_applied && (
-                          <span className="text-ink-3 line-through">
-                            <Money value={item.retail_price} size="body" />
-                          </span>
-                        )}
-                      </div>
-
-                      {item.serial_number && (
-                        <div className="flex items-center gap-1 text-body font-mono text-warn-ink">
-                          <ShieldCheck className="w-3 h-3" /> {item.serial_number}
-                        </div>
+                {items.map((item) => {
+                  /* Un producto serializado genera una línea por número de
+                     serie, todas con el mismo `id`: la identidad de la línea es
+                     el par id + serie, igual que en el store. Antes los
+                     controles pasaban solo el `id` y actuaban sobre todas sus
+                     líneas a la vez. */
+                  const key = lineKey(item.id, item.serial_number);
+                  return (
+                    <div
+                      key={key}
+                      className={cn(
+                        'min-h-16 px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 bg-raised',
+                        flashId === item.id && 'animate-scan-flash',
                       )}
-                    </div>
-
-                    {/* Controles táctiles de 44px */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <IconButton
-                        label="Restar cantidad"
-                        size="touch"
-                        onClick={() =>
-                          updateQuantity(
-                            item.id,
-                            Math.max(
-                              0.001,
-                              item.quantity - (item.unit_type === 'FRACTION' ? 0.1 : 1),
-                            ),
-                          )
-                        }
-                        className="border border-line-strong"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </IconButton>
-                      <span className="w-16 text-center font-mono tnum text-base font-semibold text-ink">
-                        {item.unit_type === 'FRACTION' ? item.quantity.toFixed(3) : item.quantity}
-                      </span>
-                      <IconButton
-                        label="Sumar cantidad"
-                        size="touch"
-                        onClick={() =>
-                          updateQuantity(
-                            item.id,
-                            item.quantity + (item.unit_type === 'FRACTION' ? 0.1 : 1),
-                          )
-                        }
-                        className="border border-line-strong"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </IconButton>
-                    </div>
-
-                    <div className="w-24 text-right shrink-0">
-                      <Money value={item.subtotal} size="base" className="text-ink" />
-                    </div>
-
-                    <IconButton
-                      label="Quitar del ticket"
-                      tone="danger"
-                      onClick={() => removeItem(item.id)}
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </IconButton>
-                  </div>
-                ))}
+                      <div className="flex-1 min-w-[160px] space-y-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-base font-semibold text-ink">{item.name}</span>
+                          {item.is_wholesale_applied && (
+                            <Badge tone="success" icon={<Sparkles className="w-3 h-3" />}>
+                              Mayorista
+                            </Badge>
+                          )}
+                          {item.unit_type === 'SERIALIZED' && <Badge tone="warning">IMEI</Badge>}
+                          {item.unit_type === 'FRACTION' && <Badge tone="accent">Granel</Badge>}
+                        </div>
+
+                        <div className="flex items-center gap-2 text-body text-ink-2">
+                          <span className="font-mono">{item.sku}</span>
+                          <span className="text-ink-3">·</span>
+                          <Money value={item.unit_price} size="body" /> c/u
+                          {item.is_wholesale_applied && (
+                            <span className="text-ink-3 line-through">
+                              <Money value={item.retail_price} size="body" />
+                            </span>
+                          )}
+                        </div>
+
+                        {item.serial_number && (
+                          <div className="flex items-center gap-1 text-body font-mono text-warn-ink">
+                            <ShieldCheck className="w-3 h-3" /> {item.serial_number}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Controles táctiles de 44px */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <IconButton
+                          label="Restar cantidad"
+                          size="touch"
+                          onClick={() =>
+                            updateQuantity(
+                              key,
+                              Math.max(
+                                0.001,
+                                item.quantity - (item.unit_type === 'FRACTION' ? 0.1 : 1),
+                              ),
+                            )
+                          }
+                          className="border border-line-strong"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </IconButton>
+                        <span className="w-16 text-center font-mono tnum text-base font-semibold text-ink">
+                          {item.unit_type === 'FRACTION' ? item.quantity.toFixed(3) : item.quantity}
+                        </span>
+                        <IconButton
+                          label="Sumar cantidad"
+                          size="touch"
+                          onClick={() =>
+                            updateQuantity(
+                              key,
+                              item.quantity + (item.unit_type === 'FRACTION' ? 0.1 : 1),
+                            )
+                          }
+                          className="border border-line-strong"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </IconButton>
+                      </div>
+
+                      <div className="w-24 text-right shrink-0">
+                        <Money value={item.subtotal} size="base" className="text-ink" />
+                      </div>
+
+                      <IconButton
+                        label="Quitar del ticket"
+                        tone="danger"
+                        onClick={() => removeItem(key)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </IconButton>
+                    </div>
+                  );
+                })}
                 <div ref={cartEndRef} />
               </div>
             )}

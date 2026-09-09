@@ -18,7 +18,8 @@ import {
   UserCheck,
   LogOut,
 } from 'lucide-react';
-import { useAuthStore, UserRole } from '../store/useAuthStore';
+import { useAuthStore } from '../store/useAuthStore';
+import { canAccessView } from '../utils/permissions';
 import { useThemeStore } from '../store/useThemeStore';
 import { cn } from '../ui';
 
@@ -26,7 +27,6 @@ interface SidebarItem {
   id: string;
   name: string;
   icon: React.ReactNode;
-  roles: UserRole[];
 }
 
 interface SidebarGroup {
@@ -50,25 +50,21 @@ const GROUPS: SidebarGroup[] = [
         id: 'home',
         name: 'Hogar',
         icon: <Home className={ico} />,
-        roles: ['ADMIN', 'SUPERVISOR', 'CAJERO', 'ALMACENERO'],
       },
       {
         id: 'pos',
         name: 'Vender',
         icon: <ShoppingBag className={ico} />,
-        roles: ['ADMIN', 'SUPERVISOR', 'CAJERO'],
       },
       {
         id: 'purchases',
         name: 'Compras',
         icon: <ShoppingCart className={ico} />,
-        roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'],
       },
       {
         id: 'transfers',
         name: 'Transferencias',
         icon: <ArrowLeftRight className={ico} />,
-        roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'],
       },
     ],
   },
@@ -79,19 +75,16 @@ const GROUPS: SidebarGroup[] = [
         id: 'products',
         name: 'Productos',
         icon: <Package className={ico} />,
-        roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'],
       },
       {
         id: 'contacts',
         name: 'Contactos',
         icon: <Contact className={ico} />,
-        roles: ['ADMIN', 'SUPERVISOR'],
       },
       {
         id: 'stock-adjust',
         name: 'Ajuste de Stock',
         icon: <Sliders className={ico} />,
-        roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'],
       },
     ],
   },
@@ -102,29 +95,25 @@ const GROUPS: SidebarGroup[] = [
         id: 'reports',
         name: 'Informes',
         icon: <BarChart3 className={ico} />,
-        roles: ['ADMIN', 'SUPERVISOR', 'CAJERO'],
       },
       {
         id: 'accounts',
         name: 'Cuentas',
         icon: <CreditCard className={ico} />,
-        roles: ['ADMIN', 'SUPERVISOR'],
       },
       {
         id: 'expenses',
         name: 'Gastos',
         icon: <DollarSign className={ico} />,
-        roles: ['ADMIN', 'SUPERVISOR'],
       },
-      { id: 'users', name: 'Usuarios', icon: <Users className={ico} />, roles: ['ADMIN'] },
-      { id: 'hr', name: 'Recursos Humanos', icon: <UserCheck className={ico} />, roles: ['ADMIN'] },
+      { id: 'users', name: 'Usuarios', icon: <Users className={ico} /> },
+      { id: 'hr', name: 'Recursos Humanos', icon: <UserCheck className={ico} /> },
       {
         id: 'notifications',
         name: 'Notificaciones',
         icon: <Bell className={ico} />,
-        roles: ['ADMIN', 'SUPERVISOR'],
       },
-      { id: 'settings', name: 'Ajustes', icon: <Settings className={ico} />, roles: ['ADMIN'] },
+      { id: 'settings', name: 'Ajustes', icon: <Settings className={ico} /> },
     ],
   },
 ];
@@ -134,7 +123,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   const { isDarkMode, toggleTheme } = useThemeStore();
   const [open, setOpen] = useState(false);
 
-  const userRole = user?.role || 'ADMIN';
+  /* Sin respaldo a ADMIN: un usuario sin rol no debe ver más que uno con el rol
+     más bajo. Antes, cualquier fallo al cargar el perfil abría la aplicación
+     entera. */
+  const userRole = user?.role;
   const initials = (user?.name || 'Usuario')
     .split(' ')
     .slice(0, 2)
@@ -177,7 +169,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         {/* Navegación agrupada */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3">
           {GROUPS.map((group) => {
-            const visible = group.items.filter((i) => i.roles.includes(userRole));
+            /* La visibilidad sale del mismo mapa que usa App para decidir qué
+               renderiza: antes eran dos listas independientes que podían
+               contradecirse. */
+            const visible = group.items.filter((i) => canAccessView(userRole, i.id));
             if (visible.length === 0) return null;
 
             return (
@@ -246,7 +241,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
               <p className="text-body font-semibold text-ink truncate leading-tight">
                 {user?.name || 'Usuario'}
               </p>
-              <p className="text-micro text-ink-3">{userRole}</p>
+              <p className="text-micro text-ink-3">{userRole ?? 'Sin rol'}</p>
             </div>
           </div>
 

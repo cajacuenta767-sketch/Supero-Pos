@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { verifySupervisorPin } from '../utils/supervisorPin';
+import { useCartStore } from './useCartStore';
 
 export interface Customer {
   id: string;
@@ -31,7 +33,6 @@ interface PosState {
   cashShift: CashShift | null;
   selectedCustomer: Customer;
   manualDiscount: number; // Percentage 0-100
-  supervisorPin: string;
   pendingSyncCount: number;
 
   // Actions
@@ -43,7 +44,7 @@ interface PosState {
   resetPosCycle: () => void;
 }
 
-export const usePosStore = create<PosState>((set, get) => ({
+export const usePosStore = create<PosState>((set) => ({
   cashShift: {
     id: 'shift-001',
     registerId: 'caja-1',
@@ -56,7 +57,6 @@ export const usePosStore = create<PosState>((set, get) => ({
   },
   selectedCustomer: DEFAULT_CUSTOMER,
   manualDiscount: 0,
-  supervisorPin: '1234', // Default supervisor authorization PIN
   pendingSyncCount: 0,
 
   openCashShift: (initialFloat, registerId = 'caja-1', registerName = 'Caja 1 Principal') => {
@@ -77,20 +77,31 @@ export const usePosStore = create<PosState>((set, get) => ({
     set({ cashShift: null });
   },
 
-  setCustomer: (customer) => set({ selectedCustomer: customer }),
+  /* El carrito necesita conocer los descuentos vigentes para calcular su propio
+     total: sin esto, `getTotal()` sin argumentos devolvía el importe sin
+     descontar y de ahí salían el precargado de efectivo y el vuelto erróneos. */
+  setCustomer: (customer) => {
+    set({ selectedCustomer: customer });
+    useCartStore
+      .getState()
+      .setDiscounts(customer.discountPercentage, useCartStore.getState().manualDiscountPercentage);
+  },
 
   setManualDiscount: (discount, pinInput) => {
-    // Limits: Manual discounts > 10% require supervisor PIN validation
+    /* Los descuentos por encima del 10 % exigen autorización. El PIN ya no vive
+       en el store —era la cadena '1234' en el bundle—: la comprobación está en
+       utils/supervisorPin, que es el único punto por el que pasa. */
     if (discount > 10) {
-      if (pinInput !== get().supervisorPin) {
-        return {
-          success: false,
-          message: 'PIN de Supervisor incorrecto. Descuento > 10% requiere autorización.',
-        };
+      const check = verifySupervisorPin(pinInput ?? '');
+      if (!check.authorized) {
+        return { success: false, message: check.message };
       }
     }
     const validDiscount = Math.min(100, Math.max(0, discount));
     set({ manualDiscount: validDiscount });
+    useCartStore
+      .getState()
+      .setDiscounts(useCartStore.getState().customerDiscountPercentage, validDiscount);
     return { success: true, message: `Descuento del ${validDiscount}% aplicado correctamente.` };
   },
 
@@ -101,5 +112,6 @@ export const usePosStore = create<PosState>((set, get) => ({
       selectedCustomer: DEFAULT_CUSTOMER,
       manualDiscount: 0,
     });
+    useCartStore.getState().setDiscounts(DEFAULT_CUSTOMER.discountPercentage, 0);
   },
 }));

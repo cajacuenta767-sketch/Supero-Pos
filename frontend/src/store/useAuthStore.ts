@@ -1,6 +1,10 @@
 import { create } from 'zustand';
+import { API_BASE_URL, IS_DEMO_MODE } from '../config/env';
+import { findDemoAccount } from '../config/demoUsers';
 
-export type UserRole = 'ADMIN' | 'CAJERO' | 'ALMACENERO' | string;
+/* Sin el `| string` que llevaba antes: con él la unión no servía de nada y un
+   rol mal escrito pasaba la comprobación de tipos sin más. */
+export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'CAJERO' | 'ALMACENERO';
 
 export interface UserProfile {
   id: string | number;
@@ -49,9 +53,23 @@ interface AuthState {
   checkLockStatus: () => boolean;
 }
 
+/** Lee un valor de localStorage sin dejar que un dato corrupto tumbe la app.
+ *
+ *  `JSON.parse(storedUser)` se ejecutaba en el ámbito del módulo y sin
+ *  try/catch: un valor malformado lanzaba durante la carga del módulo y la
+ *  terminal no arrancaba, sin forma de recuperarse desde la interfaz. */
+const readJson = <T>(key: string): T | null => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+};
+
 // Initial hydration from localStorage
 const storedToken = localStorage.getItem('supero_pos_jwt');
-const storedUser = localStorage.getItem('supero_pos_user');
 const storedAttempts = parseInt(localStorage.getItem('supero_pos_failed_attempts') || '0', 10);
 const storedIsLocked = localStorage.getItem('supero_pos_is_locked') === 'true';
 const storedLockUntil = localStorage.getItem('supero_pos_lock_until')
@@ -60,17 +78,9 @@ const storedLockUntil = localStorage.getItem('supero_pos_lock_until')
 const storedBranch = localStorage.getItem('supero_pos_branch_id') || 'branch-1';
 
 // Initial default user if token exists or fallback mock
-const initialUser: UserProfile | null = storedUser
-  ? JSON.parse(storedUser)
-  : storedToken
-    ? {
-        id: 'usr-1',
-        username: 'admin',
-        role: 'ADMIN',
-        name: 'Administrador Demo',
-        branchId: storedBranch,
-      }
-    : null;
+/* Antes, un token sin perfil guardado inventaba un usuario 'admin' con rol
+   ADMIN. Si el perfil no está, la sesión no es utilizable: se vuelve al login. */
+const initialUser: UserProfile | null = readJson<UserProfile>('supero_pos_user');
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   token: storedToken,
@@ -141,13 +151,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const activeBranchObj = DEMO_BRANCHES.find((b) => b.id === activeBranchId) || DEMO_BRANCHES[0];
 
     // 2. Try Backend authentication endpoint
+    let reachedServer = false;
     try {
-      const response = await fetch('http://localhost:3000/api/v1/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, branchId: activeBranchId }),
       });
 
+      reachedServer = true;
       const resData = await response.json();
 
       if (response.ok && resData.success) {
@@ -191,56 +203,44 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Backend unreachable -> Local offline fallback mode for POS terminal resilience
     }
 
-    // 3. Local Demo/Offline Authentication Fallback
-    const cleanUser = username.trim().toLowerCase();
-    const isDemoAdmin =
-      (cleanUser === 'admin' || cleanUser === 'administrador') && password === 'SuperoPOS2026';
-    const isDemoSupervisor = cleanUser === 'supervisor' && password === 'supervisor123';
-    const isDemoCajero =
-      (cleanUser === 'cajero' || cleanUser === 'cajero_demo') && password === 'cajero123';
-    const isDemoAlmacen = cleanUser === 'almacenero' && password === 'almacen123';
+    /* 3. Respaldo sin conexión, solo en modo demostración.
+       Este camino se activa cuando el backend no responde, así que mientras
+       existan credenciales aquí basta con desenchufar la red de la terminal
+       para entrar. En un build de producción `findDemoAccount` devuelve siempre
+       `undefined` y Vite elimina las cadenas del bundle. */
+    const demoAccount = findDemoAccount(username, password);
 
-    if (isDemoAdmin || isDemoSupervisor || isDemoCajero || isDemoAlmacen) {
-      let role: UserRole = 'ADMIN';
-      let name = 'Administrador General';
-      let id = 'usr-admin';
-
-      if (isDemoSupervisor) {
-        role = 'SUPERVISOR';
-        name = 'María López (Supervisor)';
-        id = 'usr-supervisor';
-      } else if (isDemoCajero) {
-        role = 'CAJERO';
-        name = 'Juan Pérez (Cajero)';
-        id = 'usr-cajero';
-      } else if (isDemoAlmacen) {
-        role = 'ALMACENERO';
-        name = 'Carlos Ruiz (Almacén)';
-        id = 'usr-almacen';
-      }
-
-      const mockToken = `mock-jwt-token-${role.toLowerCase()}-${Date.now()}`;
+    if (demoAccount) {
       const userProfile: UserProfile = {
-        id,
-        username,
-        role,
-        name,
+        id: demoAccount.id,
+        username: demoAccount.user,
+        role: demoAccount.role,
+        name: demoAccount.name,
         branchId: activeBranchId,
         branchName: activeBranchObj.name,
       };
 
-      localStorage.setItem('supero_pos_jwt', mockToken);
+      localStorage.setItem('supero_pos_jwt', `demo-session-${demoAccount.role.toLowerCase()}`);
       localStorage.setItem('supero_pos_user', JSON.stringify(userProfile));
       get().resetLockout();
 
       set({
-        token: mockToken,
+        token: `demo-session-${demoAccount.role.toLowerCase()}`,
         user: userProfile,
         isAuthenticated: true,
         selectedBranchId: activeBranchId,
       });
 
       return { success: true };
+    }
+
+    if (!IS_DEMO_MODE && !reachedServer) {
+      return {
+        success: false,
+        error: 'No hay conexión con el servidor. Reintente cuando se restablezca la red.',
+        isLocked: false,
+        remainingAttempts: Math.max(0, 5 - get().failedAttempts),
+      };
     }
 
     // Invalid credentials offline fallback

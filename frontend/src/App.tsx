@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutGrid } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { LoginView } from './components/LoginView';
@@ -19,6 +19,7 @@ import { SettingsView } from './components/SettingsView';
 import { HrAttendanceView } from './components/HrAttendanceView';
 import { useOfflineSync } from './hooks/useOfflineSync';
 import { useAuthStore } from './store/useAuthStore';
+import { canAccessView, VIEW_PERMISSIONS } from './utils/permissions';
 import { EmptyState, ToastProvider } from './ui';
 
 const VIEWS: Record<string, React.ComponentType> = {
@@ -40,20 +41,22 @@ const VIEWS: Record<string, React.ComponentType> = {
 
 export const App: React.FC = () => {
   const { isAuthenticated, user } = useAuthStore();
-  const userRole = user?.role || 'ADMIN';
+  /* Antes esto caía a 'ADMIN' cuando el perfil no traía rol: un fallo al cargar
+     el usuario abría toda la administración. Sin rol no se accede a nada. */
+  const userRole = user?.role;
   const [activeTab, setActiveTab] = useState('pos');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Hook de sincronización offline (listeners pasivos + worker de 30 s)
   useOfflineSync();
 
-  /* El almacenero no opera caja ni administra: se deriva su vista efectiva
-     en el render en lugar de corregirla con un efecto, que provocaría un
-     render en cascada por cada cambio de pestaña. */
-  const effectiveTab =
-    userRole === 'ALMACENERO' && ['pos', 'users', 'settings'].includes(activeTab)
-      ? 'products'
-      : activeTab;
+  /* La pestaña efectiva se deriva en el render, no con un efecto que provocaría
+     un render en cascada. Antes solo se corregía al almacenero y solo en tres
+     pestañas, de modo que un cajero podía abrir Usuarios o Ajustes escribiendo
+     la pestaña; ahora se comprueba el permiso de cualquier apartado. */
+  const effectiveTab = canAccessView(userRole, activeTab)
+    ? activeTab
+    : (Object.keys(VIEW_PERMISSIONS).find((view) => canAccessView(userRole, view)) ?? null);
 
   if (!isAuthenticated) {
     return (
@@ -63,12 +66,12 @@ export const App: React.FC = () => {
     );
   }
 
-  const ActiveView = VIEWS[effectiveTab];
+  const ActiveView = effectiveTab ? VIEWS[effectiveTab] : undefined;
 
   return (
     <ToastProvider>
       <div className="flex h-screen bg-canvas text-ink overflow-hidden">
-        <Sidebar activeTab={effectiveTab} setActiveTab={setActiveTab} />
+        <Sidebar activeTab={effectiveTab ?? ''} setActiveTab={setActiveTab} />
 
         <div className="flex-1 flex flex-col min-w-0">
           <Header searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
@@ -78,9 +81,13 @@ export const App: React.FC = () => {
               <ActiveView />
             ) : (
               <EmptyState
-                icon={<LayoutGrid className="w-6 h-6" />}
-                title={`Módulo ${effectiveTab}`}
-                hint="Este módulo está configurado con permisos estables para su rol de usuario."
+                icon={<ShieldAlert className="w-6 h-6" />}
+                title="Sin acceso a este apartado"
+                hint={
+                  userRole
+                    ? `Su rol (${userRole}) no tiene permiso sobre este módulo. Solicítelo a un administrador.`
+                    : 'Su usuario no tiene un rol asignado. Solicítelo a un administrador.'
+                }
               />
             )}
           </main>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Wifi, WifiOff, RefreshCw, Search, Lock } from 'lucide-react';
+import { AlertTriangle, Wifi, WifiOff, RefreshCw, Search, Lock } from 'lucide-react';
 import { useSyncStore } from '../store/useSyncStore';
 import { CashShiftModal } from './CashShiftModal';
 import { Button, Kbd, cn } from '../ui';
@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery }) => {
-  const { isOnline, pendingCount, lastSyncTime } = useSyncStore();
+  const { isOnline, pendingCount, failedCount, lastSyncTime } = useSyncStore();
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -60,17 +60,26 @@ export const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery }) =
           className={cn(
             'h-9 px-3 flex items-center gap-2 rounded-md border text-body font-semibold',
             'transition-colors duration-fast ease-ease',
-            isOnline
-              ? 'bg-ok-soft text-ok-ink border-ok/25 hover:border-ok/50'
-              : 'bg-warn-soft text-warn-ink border-warn/40 hover:border-warn/70',
+            /* Una venta que agotó sus reintentos manda sobre cualquier otro
+               estado: es dinero registrado en la terminal que el servidor nunca
+               llegó a guardar, y antes no se veía en ninguna parte. */
+            failedCount > 0
+              ? 'bg-danger-soft text-danger border-danger/40 hover:border-danger/70'
+              : isOnline
+                ? 'bg-ok-soft text-ok-ink border-ok/25 hover:border-ok/50'
+                : 'bg-warn-soft text-warn-ink border-warn/40 hover:border-warn/70',
           )}
         >
-          {isOnline ? (
+          {failedCount > 0 ? (
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          ) : isOnline ? (
             <Wifi className="w-3.5 h-3.5 shrink-0" />
           ) : (
             <WifiOff className="w-3.5 h-3.5 shrink-0" />
           )}
-          <span className="hidden lg:inline">{isOnline ? 'En línea' : 'Sin conexión'}</span>
+          <span className="hidden lg:inline">
+            {failedCount > 0 ? 'Ventas sin registrar' : isOnline ? 'En línea' : 'Sin conexión'}
+          </span>
           {pendingCount > 0 && (
             <span className="ml-1 px-1.5 h-5 inline-flex items-center rounded-sm bg-ink/10 font-mono tnum text-micro">
               {pendingCount}
@@ -86,6 +95,17 @@ export const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery }) =
                 {pendingCount}
               </span>
             </div>
+            {failedCount > 0 && (
+              <div className="flex items-start gap-2 p-2 rounded-sm bg-danger-soft text-body text-danger">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>
+                  <strong className="font-mono tnum">{failedCount}</strong>{' '}
+                  {failedCount === 1 ? 'venta agotó' : 'ventas agotaron'} sus reintentos y no
+                  {failedCount === 1 ? ' llegó' : ' llegaron'} al servidor. Avise a soporte antes de
+                  cerrar el turno.
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-body text-ink-2">Última sincronización</span>
               <span className="font-mono tnum text-body text-ink">{lastSyncTime}</span>

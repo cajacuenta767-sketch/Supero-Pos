@@ -40,7 +40,7 @@ const PinForm: React.FC<{
       </p>
       <Input
         label="PIN de supervisor"
-        hint="PIN por defecto en modo demo: 1234"
+        hint="Lo custodia el responsable de tienda."
         type="password"
         maxLength={6}
         autoFocus

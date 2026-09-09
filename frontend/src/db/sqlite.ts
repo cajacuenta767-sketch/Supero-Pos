@@ -97,6 +97,7 @@ interface ElectronWindow extends Window {
 class LocalDatabaseEngine {
   private db: SqliteHandle | null = null;
   private mockSyncQueue: LocalSyncQueueItem[] = [];
+  private storageWarningIssued = false;
 
   constructor() {
     this.initDatabase();
@@ -106,8 +107,11 @@ class LocalDatabaseEngine {
   private initDatabase() {
     try {
       const electronWindow = typeof window !== 'undefined' ? (window as ElectronWindow) : undefined;
-      if (!electronWindow || electronWindow.require) {
-        const Database = electronWindow!.require!('better-sqlite3');
+      /* La condición estaba invertida —`!electronWindow || ...`—: fuera de
+         Electron entraba igual y funcionaba solo porque la excepción caía en el
+         catch de abajo. */
+      if (electronWindow?.require) {
+        const Database = electronWindow.require('better-sqlite3');
         this.db = new Database('supero_pos_local.db');
         this.createTables();
       }
@@ -129,10 +133,28 @@ class LocalDatabaseEngine {
     }
   }
 
+  /**
+   * Persiste la cola del modo navegador.
+   *
+   * Los payloads llevan firmas y fotos en base64, así que la cola supera con
+   * facilidad la cuota de localStorage. Sin este try/catch, `setItem` lanzaba
+   * `QuotaExceededError` en mitad de un cobro y la venta fallaba con un aviso
+   * ininteligible. Ahora se avisa y la venta sigue viva en memoria.
+   */
   private saveMockStorage() {
-    if (!this.db && typeof localStorage !== 'undefined') {
+    if (this.db || typeof localStorage === 'undefined') return;
+    try {
       localStorage.setItem('supero_pos_mock_queue', JSON.stringify(this.mockSyncQueue));
       localStorage.setItem('supero_pos_pending_count', String(this.getPendingCount()));
+      this.storageWarningIssued = false;
+    } catch {
+      if (!this.storageWarningIssued) {
+        this.storageWarningIssued = true;
+        console.error(
+          'No se pudo guardar la cola local: almacenamiento del navegador lleno. ' +
+            'Las ventas siguen en memoria y se perderán al recargar; sincronice cuanto antes.',
+        );
+      }
     }
   }
 
@@ -153,6 +175,7 @@ class LocalDatabaseEngine {
       CREATE TABLE IF NOT EXISTS sales (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         transaction_id VARCHAR(100) UNIQUE NOT NULL,
+        shift_id VARCHAR(100) NOT NULL DEFAULT '',
         cash_register_id VARCHAR(100) NOT NULL,
         user_id VARCHAR(100) NOT NULL,
         customer_id VARCHAR(100),
@@ -163,15 +186,34 @@ class LocalDatabaseEngine {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- sale_id se declaraba INTEGER y recibía el UUID de la transacción:
+      -- funcionaba solo porque SQLite no impone tipos. Ahora es VARCHAR, con
+      -- índice, que es lo que de verdad se consulta.
       CREATE TABLE IF NOT EXISTS sale_details (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sale_id INTEGER NOT NULL,
+        sale_id VARCHAR(100) NOT NULL,
         product_id VARCHAR(100) NOT NULL,
         quantity DECIMAL(12,4) NOT NULL,
         unit_price DECIMAL(12,4) NOT NULL,
         subtotal DECIMAL(12,4) NOT NULL,
-        serial_number VARCHAR(150)
+        serials_used TEXT
       );
+
+      -- Desglose real del cobro. La tabla sales guarda un único método, así que
+      -- una venta mixta se contabilizaba entera como efectivo y el arqueo salía
+      -- descuadrado.
+      CREATE TABLE IF NOT EXISTS sale_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_id VARCHAR(100) NOT NULL,
+        payment_method VARCHAR(30) NOT NULL,
+        amount_received DECIMAL(12,4) NOT NULL,
+        change_given DECIMAL(12,4) NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sale_details_sale ON sale_details(sale_id);
+      CREATE INDEX IF NOT EXISTS idx_sale_payments_sale ON sale_payments(sale_id);
+      CREATE INDEX IF NOT EXISTS idx_sales_shift ON sales(shift_id);
+      CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status, id);
     `);
   }
 
@@ -205,46 +247,65 @@ class LocalDatabaseEngine {
 
     const db = this.db;
     const transaction = db.transaction((data: FourBlockSalePayload) => {
-      // 1. Insert sale header with UUID transaction_id
-      const saleStmt = db.prepare(`
-        INSERT INTO sales (transaction_id, cash_register_id, user_id, customer_id, subtotal, total_discount, grand_total, payment_method, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      saleStmt.run(
+      const methods = new Set(data.payment_breakdown.map((p) => p.payment_method));
+      /* Antes se guardaba `payment_breakdown[0]` a secas, así que una venta
+         mixta quedaba registrada como efectivo y el arqueo no cuadraba. */
+      const headerMethod =
+        methods.size > 1 ? 'MIXED' : (data.payment_breakdown[0]?.payment_method ?? 'CASH');
+
+      db.prepare(
+        `INSERT INTO sales (transaction_id, shift_id, cash_register_id, user_id, customer_id,
+                            subtotal, total_discount, grand_total, payment_method, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
         data.transaction_id,
+        data.shift_id,
         data.register_id,
         data.cashier_id,
         data.customer_id || null,
         data.subtotal,
         data.total_discount,
         data.grand_total,
-        data.payment_breakdown[0]?.payment_method || 'CASH',
+        headerMethod,
         data.timestamp,
       );
 
-      // 2. Iterate items & deduct stock decimal
+      const paymentStmt = db.prepare(
+        `INSERT INTO sale_payments (sale_id, payment_method, amount_received, change_given)
+         VALUES (?, ?, ?, ?)`,
+      );
+      for (const payment of data.payment_breakdown) {
+        paymentStmt.run(
+          data.transaction_id,
+          payment.payment_method,
+          payment.amount_received,
+          payment.change_given,
+        );
+      }
+
+      // La sentencia se prepara una vez, no una por línea del ticket.
+      const detailStmt = db.prepare(
+        `INSERT INTO sale_details (sale_id, product_id, quantity, unit_price, subtotal, serials_used)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      );
       for (const item of data.items) {
-        db.prepare(
-          `
-          INSERT INTO sale_details (sale_id, product_id, quantity, unit_price, subtotal, serial_number)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `,
-        ).run(
+        /* Antes se guardaba `serials_used[0]`: de tres teléfonos vendidos en una
+           línea quedaba uno. Los otros dos solo vivían en `sync_queue`, que se
+           borra al sincronizar, así que se perdía justo la trazabilidad que
+           justifica serializar. */
+        detailStmt.run(
           data.transaction_id,
           item.product_id,
           item.quantity,
           item.unit_price,
           item.line_subtotal,
-          item.serials_used[0] || null,
+          item.serials_used.length > 0 ? JSON.stringify(item.serials_used) : null,
         );
       }
 
-      // 3. Queue into sync_queue in the SAME atomic transaction
       db.prepare(
-        `
-        INSERT INTO sync_queue (payload_type, local_id, payload_data, status)
-        VALUES ('SALE_TRANSACTION', ?, ?, 'PENDING')
-      `,
+        `INSERT INTO sync_queue (payload_type, local_id, payload_data, status)
+         VALUES ('SALE_TRANSACTION', ?, ?, 'PENDING')`,
       ).run(data.transaction_id, JSON.stringify(data));
 
       return { success: true, saleId: data.transaction_id };
@@ -259,11 +320,10 @@ class LocalDatabaseEngine {
    * Es lo que convierte el arqueo ciego en un arqueo: sin esta cifra el conteo
    * físico no se compara con nada. Solo lee.
    *
-   * Advertencia sobre el modo SQLite: la tabla `sales` guarda un único
-   * `payment_method` por venta —el primero del desglose—, así que una venta
-   * mixta se atribuye entera a ese método. En el modo navegador, donde el
-   * desglose completo sigue en la cola, la cifra es exacta. Corregirlo del todo
-   * exige una columna nueva en `sales`, que es esquema y no presentación.
+   * Suma el desglose real por método de pago (`sale_payments`), de modo que una
+   * venta mixta aporta solo la parte cobrada en efectivo. Antes se sumaba
+   * `grand_total` filtrando por el único método guardado en la cabecera, y esa
+   * venta se contaba entera como efectivo.
    */
   public getCashSalesTotal(sinceIso: string): number {
     if (!this.db) {
@@ -285,11 +345,14 @@ class LocalDatabaseEngine {
       }, 0);
     }
 
+    /* Se suma del desglose por método, no de la cabecera de la venta: una venta
+       mixta aporta solo su parte en efectivo. */
     const row = this.db
       .prepare(
-        `SELECT COALESCE(SUM(grand_total), 0) AS total
-         FROM sales
-         WHERE payment_method = 'CASH' AND created_at >= ?`,
+        `SELECT COALESCE(SUM(p.amount_received - p.change_given), 0) AS total
+         FROM sale_payments p
+         JOIN sales s ON s.transaction_id = p.sale_id
+         WHERE p.payment_method = 'CASH' AND s.created_at >= ?`,
       )
       .get(sinceIso) as { total: number } | undefined;
 
@@ -349,6 +412,38 @@ class LocalDatabaseEngine {
     `,
       )
       .run(id);
+  }
+
+  /**
+   * Ventas que agotaron sus reintentos.
+   *
+   * Sin este contador, un ticket que el servidor rechaza cinco veces pasa a
+   * `FAILED`, deja de contarse como pendiente y desaparece sin que nadie sepa
+   * que nunca se registró.
+   */
+  public getFailedCount(): number {
+    if (!this.db) {
+      return this.mockSyncQueue.filter((item) => item.status === 'FAILED').length;
+    }
+    const res = this.db
+      .prepare("SELECT COUNT(*) as count FROM sync_queue WHERE status = 'FAILED'")
+      .get() as { count: number } | undefined;
+    return res?.count || 0;
+  }
+
+  /** Marca un elemento como agotado sin pasar por los cinco intentos: se usa
+   *  con payloads corruptos, que no se van a poder reenviar nunca. */
+  public exhaustAttempts(id: number) {
+    if (!this.db) {
+      const found = this.mockSyncQueue.find((item) => item.id === id);
+      if (found) {
+        found.attempts = 5;
+        found.status = 'FAILED';
+      }
+      this.saveMockStorage();
+      return;
+    }
+    this.db.prepare("UPDATE sync_queue SET attempts = 5, status = 'FAILED' WHERE id = ?").run(id);
   }
 
   public getPendingCount(): number {

@@ -6,10 +6,12 @@ import { localDb } from '../db/sqlite';
 export const useOfflineSync = () => {
   const isOnline = useSyncStore((state) => state.isOnline);
   const pendingCount = useSyncStore((state) => state.pendingCount);
+  const failedCount = useSyncStore((state) => state.failedCount);
 
   useEffect(() => {
     // Cargar conteo inicial de la cola local SQLite
     useSyncStore.getState().setPendingCount(localDb.getPendingCount());
+    useSyncStore.getState().setFailedCount(localDb.getFailedCount());
 
     // Iniciar worker activo de 30s
     syncWorker.startWorker(30000);
@@ -32,8 +34,11 @@ export const useOfflineSync = () => {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      /* El intervalo de 30 s seguía vivo tras desmontar: al cerrar sesión la
+         terminal seguía sondeando el servidor indefinidamente. */
+      syncWorker.stopWorker();
     };
   }, []);
 
-  return { isOnline, pendingCount, syncWorker };
+  return { isOnline, pendingCount, failedCount, syncWorker };
 };

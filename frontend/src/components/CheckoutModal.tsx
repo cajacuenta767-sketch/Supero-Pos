@@ -14,7 +14,7 @@ import {
   BlockDItem,
 } from '../db/sqlite';
 import { syncWorker } from '../services/syncWorker';
-import { Badge, Button, Input, Modal, Money, SignaturePad, cn } from '../ui';
+import { Badge, Button, Input, Modal, Money, SignaturePad, cn, useToast } from '../ui';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -57,6 +57,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   } = useCartStore();
 
   const { selectedCustomer, manualDiscount, resetPosCycle, setPendingSyncCount } = usePosStore();
+  const toast = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
 
@@ -229,8 +230,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
         onClose();
       }, 400);
     } catch (error) {
+      /* Antes esto era un `alert()` del navegador: bloquea la terminal, no se
+         puede leer con el cajón abierto y en modo quiosco parece que la
+         aplicación se ha roto. El sistema de avisos ya existía. */
       const reason = error instanceof Error ? error.message : String(error);
-      alert('Error en la transacción local: ' + reason);
+      console.error('Fallo al registrar la venta local:', error);
+      toast(`No se pudo registrar la venta: ${reason}`, 'danger');
       setIsProcessing(false);
     }
   };
