@@ -1,16 +1,21 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { Award, Calendar, Clock, FileText, Lock, Plus, UserCheck } from 'lucide-react';
 import {
-  UserCheck,
-  Clock,
-  Calendar,
-  CheckCircle2,
-  XCircle,
-  Search,
-  Plus,
-  Lock,
-  FileText,
-  Award,
-} from 'lucide-react';
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  Input,
+  Meter,
+  PageHeader,
+  Select,
+  StatTile,
+  Tabs,
+  Toolbar,
+  useToast,
+} from '../ui';
+import type { Column, TabItem } from '../ui';
 
 interface AttendanceLog {
   id: string;
@@ -42,19 +47,54 @@ interface ExceptionRecord {
   status: 'APPROVED' | 'PENDING';
 }
 
+type SubTab = 'timeclock' | 'shifts' | 'exceptions';
+
+const TABS: TabItem[] = [
+  { id: 'timeclock', label: 'Fichajes', icon: <Clock className="w-4 h-4" /> },
+  { id: 'shifts', label: 'Turnos', icon: <Calendar className="w-4 h-4" /> },
+  { id: 'exceptions', label: 'Incidencias', icon: <FileText className="w-4 h-4" /> },
+];
+
+/* Vocabulario de producto: los enums no se muestran crudos. */
+const EVENT_LABEL: Record<AttendanceLog['event_type'], string> = {
+  CLOCK_IN: 'Entrada',
+  BREAK_START: 'Inicio de pausa',
+  BREAK_END: 'Fin de pausa',
+  CLOCK_OUT: 'Salida',
+};
+
+const STATUS_LABEL: Record<AttendanceLog['status'], string> = {
+  ON_TIME: 'A tiempo',
+  LATE: 'Retraso',
+  OVERTIME: 'Horas extra',
+  JUSTIFIED: 'Justificado',
+};
+
+const STATUS_TONE: Record<AttendanceLog['status'], 'success' | 'warning' | 'accent' | 'neutral'> = {
+  ON_TIME: 'success',
+  LATE: 'warning',
+  OVERTIME: 'accent',
+  JUSTIFIED: 'neutral',
+};
+
+const EXCEPTION_LABEL: Record<ExceptionRecord['type'], string> = {
+  PERMISO_GOCE: 'Permiso con goce',
+  LICENCIA_MEDICA: 'Licencia médica',
+  VACACIONES: 'Vacaciones',
+  FALTA_JUSTIFICADA: 'Falta justificada',
+};
+
+/** Jornada pactada, contra la que se compara lo trabajado. */
+const SHIFT_HOURS = 8;
+
 export const HrAttendanceView: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<
-    'timeclock' | 'shifts' | 'engine' | 'exceptions'
-  >('timeclock');
+  const toast = useToast();
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>('timeclock');
 
-  // Time Clock State
   const [clockPin, setClockPin] = useState('');
-  const [clockEventType, setClockEventType] = useState<
-    'CLOCK_IN' | 'BREAK_START' | 'BREAK_END' | 'CLOCK_OUT'
-  >('CLOCK_IN');
-
-  // Search & Filters
+  const [clockEventType, setClockEventType] = useState<AttendanceLog['event_type']>('CLOCK_IN');
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   // Attendance Logs State
   const [logs, setLogs] = useState<AttendanceLog[]>([
@@ -113,16 +153,15 @@ export const HrAttendanceView: React.FC = () => {
       status: 'APPROVED',
     },
   ]);
-  const [, setIsExceptionModalOpen] = useState(false);
 
-  const handleClockPUNCH = (e: React.FormEvent) => {
+  const handlePunch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!clockPin) return;
 
     const newLog: AttendanceLog = {
-      id: `LOG-${Math.floor(7000 + Math.random() * 900)}`,
+      id: `LOG-${7000 + logs.length + 1}`,
       timestamp: new Date().toLocaleString('es-ES'),
-      employee_name: 'Juan Pérez (Cajero)',
+      employee_name: 'Juan Pérez',
       role: 'CAJERO',
       event_type: clockEventType,
       terminal: 'Caja 1 Mostrador',
@@ -133,339 +172,298 @@ export const HrAttendanceView: React.FC = () => {
 
     setLogs((prev) => [newLog, ...prev]);
     setClockPin('');
-    alert(`✅ Marcación de ${clockEventType} registrada correctamente. Asistencia validada.`);
+    toast(`${EVENT_LABEL[clockEventType]} registrada`, 'success');
   };
 
-  const filteredLogs = logs.filter(
-    (l) =>
-      l.employee_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.id.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredLogs = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return logs.filter(
+      (l) =>
+        (l.employee_name.toLowerCase().includes(q) || l.id.toLowerCase().includes(q)) &&
+        (statusFilter === 'ALL' || l.status === statusFilter),
+    );
+  }, [logs, searchQuery, statusFilter]);
+
+  const presentNow = logs.filter((l) => l.event_type === 'CLOCK_IN').length;
+  const totalHours = logs.reduce((s, l) => s + (l.hours_worked ?? 0), 0);
+  const openIncidents = exceptions.filter((e) => e.status === 'PENDING').length;
+
+  const logColumns: Array<Column<AttendanceLog>> = [
+    {
+      key: 'when',
+      header: 'Fecha y hora',
+      width: '170px',
+      render: (l) => <span className="font-mono tnum text-body text-ink-2">{l.timestamp}</span>,
+    },
+    {
+      key: 'employee',
+      header: 'Empleado',
+      render: (l) => (
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-ink truncate">{l.employee_name}</p>
+          <p className="text-micro uppercase text-ink-3">{l.role}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'event',
+      header: 'Evento',
+      width: '150px',
+      render: (l) => <Badge>{EVENT_LABEL[l.event_type]}</Badge>,
+    },
+    {
+      key: 'terminal',
+      header: 'Terminal',
+      width: '170px',
+      render: (l) => <span className="text-body text-ink-2 truncate">{l.terminal}</span>,
+    },
+    {
+      key: 'hours',
+      header: 'Jornada',
+      width: '190px',
+      render: (l) =>
+        typeof l.hours_worked === 'number' ? (
+          <Meter
+            value={l.hours_worked}
+            max={SHIFT_HOURS}
+            label={`Jornada de ${l.employee_name}`}
+            hint={`${l.hours_worked.toFixed(1)} h`}
+            tone={l.hours_worked >= SHIFT_HOURS ? 'success' : 'warning'}
+          />
+        ) : (
+          <span className="text-ink-3">—</span>
+        ),
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      align: 'right',
+      width: '150px',
+      render: (l) => (
+        <Badge tone={STATUS_TONE[l.status]}>
+          {STATUS_LABEL[l.status]}
+          {l.lateness_minutes > 0 ? ` · ${l.lateness_minutes} min` : ''}
+        </Badge>
+      ),
+    },
+  ];
+
+  const shiftColumns: Array<Column<ShiftSchedule>> = [
+    {
+      key: 'name',
+      header: 'Turno',
+      render: (s) => <span className="text-base font-semibold text-ink">{s.name}</span>,
+    },
+    {
+      key: 'hours',
+      header: 'Horario',
+      width: '170px',
+      render: (s) => (
+        <span className="font-mono tnum text-ink-2">
+          {s.start_time} – {s.end_time}
+        </span>
+      ),
+    },
+    {
+      key: 'grace',
+      header: 'Tolerancia',
+      align: 'right',
+      width: '120px',
+      render: (s) => <span className="font-mono tnum text-ink-2">{s.grace_period_mins} min</span>,
+    },
+    {
+      key: 'people',
+      header: 'Asignados',
+      render: (s) => (
+        <span className="text-body text-ink-2">{s.assigned_employees.join(' · ')}</span>
+      ),
+    },
+  ];
+
+  const exceptionColumns: Array<Column<ExceptionRecord>> = [
+    {
+      key: 'employee',
+      header: 'Empleado',
+      render: (x) => <span className="text-base font-semibold text-ink">{x.employee_name}</span>,
+    },
+    {
+      key: 'type',
+      header: 'Tipo',
+      width: '190px',
+      render: (x) => <Badge tone="accent">{EXCEPTION_LABEL[x.type]}</Badge>,
+    },
+    {
+      key: 'range',
+      header: 'Periodo',
+      width: '210px',
+      render: (x) => <span className="font-mono tnum text-body text-ink-2">{x.date_range}</span>,
+    },
+    { key: 'notes', header: 'Notas', render: (x) => <span className="text-ink-2">{x.notes}</span> },
+    {
+      key: 'status',
+      header: 'Estado',
+      align: 'right',
+      width: '130px',
+      render: (x) => (
+        <Badge tone={x.status === 'APPROVED' ? 'success' : 'warning'}>
+          {x.status === 'APPROVED' ? 'Aprobada' : 'Pendiente'}
+        </Badge>
+      ),
+    },
+  ];
 
   return (
-    <div className="p-6 bg-canvas h-[calc(100vh-56px)] overflow-y-auto pr-2 space-y-6 select-none transition-colors duration-fast ease-ease">
-      {/* 1. Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
-        <div>
-          <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <UserCheck className="w-7 h-7 text-accent" />
-            Recursos Humanos & Control de Asistencia POS
-          </h1>
-          <p className="text-body text-ink-2 mt-1">
-            Fichaje TimeClock en terminal, validación de turnos, cálculo automático de
-            horas/retrasos y licencias
-          </p>
+    <div className="h-full overflow-y-auto bg-canvas select-none">
+      <div className="max-w-[1600px] mx-auto p-6 space-y-5">
+        <PageHeader
+          title="Recursos humanos"
+          subtitle="Fichajes de entrada y salida, turnos asignados e incidencias del personal."
+          actions={
+            <Button
+              icon={<Plus className="w-4 h-4" />}
+              onClick={() => toast('Registrar incidencia', 'info')}
+            >
+              Nueva incidencia
+            </Button>
+          }
+          tabs={
+            <Tabs
+              items={TABS}
+              value={activeSubTab}
+              onChange={(id) => setActiveSubTab(id as SubTab)}
+              label="Secciones de recursos humanos"
+            />
+          }
+        />
+
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+          <StatTile
+            label="Presentes ahora"
+            value={presentNow}
+            hint="con entrada registrada"
+            icon={<UserCheck className="w-4 h-4" />}
+            tone="success"
+          />
+          <StatTile
+            label="Horas del periodo"
+            value={totalHours.toFixed(1)}
+            hint={`${logs.length} fichajes`}
+            icon={<Clock className="w-4 h-4" />}
+            tone="accent"
+          />
+          <StatTile
+            label="Incidencias abiertas"
+            value={openIncidents}
+            hint="pendientes de aprobar"
+            icon={<FileText className="w-4 h-4" />}
+            tone={openIncidents > 0 ? 'warning' : 'neutral'}
+          />
         </div>
 
-        {/* Sub-tabs Navigation */}
-        <div className="flex items-center bg-sunken p-1.5 rounded-md border border-line">
-          <button
-            onClick={() => setActiveSubTab('timeclock')}
-            className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
-              activeSubTab === 'timeclock' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
+        {activeSubTab === 'timeclock' && (
+          <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-5 items-start">
+            <Card title="Marcar fichaje" icon={<Award className="w-4 h-4" />}>
+              <form onSubmit={handlePunch} className="space-y-4">
+                <Select
+                  label="Evento"
+                  value={clockEventType}
+                  onChange={(e) => setClockEventType(e.target.value as AttendanceLog['event_type'])}
+                >
+                  {(Object.keys(EVENT_LABEL) as Array<AttendanceLog['event_type']>).map((k) => (
+                    <option key={k} value={k}>
+                      {EVENT_LABEL[k]}
+                    </option>
+                  ))}
+                </Select>
+
+                <Input
+                  label="PIN del empleado"
+                  type="password"
+                  maxLength={6}
+                  value={clockPin}
+                  onChange={(e) => setClockPin(e.target.value)}
+                  leading={<Lock className="w-4 h-4" />}
+                  placeholder="••••"
+                  inputSize="lg"
+                  className="[&_input]:text-center [&_input]:font-mono [&_input]:tracking-[0.4em]"
+                />
+
+                <Button type="submit" block size="lg" disabled={!clockPin}>
+                  Registrar
+                </Button>
+              </form>
+            </Card>
+
+            <div className="space-y-4 min-w-0">
+              <Toolbar
+                search={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchPlaceholder="Buscar por empleado o registro…"
+                filters={
+                  <select
+                    aria-label="Estado"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="h-9 px-2.5 bg-raised border border-line-strong rounded-md text-body font-semibold text-ink cursor-pointer hover:border-ink-3 transition-colors duration-fast ease-ease"
+                  >
+                    <option value="ALL">Todos los estados</option>
+                    {(Object.keys(STATUS_LABEL) as Array<AttendanceLog['status']>).map((k) => (
+                      <option key={k} value={k}>
+                        {STATUS_LABEL[k]}
+                      </option>
+                    ))}
+                  </select>
+                }
+              />
+
+              <DataTable
+                columns={logColumns}
+                rows={filteredLogs}
+                rowKey={(l) => l.id}
+                empty={
+                  <EmptyState
+                    icon={<Clock className="w-6 h-6" />}
+                    title="Sin fichajes que coincidan"
+                    hint="Ajuste la búsqueda o el filtro de estado."
+                  />
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        {activeSubTab === 'shifts' && (
+          <Card
+            title="Turnos configurados"
+            subtitle="El horario define a partir de cuándo un fichaje cuenta como retraso."
+            icon={<Calendar className="w-4 h-4" />}
+            padding="none"
           >
-            <Clock className="w-4 h-4" />
-            TimeClock (Fichaje)
-          </button>
-          <button
-            onClick={() => setActiveSubTab('shifts')}
-            className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
-              activeSubTab === 'shifts' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <Calendar className="w-4 h-4" />
-            Turnos & Programación
-          </button>
-          <button
-            onClick={() => setActiveSubTab('engine')}
-            className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
-              activeSubTab === 'engine' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <Award className="w-4 h-4" />
-            Cálculo de Incidencias
-          </button>
-          <button
-            onClick={() => setActiveSubTab('exceptions')}
-            className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
-              activeSubTab === 'exceptions' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            Permisos & Licencias
-          </button>
-        </div>
+            <DataTable
+              columns={shiftColumns}
+              rows={shifts}
+              rowKey={(s) => s.id}
+              dense
+              className="border-0 rounded-none"
+            />
+          </Card>
+        )}
+
+        {activeSubTab === 'exceptions' && (
+          <DataTable
+            columns={exceptionColumns}
+            rows={exceptions}
+            rowKey={(x) => x.id}
+            empty={
+              <EmptyState
+                icon={<FileText className="w-6 h-6" />}
+                title="Sin incidencias registradas"
+                hint="Permisos, licencias y vacaciones aparecerán aquí."
+              />
+            }
+          />
+        )}
       </div>
-
-      {/* SUB-TAB 1: TIMECLOCK (FICHAJE EN TERMINAL) */}
-      {activeSubTab === 'timeclock' && (
-        <div className="max-w-xl mx-auto bg-raised p-8 rounded-md border border-line shadow-e3 space-y-6 text-center">
-          <div>
-            <div className="w-16 h-16 bg-accent-soft text-accent rounded-full flex items-center justify-center mx-auto mb-3">
-              <Clock className="w-8 h-8" />
-            </div>
-            <h2 className="text-title font-black text-ink">
-              Marcación de Asistencia en Terminal POS
-            </h2>
-            <p className="text-body text-ink-3 mt-1">
-              Ingrese su PIN personal de 4 a 6 dígitos para validar entrada/salida
-            </p>
-          </div>
-
-          <form onSubmit={handleClockPUNCH} className="space-y-6">
-            <div className="grid grid-cols-2 gap-3 text-body font-bold">
-              <button
-                type="button"
-                onClick={() => setClockEventType('CLOCK_IN')}
-                className={`p-3.5 rounded-md border flex items-center justify-center gap-2 transition-all ${
-                  clockEventType === 'CLOCK_IN'
-                    ? 'bg-ok text-white border-emerald-600 shadow-e2'
-                    : 'bg-sunken text-ink-2'
-                }`}
-              >
-                <CheckCircle2 className="w-4 h-4" /> ENTRADA (CLOCK IN)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setClockEventType('BREAK_START')}
-                className={`p-3.5 rounded-md border flex items-center justify-center gap-2 transition-all ${
-                  clockEventType === 'BREAK_START'
-                    ? 'bg-warn text-white border-amber-600 shadow-e2'
-                    : 'bg-sunken text-ink-2'
-                }`}
-              >
-                <Clock className="w-4 h-4" /> INICIO DESCANSO
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setClockEventType('BREAK_END')}
-                className={`p-3.5 rounded-md border flex items-center justify-center gap-2 transition-all ${
-                  clockEventType === 'BREAK_END'
-                    ? 'bg-accent text-white border-blue-600 shadow-e2'
-                    : 'bg-sunken text-ink-2'
-                }`}
-              >
-                <Clock className="w-4 h-4" /> FIN DESCANSO
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setClockEventType('CLOCK_OUT')}
-                className={`p-3.5 rounded-md border flex items-center justify-center gap-2 transition-all ${
-                  clockEventType === 'CLOCK_OUT'
-                    ? 'bg-danger text-white border-rose-600 shadow-e2'
-                    : 'bg-sunken text-ink-2'
-                }`}
-              >
-                <XCircle className="w-4 h-4" /> SALIDA (CLOCK OUT)
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              <label className="font-bold text-body text-ink-2 block">
-                PIN Personal (4 a 6 dígitos) *
-              </label>
-              <input
-                type="password"
-                required
-                maxLength={6}
-                value={clockPin}
-                onChange={(e) => setClockPin(e.target.value)}
-                placeholder="• • • •"
-                className="w-full p-4 bg-sunken border border-line rounded-md font-mono text-center font-black text-display tracking-widest text-ink"
-              />
-            </div>
-
-            <div className="p-3 bg-accent-soft border border-accent/30 rounded-md text-left text-micro text-accent-ink font-semibold">
-              🔒 Regla de Seguridad: La terminal POS requiere registro oficial de ENTRADA para abrir
-              la caja física.
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-4 bg-accent hover:bg-accent-hover text-white rounded-md font-black text-base shadow-e2 flex items-center justify-center gap-2"
-            >
-              <Lock className="w-5 h-5" /> CONFIRMAR MARCA EN ATÓMICO
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* SUB-TAB 2: SHIFT MANAGEMENT */}
-      {activeSubTab === 'shifts' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between bg-raised p-4 rounded-md border border-line shadow-e1">
-            <h3 className="font-extrabold text-base text-ink">
-              Programación de Turnos & Tolerancia de Ingreso
-            </h3>
-            <button className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
-              <Plus className="w-4 h-4" /> Crear Horario de Trabajo
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {shifts.map((s) => (
-              <div
-                key={s.id}
-                className="bg-raised p-6 rounded-md border border-line shadow-e1 space-y-3"
-              >
-                <div className="flex items-center justify-between border-b border-line pb-3">
-                  <h4 className="font-extrabold text-base text-ink flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-accent" /> {s.name}
-                  </h4>
-                  <span className="px-2.5 py-1 bg-accent-soft text-accent-ink dark:bg-accent-soft border border-accent/30 rounded-md text-body font-mono font-bold">
-                    {s.start_time} - {s.end_time}
-                  </span>
-                </div>
-
-                <div className="space-y-1 text-body text-ink-2">
-                  <p className="font-semibold">
-                    Tiempo de Gracia Tolerado:{' '}
-                    <strong className="text-ink font-mono">{s.grace_period_mins} minutos</strong>
-                  </p>
-                  <p className="font-semibold">
-                    Personal Asignado:{' '}
-                    <strong className="text-ink">{s.assigned_employees.join(', ')}</strong>
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* SUB-TAB 3: ATTENDANCE ENGINE & INCIDENCES */}
-      {activeSubTab === 'engine' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-raised p-4 rounded-md border border-line shadow-e1">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar marcas por empleado..."
-                className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink font-semibold"
-              />
-            </div>
-          </div>
-
-          <div className="bg-raised rounded-md border border-line shadow-e1 overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-sunken text-ink-2 text-micro font-extrabold uppercase tracking-wider border-b border-line">
-                  <th className="p-4"># Marca ID</th>
-                  <th className="p-4">Timestamp Exacto</th>
-                  <th className="p-4">Empleado & Rol</th>
-                  <th className="p-4">Evento</th>
-                  <th className="p-4 font-mono text-center">Horas Trabajadas</th>
-                  <th className="p-4 text-center">Estado Incidencia</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line text-body">
-                {filteredLogs.map((log) => {
-                  const statusBadge = {
-                    ON_TIME: {
-                      label: 'A TIEMPO (PUNTUAL)',
-                      color: 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30',
-                    },
-                    LATE: {
-                      label: `RETRASO (${log.lateness_minutes} min)`,
-                      color: 'bg-danger-soft text-danger-ink dark:bg-danger-soft border-danger/30',
-                    },
-                    OVERTIME: {
-                      label: 'HORAS EXTRAS',
-                      color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30',
-                    },
-                    JUSTIFIED: {
-                      label: 'JUSTIFICADO',
-                      color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30',
-                    },
-                  }[log.status];
-
-                  return (
-                    <tr key={log.id} className="hover:bg-sunken">
-                      <td className="p-4 font-mono font-extrabold text-accent">{log.id}</td>
-                      <td className="p-4 font-mono text-ink-2">{log.timestamp}</td>
-                      <td className="p-4 font-bold text-ink">
-                        {log.employee_name} ({log.role})
-                      </td>
-                      <td className="p-4 font-bold">
-                        <span className="px-2 py-0.5 bg-sunken rounded font-mono text-micro">
-                          {log.event_type}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center font-mono font-black text-base text-ink">
-                        {log.hours_worked ? `${log.hours_worked} hrs` : '-'}
-                      </td>
-                      <td className="p-4 text-center">
-                        <span
-                          className={`px-2.5 py-1 rounded-md text-micro font-bold border ${statusBadge.color}`}
-                        >
-                          {statusBadge.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* SUB-TAB 4: EXCEPTIONS & PERMITS */}
-      {activeSubTab === 'exceptions' && (
-        <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4">
-          <div className="flex items-center justify-between border-b border-line pb-4">
-            <div>
-              <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <FileText className="w-5 h-5 text-accent" /> Licencias Médicas, Permisos &
-                Justificación de Faltas
-              </h3>
-              <p className="text-body text-ink-3">
-                Registro de excepciones con o sin goce de haber
-              </p>
-            </div>
-            <button
-              onClick={() => setIsExceptionModalOpen(true)}
-              className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md font-bold text-body flex items-center gap-2 shadow"
-            >
-              <Plus className="w-4 h-4" /> Registrar Permiso / Licencia
-            </button>
-          </div>
-
-          <table className="w-full text-left border-collapse text-body">
-            <thead>
-              <tr className="bg-sunken text-ink-3 uppercase text-micro font-bold border-b border-line">
-                <th className="p-4">Empleado</th>
-                <th className="p-4">Tipo de Excepción</th>
-                <th className="p-4">Rango de Fechas</th>
-                <th className="p-4">Notas / Certificado</th>
-                <th className="p-4 text-right">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {exceptions.map((exc) => (
-                <tr key={exc.id}>
-                  <td className="p-4 font-bold text-ink">{exc.employee_name}</td>
-                  <td className="p-4 font-semibold text-accent">{exc.type}</td>
-                  <td className="p-4 font-mono text-ink-2">{exc.date_range}</td>
-                  <td className="p-4 font-semibold text-ink-2">{exc.notes}</td>
-                  <td className="p-4 text-right">
-                    <span className="px-2.5 py-1 bg-ok-soft text-ok-ink dark:bg-ok-soft border border-ok/30 rounded-md text-micro font-bold">
-                      APROBADO
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 };
