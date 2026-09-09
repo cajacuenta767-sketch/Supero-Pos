@@ -153,3 +153,75 @@ describe('cajón portamonedas', () => {
     expect(buildDrawerKick().includes(Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]))).toBe(true);
   });
 });
+
+/**
+ * Codificación PC858.
+ *
+ * El compositor declaraba la página de códigos 19 con `ESC t 19` y luego
+ * escribía el texto en latin1, que es otra tabla. Sobre papel, «PANADERÍA
+ * ÑOÑA» salía como «PANADER═A ╤O╤A» y «¡Gracias!» como «íGracias!». Solo se
+ * veía con una impresora delante, así que aquí se comprueba byte a byte.
+ */
+describe('codificación PC858', () => {
+  const { encodePc858 } = require('../../electron/pc858.cjs') as {
+    encodePc858: (text: string) => Buffer;
+  };
+
+  const bytes = (text: string) => [...encodePc858(text)];
+
+  it('el ASCII pasa tal cual', () => {
+    expect(bytes('Total: 25.00')).toEqual([...Buffer.from('Total: 25.00', 'ascii')]);
+  });
+
+  it('las vocales acentuadas usan la tabla de PC858, no la de latin1', () => {
+    // En latin1 serían e1 e9 ed f3 fa; en PC858 son a0 82 a1 a2 a3.
+    expect(bytes('áéíóú')).toEqual([0xa0, 0x82, 0xa1, 0xa2, 0xa3]);
+    expect(bytes('ÁÉÍÓÚ')).toEqual([0xb5, 0x90, 0xd6, 0xe0, 0xe9]);
+  });
+
+  it('la eñe y la diéresis salen bien en las dos cajas', () => {
+    expect(bytes('ñÑüÜ')).toEqual([0xa4, 0xa5, 0x81, 0x9a]);
+  });
+
+  it('la apertura de exclamación y de interrogación no son las de latin1', () => {
+    // Enviar 0xa1 (el «¡» de latin1) hacía que la impresora escribiera «í».
+    expect(bytes('¡¿')).toEqual([0xad, 0xa8]);
+  });
+
+  it('el euro existe en PC858, que es lo que lo distingue de PC850', () => {
+    expect(bytes('€')).toEqual([0xd5]);
+  });
+
+  it('las comillas tipográficas se sustituyen por rectas en vez de imprimir basura', () => {
+    expect(bytes('“hola” ‘eso’ — …')).toEqual([...Buffer.from('"hola" \'eso\' - ...', 'ascii')]);
+  });
+
+  it('una letra fuera de la tabla pierde la tilde antes que imprimir un símbolo', () => {
+    // «Ǎ» no está en PC858; se prefiere una «A» legible.
+    expect(bytes('Ǎ')).toEqual([0x41]);
+  });
+
+  it('lo que no tiene ninguna equivalencia sale como interrogante, no como ruido', () => {
+    expect(bytes('漢')).toEqual([0x3f]);
+  });
+
+  it('el ticket completo lleva la razón social acentuada en PC858', () => {
+    const buffer = buildTicket({
+      ...TICKET,
+      companyName: 'PANADERÍA ÑOÑA',
+      footerText: '¡Gracias!',
+    });
+    // 0xd6 = Í y 0xa5 = Ñ. Con latin1 habrían sido 0xcd y 0xd1.
+    expect([...buffer]).toContain(0xd6);
+    expect([...buffer]).toContain(0xa5);
+    expect([...buffer]).toContain(0xad); // ¡
+    expect([...buffer]).not.toContain(0xcd); // la «Í» de latin1 ya no aparece
+  });
+
+  it('declara la página de códigos que después cumple', () => {
+    const buffer = buildTicket(TICKET);
+    // ESC t 19 (0x1b 0x74 0x13) = PC858.
+    const head = [...buffer.subarray(0, 8)];
+    expect(head).toEqual(expect.arrayContaining([0x1b, 0x74, 0x13]));
+  });
+});

@@ -1,9 +1,13 @@
+const { encodePc858 } = require('./pc858.cjs');
 // Composición de tramas ESC/POS para impresora térmica y cajón portamonedas.
 
 const ESC_POS = {
   INIT: Buffer.from([0x1b, 0x40]), // ESC @  — inicializa
   /* Página de códigos 19 = PC858 (multilingüe con € y vocales acentuadas).
-     Antes se enviaba texto en latin1 sin declarar página de códigos, así que
+     Se declara aquí y se cumple en `pc858.cjs`: durante un tiempo se declaraba
+     PC858 y se escribía latin1, que es otra tabla, y sobre papel «PANADERÍA»
+     salía «PANADER═A».
+     Antes de eso se enviaba texto en latin1 sin declarar página de códigos, así que
      «Audífonos» salía con caracteres rotos en casi cualquier impresora. */
   CODEPAGE_PC858: Buffer.from([0x1b, 0x74, 0x13]), // ESC t 19
   ALIGN_CENTER: Buffer.from([0x1b, 0x61, 0x01]),
@@ -108,13 +112,13 @@ function buildTicket(ticket) {
     ESC_POS.INIT,
     ESC_POS.CODEPAGE_PC858,
     ESC_POS.ALIGN_LEFT,
-    Buffer.from(body, 'latin1'),
+    encodePc858(body),
     ESC_POS.BOLD_ON,
     ESC_POS.DOUBLE_ON,
-    Buffer.from(totalLine, 'latin1'),
+    encodePc858(totalLine),
     ESC_POS.DOUBLE_OFF,
     ESC_POS.BOLD_OFF,
-    Buffer.from(tail.join('\n') + '\n', 'latin1'),
+    encodePc858(tail.join('\n') + '\n'),
     ESC_POS.FEED_3,
     ESC_POS.CUT_PAPER,
   ]);
@@ -137,17 +141,17 @@ function buildLabels(job) {
 
     blocks.push(
       ESC_POS.ALIGN_CENTER,
-      Buffer.from(header, 'latin1'),
+      encodePc858(header),
       // GS h 64: alto de barras. GS w 2: ancho de módulo. GS H 2: texto debajo.
       Buffer.from([0x1d, 0x68, 0x40]),
       Buffer.from([0x1d, 0x77, 0x02]),
       Buffer.from([0x1d, 0x48, 0x02]),
       // GS k 67 <len> <datos>: EAN-13 en el modo con longitud explícita.
       Buffer.from([0x1d, 0x6b, 0x43, job.barcode.length]),
-      Buffer.from(job.barcode, 'latin1'),
-      Buffer.from('\n', 'latin1'),
+      encodePc858(job.barcode),
+      encodePc858('\n'),
       ESC_POS.BOLD_ON,
-      Buffer.from(price, 'latin1'),
+      encodePc858(price),
       ESC_POS.BOLD_OFF,
       ESC_POS.FEED_3,
       ESC_POS.CUT_PAPER,
