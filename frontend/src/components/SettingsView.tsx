@@ -1,21 +1,34 @@
 import React, { useState } from 'react';
-import { 
-  Settings, 
-  Building2, 
-  Printer, 
-  RefreshCw, 
-  Save, 
-  CheckCircle2, 
-  Moon, 
-  Sun, 
-  ShieldAlert, 
-  Scale, 
-  Scan, 
-  Upload, 
-  Clock, 
-  AlertTriangle
+import {
+  AlertTriangle,
+  Building2,
+  CheckCircle2,
+  Clock,
+  Moon,
+  Printer,
+  RefreshCw,
+  Save,
+  Scale,
+  Scan,
+  ShieldAlert,
+  Sun,
+  Upload,
 } from 'lucide-react';
 import { useThemeStore } from '../store/useThemeStore';
+import {
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  Input,
+  Meter,
+  PageHeader,
+  Select,
+  Switch,
+  Tabs,
+  useToast,
+} from '../ui';
+import type { Column, TabItem } from '../ui';
 
 interface Branch {
   id: string;
@@ -25,460 +38,419 @@ interface Branch {
   phone: string;
 }
 
+type SubTab = 'company' | 'hardware' | 'security' | 'sync';
+
+const TABS: TabItem[] = [
+  { id: 'company', label: 'Empresa', icon: <Building2 className="w-4 h-4" /> },
+  { id: 'hardware', label: 'Hardware', icon: <Printer className="w-4 h-4" /> },
+  { id: 'security', label: 'Seguridad', icon: <ShieldAlert className="w-4 h-4" /> },
+  { id: 'sync', label: 'Sincronización', icon: <RefreshCw className="w-4 h-4" /> },
+];
+
 export const SettingsView: React.FC = () => {
   const { isDarkMode, toggleTheme } = useThemeStore();
-  const [activeSubTab, setActiveSubTab] = useState<'company' | 'hardware' | 'security' | 'sync'>('company');
+  const toast = useToast();
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>('company');
 
-  // 1. Company & Fiscal Settings
+  /* Marca si hay cambios sin guardar: Guardar solo se habilita entonces. */
+  const [dirty, setDirty] = useState(false);
+  const touch =
+    <T,>(setter: (v: T) => void) =>
+    (v: T) => {
+      setter(v);
+      setDirty(true);
+    };
+
+  // Identidad de la empresa
   const [companyName, setCompanyName] = useState('SUPERO POS ENTERPRISE S.R.L.');
   const [companyNit, setCompanyNit] = useState('10293847019');
   const [companyAddress, setCompanyAddress] = useState('Av. Las Palmas #450, Santa Cruz - Bolivia');
   const [phone, setPhone] = useState('+591 70012345');
   const [email, setEmail] = useState('contacto@superopos.com');
   const [currency, setCurrency] = useState('BOB');
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  // Branches Management State
   const [branches] = useState<Branch[]>([
-    { id: 'BR-01', name: 'Sucursal Central (Matriz)', code: 'SC-01', address: 'Av. Las Palmas #450', phone: '+591 3 3456789' },
-    { id: 'BR-02', name: 'Sucursal Centro Comercio', code: 'SC-02', address: 'Calle Junín #120', phone: '+591 3 3456790' },
-    { id: 'BR-03', name: 'Almacén General Depósito', code: 'ALM-01', address: 'Zona Industrial Parque', phone: '+591 3 3456791' }
+    {
+      id: 'BR-01',
+      name: 'Sucursal Central (Matriz)',
+      code: 'SC-01',
+      address: 'Av. Las Palmas #450',
+      phone: '+591 3 3456789',
+    },
+    {
+      id: 'BR-02',
+      name: 'Sucursal Centro Comercio',
+      code: 'SC-02',
+      address: 'Calle Junín #120',
+      phone: '+591 3 3456790',
+    },
+    {
+      id: 'BR-03',
+      name: 'Almacén General Depósito',
+      code: 'ALM-01',
+      address: 'Zona Industrial Parque',
+      phone: '+591 3 3456791',
+    },
   ]);
 
-  // 2. Hardware & POS Peripherals Settings
+  // Periféricos
   const [printerInterface, setPrinterInterface] = useState('USB');
   const [paperWidth, setPaperWidth] = useState('80mm');
   const [autoCutPaper, setAutoCutPaper] = useState(true);
   const [cashDrawerPulse, setCashDrawerPulse] = useState(true);
-  const [scannerLatency, setScannerLatency] = useState(10); // ms
-  const [scaleProtocol, setScaleProtocol] = useState('CAS_PD_II'); // Serial Scale protocol
+  const [scannerLatency, setScannerLatency] = useState(10);
+  const [scaleProtocol, setScaleProtocol] = useState('CAS_PD_II');
 
-  // 3. Security & Operational Rules Settings
+  // Seguridad
   const [inactivityTimeoutMins, setInactivityTimeoutMins] = useState(15);
   const [requireSupervisorPinForVoids, setRequireSupervisorPinForVoids] = useState(true);
   const [requireSupervisorPinForDiscounts, setRequireSupervisorPinForDiscounts] = useState(true);
   const [criticalStockThreshold, setCriticalStockThreshold] = useState(5);
 
-  // 4. Offline Persistence & Sync Worker Settings
+  // Sincronización
   const [syncIntervalSec, setSyncIntervalSec] = useState(30);
-  const [pendingQueueCount] = useState(0); // 0 pending items
+  const [pendingQueueCount] = useState(0);
 
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    alert('✅ Parámetros globales del sistema guardados correctamente.');
+    setDirty(false);
+    toast('Ajustes guardados', 'success');
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onload = (upload) => {
-        setLogoPreview(upload.target?.result as string);
-      };
-      reader.readAsDataURL(e.target.files[0]);
-    }
-  };
+  const branchColumns: Array<Column<Branch>> = [
+    {
+      key: 'name',
+      header: 'Sucursal',
+      render: (b) => (
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-ink truncate">{b.name}</p>
+          <p className="font-mono text-micro text-ink-3">{b.code}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'address',
+      header: 'Dirección',
+      render: (b) => <span className="text-ink-2">{b.address}</span>,
+    },
+    {
+      key: 'phone',
+      header: 'Teléfono',
+      width: '160px',
+      render: (b) => <span className="font-mono tnum text-ink-2">{b.phone}</span>,
+    },
+  ];
+
+  const saveAction = (
+    <Button icon={<Save className="w-4 h-4" />} disabled={!dirty} onClick={handleSave}>
+      Guardar cambios
+    </Button>
+  );
 
   return (
-    <div className="p-6 bg-gray-50 dark:bg-[#000000] h-[calc(100vh-56px)] overflow-y-auto pr-2 space-y-6 select-none transition-colors duration-200">
-      {/* 1. Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#121212] p-5 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-            <Settings className="w-7 h-7 text-blue-500" />
-            13. Ajustes y Configuración Global del Sistema
-          </h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Configuración institucional, periféricos POS, políticas de seguridad RBAC y motor de sincronización offline SQLite
-          </p>
-        </div>
+    <div className="h-full overflow-y-auto bg-canvas select-none">
+      <div className="max-w-[1600px] mx-auto p-6 space-y-5">
+        <PageHeader
+          title="Ajustes"
+          subtitle="Identidad de la empresa, periféricos del punto de venta, políticas de seguridad y sincronización."
+          actions={saveAction}
+          tabs={
+            <Tabs
+              items={TABS}
+              value={activeSubTab}
+              onChange={(id) => setActiveSubTab(id as SubTab)}
+              label="Secciones de ajustes"
+            />
+          }
+        />
 
-        {/* Sub-tabs Navigation */}
-        <div className="flex items-center bg-gray-100 dark:bg-[#0B0C10] p-1.5 rounded-xl border border-gray-200 dark:border-[#1F2833]">
-          <button
-            onClick={() => setActiveSubTab('company')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
-              activeSubTab === 'company' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'
-            }`}
-          >
-            <Building2 className="w-4 h-4" />
-            Empresa & Sucursales
-          </button>
-          <button
-            onClick={() => setActiveSubTab('hardware')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
-              activeSubTab === 'hardware' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'
-            }`}
-          >
-            <Printer className="w-4 h-4" />
-            Hardware & Balanzas
-          </button>
-          <button
-            onClick={() => setActiveSubTab('security')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
-              activeSubTab === 'security' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'
-            }`}
-          >
-            <ShieldAlert className="w-4 h-4" />
-            Seguridad & Reglas POS
-          </button>
-          <button
-            onClick={() => setActiveSubTab('sync')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
-              activeSubTab === 'sync' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'
-            }`}
-          >
-            <RefreshCw className="w-4 h-4" />
-            Sincronización Local SQLite
-          </button>
-        </div>
-      </div>
+        {/* ── Empresa ──────────────────────────────────────────────── */}
+        {activeSubTab === 'company' && (
+          <div className="space-y-5">
+            <Card title="Identidad de la empresa" icon={<Building2 className="w-4 h-4" />}>
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-center gap-4 p-4 rounded-md bg-sunken border border-line">
+                  <div className="w-20 h-20 shrink-0 rounded-md border border-dashed border-line-strong flex items-center justify-center text-ink-3">
+                    <Building2 className="w-7 h-7" />
+                  </div>
+                  <div className="flex-1 min-w-[220px] space-y-1">
+                    <p className="text-base font-semibold text-ink">Logotipo</p>
+                    <p className="text-body text-ink-2">
+                      Se imprime en la cabecera de tickets térmicos y facturas. PNG o JPG, máximo 2
+                      MB.
+                    </p>
+                  </div>
+                  <Button variant="secondary" icon={<Upload className="w-4 h-4" />}>
+                    Subir imagen
+                  </Button>
+                </div>
 
-      {/* SUB-TAB 1: COMPANY IDENTITY & BRANCHES */}
-      {activeSubTab === 'company' && (
-        <div className="space-y-6 max-w-4xl">
-          <form onSubmit={handleSaveSettings} className="bg-white dark:bg-[#121212] p-6 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm space-y-6">
-            <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#1F2833] pb-4">
-              <h3 className="font-extrabold text-base text-gray-900 dark:text-white flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-blue-500" /> Identidad Corporativa y Configuración Fiscal
-              </h3>
-              <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow">
-                <Save className="w-4 h-4" /> Guardar Cambios
-              </button>
-            </div>
-
-            {/* Logo Loader Section */}
-            <div className="flex items-center gap-6 p-4 bg-gray-50 dark:bg-[#0B0C10] rounded-2xl border border-gray-200 dark:border-[#1F2833]">
-              <div className="w-20 h-20 bg-white dark:bg-[#121212] border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl flex items-center justify-center overflow-hidden">
-                {logoPreview ? (
-                  <img src={logoPreview} alt="Logo Oficial" className="w-full h-full object-contain" />
-                ) : (
-                  <Building2 className="w-8 h-8 text-gray-400" />
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <span className="font-extrabold text-xs text-gray-900 dark:text-white block">Logotipo Oficial Institucional</span>
-                <p className="text-[11px] text-gray-500">Se imprimirá en la cabecera de comprobantes térmicos y facturas PDF (PNG/JPG máx 2MB)</p>
-                <label className="mt-1 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 w-fit cursor-pointer shadow">
-                  <Upload className="w-3.5 h-3.5" /> Subir Imagen Logo
-                  <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                </label>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div>
-                <label className="font-bold text-gray-700 dark:text-gray-300">Razón Social / Nombre Oficial *</label>
-                <input
-                  type="text" required
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-bold text-gray-900 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 dark:text-gray-300">NIT / RUC Fiscal *</label>
-                <input
-                  type="text" required
-                  value={companyNit}
-                  onChange={(e) => setCompanyNit(e.target.value)}
-                  className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-mono font-bold text-gray-900 dark:text-white"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="font-bold text-gray-700 dark:text-gray-300">Dirección Matriz *</label>
-                <input
-                  type="text" required
-                  value={companyAddress}
-                  onChange={(e) => setCompanyAddress(e.target.value)}
-                  className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-semibold text-gray-900 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 dark:text-gray-300">Teléfono / WhatsApp de Atención</label>
-                <input
-                  type="text"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-mono font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 dark:text-gray-300">Correo Electrónico Oficial</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 dark:text-gray-300">Moneda Base de Operación</label>
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-bold"
-                >
-                  <option value="BOB">BOB (Bs. - Bolivianos)</option>
-                  <option value="USD">USD ($ - Dólar Estadounidense)</option>
-                </select>
-              </div>
-            </div>
-          </form>
-
-          {/* Branches Directory Table */}
-          <div className="bg-white dark:bg-[#121212] p-6 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm space-y-4">
-            <h3 className="font-extrabold text-base text-gray-900 dark:text-white flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-emerald-500" /> Directorio de Sucursales y Almacenes Vinculados
-            </h3>
-
-            <div className="border border-gray-200 dark:border-[#1F2833] rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-gray-100 dark:bg-[#0B0C10] text-gray-500 font-extrabold uppercase text-[11px] border-b border-gray-200 dark:border-[#1F2833]">
-                    <th className="p-3">Código</th>
-                    <th className="p-3">Nombre Sucursal</th>
-                    <th className="p-3">Ubicación Física</th>
-                    <th className="p-3">Teléfono</th>
-                    <th className="p-3 text-right">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-[#1F2833]">
-                  {branches.map(b => (
-                    <tr key={b.id}>
-                      <td className="p-3 font-mono font-bold text-blue-600 dark:text-blue-400">{b.code}</td>
-                      <td className="p-3 font-bold text-gray-900 dark:text-white">{b.name}</td>
-                      <td className="p-3 font-semibold text-gray-600 dark:text-gray-300">{b.address}</td>
-                      <td className="p-3 font-mono text-gray-500">{b.phone}</td>
-                      <td className="p-3 text-right">
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 rounded font-bold text-[10px]">
-                          OPERATIVA
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SUB-TAB 2: HARDWARE & POS PERIPHERALS */}
-      {activeSubTab === 'hardware' && (
-        <div className="bg-white dark:bg-[#121212] p-6 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm space-y-6 max-w-3xl">
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#1F2833] pb-4">
-            <h3 className="font-extrabold text-base text-gray-900 dark:text-white flex items-center gap-2">
-              <Printer className="w-5 h-5 text-blue-500" /> Periféricos POS: Impresora, Gaveta & Balanza Electrónica
-            </h3>
-            <button onClick={() => alert('🖨️ Imprimiendo ticket de calibración hardware...')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow">
-              Imprimir Comprobante de Prueba
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <div>
-              <label className="font-bold text-gray-700 dark:text-gray-300">Interfaz de Impresora Térmica *</label>
-              <select
-                value={printerInterface}
-                onChange={(e) => setPrinterInterface(e.target.value)}
-                className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-bold"
-              >
-                <option value="USB">Conexión USB Directa (Electron IPC / node-escpos)</option>
-                <option value="SERIAL">Puerto Serie Virtual COM (COM1 - COM4)</option>
-                <option value="NETWORK">Impresora de Red IP (TCP/IP Port 9100)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="font-bold text-gray-700 dark:text-gray-300">Ancho de Papel Térmico</label>
-              <select
-                value={paperWidth}
-                onChange={(e) => setPaperWidth(e.target.value)}
-                className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-bold"
-              >
-                <option value="80mm">80 mm (Estándar Mostrador)</option>
-                <option value="58mm">58 mm (Impresora Portátil)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                <Scan className="w-3.5 h-3.5 text-blue-500" /> Latencia de Lectura Pistola Láser
-              </label>
-              <input
-                type="number"
-                value={scannerLatency}
-                onChange={(e) => setScannerLatency(parseInt(e.target.value) || 10)}
-                className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-mono font-bold"
-              />
-              <span className="text-[10px] text-gray-400">Tolerancia recomendada: 10ms</span>
-            </div>
-
-            <div>
-              <label className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                <Scale className="w-3.5 h-3.5 text-purple-500" /> Protocolo Balanza Electrónica
-              </label>
-              <select
-                value={scaleProtocol}
-                onChange={(e) => setScaleProtocol(e.target.value)}
-                className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-bold"
-              >
-                <option value="CAS_PD_II">CAS PD-II / Serial RS232</option>
-                <option value="TOLEDO_8217">Mettler Toledo 8217</option>
-                <option value="SYSTEL">Systel Croma / Clipse</option>
-              </select>
-            </div>
-
-            <div className="md:col-span-2 space-y-3 pt-2">
-              <label className="flex items-center gap-2 font-bold cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={autoCutPaper}
-                  onChange={(e) => setAutoCutPaper(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-                <span>Enviar comando de guillotina / auto-corte de papel tras imprimir ticket</span>
-              </label>
-
-              <label className="flex items-center gap-2 font-bold cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={cashDrawerPulse}
-                  onChange={(e) => setCashDrawerPulse(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-                <span>Enviar pulso eléctrico a gaveta portamonedas al liquidar venta en efectivo</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SUB-TAB 3: SECURITY & OPERATIONAL RULES */}
-      {activeSubTab === 'security' && (
-        <div className="bg-white dark:bg-[#121212] p-6 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm space-y-6 max-w-3xl">
-          <div className="border-b border-gray-100 dark:border-[#1F2833] pb-4">
-            <h3 className="font-extrabold text-base text-gray-900 dark:text-white flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-rose-500" /> Políticas de Seguridad Operativa & Reglas RBAC
-            </h3>
-          </div>
-
-          <div className="space-y-4 text-xs">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-500" /> Inactividad para Bloqueo de Pantalla (Minutos)
-                </label>
-                <input
-                  type="number"
-                  value={inactivityTimeoutMins}
-                  onChange={(e) => setInactivityTimeoutMins(parseInt(e.target.value) || 15)}
-                  className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-mono font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> Umbral General Stock Crítico
-                </label>
-                <input
-                  type="number"
-                  value={criticalStockThreshold}
-                  onChange={(e) => setCriticalStockThreshold(parseInt(e.target.value) || 5)}
-                  className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-mono font-bold"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <label className="flex items-center gap-2 font-bold cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={requireSupervisorPinForVoids}
-                  onChange={(e) => setRequireSupervisorPinForVoids(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-                <span>Exigir PIN de Supervisor para Anulación de Tickets en POS</span>
-              </label>
-
-              <label className="flex items-center gap-2 font-bold cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={requireSupervisorPinForDiscounts}
-                  onChange={(e) => setRequireSupervisorPinForDiscounts(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-                <span>Exigir PIN de Supervisor para Aplicar Descuentos Libres en Carrito</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SUB-TAB 4: OFFLINE SYNC WORKER & SQLITE ARCHITECTURE */}
-      {activeSubTab === 'sync' && (
-        <div className="bg-white dark:bg-[#121212] p-6 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm space-y-6 max-w-3xl">
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#1F2833] pb-4">
-            <h3 className="font-extrabold text-base text-gray-900 dark:text-white flex items-center gap-2">
-              <RefreshCw className="w-5 h-5 text-emerald-500" /> Arquitectura Offline-First & Cola SQLite (sync_queue)
-            </h3>
-            <button onClick={() => alert('⚡ Bucle de sincronización bidireccional ejecutado en segundo plano.')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow">
-              Forzar Sincronización Ahora
-            </button>
-          </div>
-
-          <div className="space-y-4 text-xs">
-            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 rounded-xl space-y-1">
-              <span className="font-extrabold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
-                <CheckCircle2 className="w-4 h-4" /> Persistencia Local Autónoma SQLite (better-sqlite3)
-              </span>
-              <p className="text-[11px] text-gray-600 dark:text-gray-400">
-                La terminal opera sin interrupciones ante cortes de red. Las ventas y stock se almacenan en <code>sync_queue</code> y se transmiten al detectar señal.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="font-bold text-gray-700 dark:text-gray-300">Frecuencia del Worker Loop (Segundos) *</label>
-                <input
-                  type="number"
-                  value={syncIntervalSec}
-                  onChange={(e) => setSyncIntervalSec(parseInt(e.target.value) || 30)}
-                  className="w-full mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-mono font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 dark:text-gray-300">Estado de Cola Pendiente</label>
-                <div className="mt-1 p-2.5 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-mono font-bold flex items-center justify-between">
-                  <span>Transacciones Pendientes:</span>
-                  <span className="text-emerald-600 dark:text-emerald-400">{pendingQueueCount} ítems (Sincronizado)</span>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <Input
+                    label="Razón social"
+                    value={companyName}
+                    onChange={(e) => touch(setCompanyName)(e.target.value)}
+                    required
+                  />
+                  <Input
+                    label="NIT / RUC fiscal"
+                    value={companyNit}
+                    onChange={(e) => touch(setCompanyNit)(e.target.value)}
+                    className="[&_input]:font-mono"
+                    required
+                  />
+                  <Input
+                    label="Dirección de la matriz"
+                    value={companyAddress}
+                    onChange={(e) => touch(setCompanyAddress)(e.target.value)}
+                    className="lg:col-span-2"
+                    required
+                  />
+                  <Input
+                    label="Teléfono de atención"
+                    value={phone}
+                    onChange={(e) => touch(setPhone)(e.target.value)}
+                    className="[&_input]:font-mono"
+                  />
+                  <Input
+                    label="Correo electrónico"
+                    type="email"
+                    value={email}
+                    onChange={(e) => touch(setEmail)(e.target.value)}
+                  />
+                  <Select
+                    label="Moneda base"
+                    value={currency}
+                    onChange={(e) => touch(setCurrency)(e.target.value)}
+                  >
+                    <option value="BOB">BOB · Bolivianos</option>
+                    <option value="USD">USD · Dólares</option>
+                    <option value="PEN">PEN · Soles</option>
+                  </Select>
                 </div>
               </div>
-            </div>
+            </Card>
 
-            <div className="p-4 bg-gray-50 dark:bg-[#0B0C10] rounded-xl border border-gray-200 dark:border-[#1F2833] flex items-center justify-between">
-              <div>
-                <span className="font-bold text-gray-900 dark:text-white block">Tema de Interfaz de Usuario</span>
-                <span className="text-gray-500 text-[11px]">Alternar entre Light Mode (#FFFFFF) y Dark Mode (#000000)</span>
-              </div>
-              <button
-                onClick={toggleTheme}
-                className="px-4 py-2 bg-blue-600 text-white rounded-xl font-extrabold flex items-center gap-2 shadow"
-              >
-                {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                {isDarkMode ? 'Modo Claro' : 'Modo Oscuro'}
-              </button>
-            </div>
+            <Card
+              title="Sucursales y almacenes"
+              subtitle={`${branches.length} ubicaciones vinculadas`}
+              icon={<Building2 className="w-4 h-4" />}
+              padding="none"
+            >
+              <DataTable
+                columns={branchColumns}
+                rows={branches}
+                rowKey={(b) => b.id}
+                dense
+                className="border-0 rounded-none"
+              />
+            </Card>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* ── Hardware ─────────────────────────────────────────────── */}
+        {activeSubTab === 'hardware' && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+            <Card title="Impresora térmica" icon={<Printer className="w-4 h-4" />}>
+              <div className="space-y-4">
+                <Select
+                  label="Interfaz"
+                  value={printerInterface}
+                  onChange={(e) => touch(setPrinterInterface)(e.target.value)}
+                >
+                  <option value="USB">USB directo</option>
+                  <option value="NETWORK">Red IP · puerto 9100</option>
+                  <option value="BLUETOOTH">Bluetooth</option>
+                </Select>
+
+                <Select
+                  label="Ancho de papel"
+                  hint="Determina el ancho de la plantilla de ticket."
+                  value={paperWidth}
+                  onChange={(e) => touch(setPaperWidth)(e.target.value)}
+                >
+                  <option value="80mm">80 mm · estándar de mostrador</option>
+                  <option value="58mm">58 mm · portátil</option>
+                </Select>
+
+                <div className="pt-2 flex flex-col gap-3 border-t border-line">
+                  <Switch
+                    checked={autoCutPaper}
+                    onChange={touch(setAutoCutPaper)}
+                    label="Corte automático de papel"
+                    showLabel
+                  />
+                  <Switch
+                    checked={cashDrawerPulse}
+                    onChange={touch(setCashDrawerPulse)}
+                    label="Pulso de apertura de gaveta al cobrar"
+                    showLabel
+                  />
+                </div>
+              </div>
+            </Card>
+
+            <Card title="Lector y balanza" icon={<Scan className="w-4 h-4" />}>
+              <div className="space-y-4">
+                <Input
+                  label="Latencia del lector (ms)"
+                  hint="Tiempo máximo entre pulsaciones para tratarlas como un mismo escaneo."
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={scannerLatency}
+                  onChange={(e) => touch(setScannerLatency)(parseInt(e.target.value) || 10)}
+                  className="[&_input]:font-mono"
+                />
+                <Meter
+                  value={scannerLatency}
+                  max={100}
+                  label="Latencia del lector"
+                  hint={`${scannerLatency} ms`}
+                  tone={
+                    scannerLatency <= 20 ? 'success' : scannerLatency <= 50 ? 'warning' : 'danger'
+                  }
+                />
+
+                <Select
+                  label="Protocolo de balanza"
+                  value={scaleProtocol}
+                  onChange={(e) => touch(setScaleProtocol)(e.target.value)}
+                  className="pt-2"
+                >
+                  <option value="CAS_PD_II">CAS PD-II</option>
+                  <option value="TOLEDO">Mettler Toledo</option>
+                  <option value="GENERIC_SERIAL">Serie genérica</option>
+                </Select>
+
+                <p className="flex items-center gap-1.5 text-body text-ink-2">
+                  <Scale className="w-3.5 h-3.5 shrink-0" />
+                  La lectura de peso se dispara con <span className="font-mono">F4</span> en el
+                  punto de venta.
+                </p>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* ── Seguridad ────────────────────────────────────────────── */}
+        {activeSubTab === 'security' && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+            <Card title="Bloqueo y umbrales" icon={<Clock className="w-4 h-4" />}>
+              <div className="space-y-4">
+                <Input
+                  label="Inactividad para bloquear la pantalla (minutos)"
+                  type="number"
+                  min={1}
+                  value={inactivityTimeoutMins}
+                  onChange={(e) => touch(setInactivityTimeoutMins)(parseInt(e.target.value) || 15)}
+                  className="[&_input]:font-mono"
+                />
+                <Input
+                  label="Umbral general de stock crítico"
+                  hint="Por debajo de esta cantidad, el producto se marca en ámbar."
+                  type="number"
+                  min={0}
+                  value={criticalStockThreshold}
+                  onChange={(e) => touch(setCriticalStockThreshold)(parseInt(e.target.value) || 5)}
+                  className="[&_input]:font-mono"
+                />
+              </div>
+            </Card>
+
+            <Card title="Autorización de supervisor" icon={<ShieldAlert className="w-4 h-4" />}>
+              <div className="flex flex-col gap-3">
+                <Switch
+                  checked={requireSupervisorPinForVoids}
+                  onChange={touch(setRequireSupervisorPinForVoids)}
+                  label="Exigir PIN para anular tickets"
+                  showLabel
+                />
+                <Switch
+                  checked={requireSupervisorPinForDiscounts}
+                  onChange={touch(setRequireSupervisorPinForDiscounts)}
+                  label="Exigir PIN para descuentos superiores al 10%"
+                  showLabel
+                />
+                <p className="flex items-start gap-1.5 pt-2 text-body text-ink-2 border-t border-line">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-warn" />
+                  Toda autorización queda registrada en el historial de auditoría con el usuario que
+                  la concedió.
+                </p>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* ── Sincronización ───────────────────────────────────────── */}
+        {activeSubTab === 'sync' && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+            <Card
+              title="Cola de sincronización"
+              icon={<RefreshCw className="w-4 h-4" />}
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => toast('Sincronización lanzada en segundo plano', 'info')}
+                >
+                  Sincronizar ahora
+                </Button>
+              }
+            >
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-4 h-12 rounded-md bg-sunken border border-line">
+                  <span className="text-base text-ink-2">Transacciones pendientes</span>
+                  {pendingQueueCount === 0 ? (
+                    <Badge tone="success" size="md" icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
+                      Al día
+                    </Badge>
+                  ) : (
+                    <Badge tone="warning" size="md">
+                      {pendingQueueCount} en cola
+                    </Badge>
+                  )}
+                </div>
+
+                <Input
+                  label="Frecuencia del worker (segundos)"
+                  type="number"
+                  min={5}
+                  value={syncIntervalSec}
+                  onChange={(e) => touch(setSyncIntervalSec)(parseInt(e.target.value) || 30)}
+                  className="[&_input]:font-mono"
+                />
+
+                <p className="text-body text-ink-2 leading-relaxed pt-2 border-t border-line">
+                  La terminal sigue vendiendo sin red: las ventas se guardan en la cola local y se
+                  transmiten en cuanto vuelve la señal.
+                </p>
+              </div>
+            </Card>
+
+            <Card
+              title="Apariencia"
+              icon={isDarkMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-ink">Tema de la interfaz</p>
+                  <p className="text-body text-ink-2">
+                    El modo oscuro usa negro puro: en pantallas OLED apaga el píxel y cansa menos.
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  icon={isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  onClick={toggleTheme}
+                >
+                  {isDarkMode ? 'Modo claro' : 'Modo oscuro'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

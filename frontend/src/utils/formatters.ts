@@ -2,7 +2,7 @@ export const formatCurrency = (amount: number, currency = 'BOB'): string => {
   const symbol = currency === 'BOB' ? 'Bs.' : '$';
   return `${symbol} ${Number(amount || 0).toLocaleString('es-BO', {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    maximumFractionDigits: 2,
   })}`;
 };
 
@@ -13,7 +13,7 @@ export const formatDate = (date: Date | string): string => {
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   });
 };
 

@@ -36,7 +36,12 @@ interface AuthState {
     username: string,
     password: string,
     branchId?: string,
-  ) => Promise<{ success: boolean; error?: string; isLocked?: boolean; remainingAttempts?: number }>;
+  ) => Promise<{
+    success: boolean;
+    error?: string;
+    isLocked?: boolean;
+    remainingAttempts?: number;
+  }>;
   logout: () => void;
   setSelectedBranchId: (branchId: string) => void;
   recordFailedAttempt: () => { attempts: number; locked: boolean };
@@ -58,8 +63,14 @@ const storedBranch = localStorage.getItem('supero_pos_branch_id') || 'branch-1';
 const initialUser: UserProfile | null = storedUser
   ? JSON.parse(storedUser)
   : storedToken
-  ? { id: 'usr-1', username: 'admin', role: 'ADMIN', name: 'Administrador Demo', branchId: storedBranch }
-  : null;
+    ? {
+        id: 'usr-1',
+        username: 'admin',
+        role: 'ADMIN',
+        name: 'Administrador Demo',
+        branchId: storedBranch,
+      }
+    : null;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   token: storedToken,
@@ -164,7 +175,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { success: true };
       } else if (response.status === 401 || response.status === 403) {
         const { attempts, locked } = get().recordFailedAttempt();
-        const serverMsg = resData.message || (locked ? 'Cuenta bloqueada tras 5 intentos fallidos.' : `Credenciales incorrectas. Intento ${attempts} de 5.`);
+        const serverMsg =
+          resData.message ||
+          (locked
+            ? 'Cuenta bloqueada tras 5 intentos fallidos.'
+            : `Credenciales incorrectas. Intento ${attempts} de 5.`);
         return {
           success: false,
           error: serverMsg,
@@ -178,9 +193,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // 3. Local Demo/Offline Authentication Fallback
     const cleanUser = username.trim().toLowerCase();
-    const isDemoAdmin = (cleanUser === 'admin' || cleanUser === 'administrador') && password === 'SuperoPOS2026';
+    const isDemoAdmin =
+      (cleanUser === 'admin' || cleanUser === 'administrador') && password === 'SuperoPOS2026';
     const isDemoSupervisor = cleanUser === 'supervisor' && password === 'supervisor123';
-    const isDemoCajero = (cleanUser === 'cajero' || cleanUser === 'cajero_demo') && password === 'cajero123';
+    const isDemoCajero =
+      (cleanUser === 'cajero' || cleanUser === 'cajero_demo') && password === 'cajero123';
     const isDemoAlmacen = cleanUser === 'almacenero' && password === 'almacen123';
 
     if (isDemoAdmin || isDemoSupervisor || isDemoCajero || isDemoAlmacen) {

@@ -1,541 +1,499 @@
-import React, { useState } from 'react';
-import { 
-  ShoppingCart, 
-  Wallet, 
-  Download, 
-  AlertTriangle, 
-  Info, 
-  Calendar, 
-  RefreshCw, 
-  Wifi, 
-  WifiOff, 
-  TrendingUp, 
-  BarChart3, 
-  LineChart as LineChartIcon,
-  CreditCard,
-  QrCode,
+import React, { useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowUpRight,
   Banknote,
-  Store,
-  PlusCircle,
-  Clock,
-  ArrowUpRight
+  BarChart3,
+  Calendar,
+  CreditCard,
+  LineChart as LineChartIcon,
+  Package,
+  QrCode,
+  RefreshCw,
+  ShoppingCart,
+  Wallet,
 } from 'lucide-react';
+import { Badge, Button, Card, DataTable, EmptyState, Money, Select, StatTile, cn } from '../ui';
+import type { Column } from '../ui';
 
-interface DashboardViewProps {
-  onNavigateToPos?: () => void;
-  onNavigateToShift?: () => void;
+/* Datos de demostración deterministas: un generador congruencial con semilla
+ fija. Con Math.random la serie se regeneraba en cada render y el gráfico
+ cambiaba solo al pasar el ratón. */
+const seeded = (seed: number) => () => {
+  seed = (seed * 1103515245 + 12345) % 2147483648;
+  return seed / 2147483648;
+};
+
+interface TrendPoint {
+  day: number;
+  date: string;
+  amount: number;
+  tickets: number;
 }
 
-export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigateToPos, onNavigateToShift }) => {
-  const [selectedBranch, setSelectedBranch] = useState('Consolidado Global');
-  const [timeRange, setTimeRange] = useState('30d');
-  const [chartType, setChartType] = useState<'line' | 'bar'>('line');
-  const [chartMetric, setChartMetric] = useState<'amount' | 'tickets'>('amount');
-  const [isOnline, setIsOnline] = useState(true);
+const CRITICAL_STOCK = [
+  { sku: 'EL-CAB-005', name: 'Cables USB-C Carga Rápida 2m', stock: 0, min: 5, unit: 'u.' },
+  { sku: 'EL-AUD-012', name: 'Auriculares Bluetooth Pro', stock: 1, min: 4, unit: 'u.' },
+  { sku: 'AB-QSO-002', name: 'Queso Criollo (a granel)', stock: 1.25, min: 5, unit: 'kg' },
+  { sku: 'AB-ARZ-001', name: 'Arroz Extra (Bolsa 5 kg)', stock: 2, min: 8, unit: 'u.' },
+  { sku: 'AB-LAC-006', name: 'Leche Entera 1 Litro (Caja)', stock: 3, min: 10, unit: 'u.' },
+];
+
+const RECENT_SALES = [
+  { ticket: 'TK-10024', time: '14:22', cashier: 'Juan Pérez', method: 'Efectivo', total: 145.8 },
+  { ticket: 'TK-10023', time: '14:10', cashier: 'Juan Pérez', method: 'Tarjeta', total: 320.0 },
+  { ticket: 'TK-10022', time: '13:45', cashier: 'María Gómez', method: 'QR', total: 85.5 },
+  { ticket: 'TK-10021', time: '13:12', cashier: 'Juan Pérez', method: 'Efectivo', total: 42.3 },
+  { ticket: 'TK-10020', time: '12:50', cashier: 'María Gómez', method: 'Tarjeta', total: 270.4 },
+];
+
+const METHOD_ICON: Record<string, React.ReactNode> = {
+  Efectivo: <Banknote className="w-3.5 h-3.5" />,
+  Tarjeta: <CreditCard className="w-3.5 h-3.5" />,
+  QR: <QrCode className="w-3.5 h-3.5" />,
+};
+
+/* ── Gráfico de tendencia ────────────────────────────────────────────────
+   Una sola serie: el título la nombra, no hace falta leyenda. Un solo eje.
+   Marcas finas, rejilla recesiva, capa de hover con línea guía y tooltip,
+ y etiqueta directa solo en el máximo.
+   Nota de color: la serie usa --accent, que pasa los seis chequeos en ambos
+ temas. --ok y --warn quedan fuera de la banda de luminosidad sobre fondo
+ oscuro: sirven como estado, no como marca de gráfico.                  */
+const TrendChart: React.FC<{
+  data: TrendPoint[];
+  metric: 'amount' | 'tickets';
+  kind: 'line' | 'bar';
+}> = ({ data, metric, kind }) => {
+  const [hover, setHover] = useState<number | null>(null);
+
+  const W = 1000;
+  const H = 260;
+  const PAD = { top: 16, right: 16, bottom: 28, left: 48 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+
+  const values = data.map((d) => d[metric]);
+  const max = Math.max(...values);
+  const niceMax = Math.ceil(max / 100) * 100 || 1;
+  const peakIndex = values.indexOf(max);
+
+  const x = (i: number) => PAD.left + (i / Math.max(1, data.length - 1)) * plotW;
+  const y = (v: number) => PAD.top + plotH - (v / niceMax) * plotH;
+
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(niceMax * t));
+  const linePath = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(d[metric])}`).join(' ');
+  const areaPath = `${linePath} L${x(data.length - 1)},${PAD.top + plotH} L${x(0)},${PAD.top + plotH} Z`;
+  const barW = Math.max(4, (plotW / data.length) * 0.55);
+
+  const active = hover !== null ? data[hover] : null;
+
+  return (
+    <figure className="m-0">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full h-[260px] overflow-visible"
+        role="img"
+        aria-label={`Tendencia de ${metric === 'amount' ? 'ventas' : 'tickets'} de los últimos 30 días`}
+        onMouseLeave={() => setHover(null)}
+      >
+        {/* Rejilla recesiva */}
+        {ticks.map((t) => (
+          <g key={t}>
+            <line
+              x1={PAD.left}
+              x2={W - PAD.right}
+              y1={y(t)}
+              y2={y(t)}
+              className="stroke-line"
+              strokeWidth={1}
+            />
+            <text
+              x={PAD.left - 10}
+              y={y(t)}
+              dy="0.32em"
+              textAnchor="end"
+              className="fill-ink-3 text-[11px] font-mono"
+            >
+              {metric === 'amount' ? `${t / 1000 >= 1 ? `${t / 1000}k` : t}` : t}
+            </text>
+          </g>
+        ))}
+
+        {kind === 'line' ? (
+          <>
+            <path d={areaPath} className="fill-accent/10" />
+            <path
+              d={linePath}
+              className="stroke-accent"
+              strokeWidth={2}
+              fill="none"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          </>
+        ) : (
+          data.map((d, i) => (
+            <rect
+              key={d.day}
+              x={x(i) - barW / 2}
+              y={y(d[metric])}
+              width={barW}
+              height={Math.max(2, PAD.top + plotH - y(d[metric]))}
+              rx={4}
+              className={cn(
+                'fill-accent transition-opacity duration-fast',
+                hover !== null && hover !== i && 'opacity-40',
+              )}
+            />
+          ))
+        )}
+
+        {/* Etiqueta directa: solo el máximo, nunca un número por punto */}
+        <text
+          x={x(peakIndex)}
+          y={y(max) - 12}
+          textAnchor="middle"
+          className="fill-ink text-[11px] font-mono font-semibold"
+        >
+          {metric === 'amount' ? `$${max}` : max}
+        </text>
+
+        {/* Eje X: un rótulo cada cinco días */}
+        {data.map((d, i) =>
+          i % 5 === 0 || i === data.length - 1 ? (
+            <text
+              key={d.day}
+              x={x(i)}
+              y={H - 8}
+              textAnchor="middle"
+              className="fill-ink-3 text-[11px] font-mono"
+            >
+              {d.day}
+            </text>
+          ) : null,
+        )}
+
+        {/* Capa de hover: línea guía + marcador, con zonas de impacto anchas */}
+        {active && (
+          <>
+            <line
+              x1={x(hover!)}
+              x2={x(hover!)}
+              y1={PAD.top}
+              y2={PAD.top + plotH}
+              className="stroke-line-strong"
+              strokeWidth={1}
+              strokeDasharray="3 3"
+            />
+            <circle
+              cx={x(hover!)}
+              cy={y(active[metric])}
+              r={5}
+              className="fill-accent stroke-surface"
+              strokeWidth={2}
+            />
+          </>
+        )}
+        {data.map((d, i) => (
+          <rect
+            key={`hit-${d.day}`}
+            x={x(i) - plotW / data.length / 2}
+            y={PAD.top}
+            width={plotW / data.length}
+            height={plotH}
+            fill="transparent"
+            onMouseEnter={() => setHover(i)}
+          />
+        ))}
+      </svg>
+
+      <figcaption
+        className={cn(
+          'mt-2 h-9 flex items-center gap-3 px-3 rounded-md border text-body',
+          active ? 'bg-sunken border-line' : 'border-transparent',
+        )}
+      >
+        {active ? (
+          <>
+            <span className="font-mono text-ink-2">{active.date}</span>
+            <span className="text-ink-3">·</span>
+            <span className="text-ink-2">Ventas</span>
+            <Money value={active.amount} size="body" className="text-ink font-semibold" />
+            <span className="text-ink-3">·</span>
+            <span className="text-ink-2">Tickets</span>
+            <span className="font-mono tnum text-ink font-semibold">{active.tickets}</span>
+          </>
+        ) : (
+          <span className="text-ink-3">
+            Pase el cursor sobre el gráfico para ver el detalle diario.
+          </span>
+        )}
+      </figcaption>
+    </figure>
+  );
+};
+
+export const DashboardView: React.FC = () => {
+  const [branch, setBranch] = useState('Consolidado Global');
+  const [range, setRange] = useState('30d');
+  const [metric, setMetric] = useState<'amount' | 'tickets'>('amount');
+  const [kind, setKind] = useState<'line' | 'bar'>('line');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [hoveredDay, setHoveredDay] = useState<number | null>(null);
 
-  // Mock 30 days data
-  const salesTrendData = Array.from({ length: 30 }, (_, i) => ({
-    day: i + 1,
-    date: `2026-08-${String(i + 1).padStart(2, '0')}`,
-    amount: Math.floor(Math.random() * 400) + 400,
-    tickets: Math.floor(Math.random() * 10) + 5,
-    avgTicket: 86.40,
-  }));
+  const trend = useMemo<TrendPoint[]>(() => {
+    const rnd = seeded(20260814);
+    return Array.from({ length: 30 }, (_, i) => ({
+      day: i + 1,
+      date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+      amount: Math.floor(rnd() * 400) + 400,
+      tickets: Math.floor(rnd() * 10) + 5,
+    }));
+  }, []);
 
-  const handleRefresh = () => {
+  const refresh = () => {
     setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 600);
+    window.setTimeout(() => setIsRefreshing(false), 600);
   };
 
-  const criticalStockItems = [
-    { sku: 'AB-QSO-002', name: 'Queso Criollo (a granel)', stock: '1.25 kg', min_stock: '5.00 kg' },
-    { sku: 'AB-LAC-006', name: 'Leche Entera 1 Litro (Caja)', stock: '3 u.', min_stock: '10 u.' },
-    { sku: 'EL-AUD-012', name: 'Auriculares Bluetooth Pro', stock: '1 u.', min_stock: '4 u.' },
-    { sku: 'AB-ARZ-001', name: 'Arroz Extra (Bolsa 5kg)', stock: '2 u.', min_stock: '8 u.' },
-    { sku: 'EL-CAB-005', name: 'Cables USB-C Carga Rápida 2m', stock: '0 u.', min_stock: '5 u.' },
+  const stockColumns: Array<Column<(typeof CRITICAL_STOCK)[number]>> = [
+    {
+      key: 'product',
+      header: 'Producto',
+      render: (r) => (
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-ink truncate">{r.name}</p>
+          <p className="font-mono text-micro text-ink-3">{r.sku}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'stock',
+      header: 'Existencia',
+      align: 'right',
+      width: '150px',
+      render: (r) => (
+        <Badge
+          tone={r.stock === 0 ? 'danger' : 'warning'}
+          icon={<AlertTriangle className="w-3 h-3" />}
+        >
+          {r.stock} {r.unit}
+        </Badge>
+      ),
+    },
+    {
+      key: 'min',
+      header: 'Mínimo',
+      align: 'right',
+      width: '90px',
+      render: (r) => (
+        <span className="font-mono tnum text-ink-2">
+          {r.min} {r.unit}
+        </span>
+      ),
+    },
   ];
 
-  const recentSales = [
-    { ticket: 'TK-10024', time: '14:22:10', cashier: 'Juan Pérez', method: 'Efectivo', total: '$145.80', icon: <Banknote className="w-4 h-4 text-emerald-500" /> },
-    { ticket: 'TK-10023', time: '14:10:05', cashier: 'Juan Pérez', method: 'Tarjeta', total: '$320.00', icon: <CreditCard className="w-4 h-4 text-blue-500" /> },
-    { ticket: 'TK-10022', time: '13:45:50', cashier: 'María Gómez', method: 'QR', total: '$85.50', icon: <QrCode className="w-4 h-4 text-purple-500" /> },
-    { ticket: 'TK-10021', time: '13:12:18', cashier: 'Juan Pérez', method: 'Efectivo', total: '$42.30', icon: <Banknote className="w-4 h-4 text-emerald-500" /> },
-    { ticket: 'TK-10020', time: '12:50:00', cashier: 'María Gómez', method: 'Tarjeta', total: '$270.40', icon: <CreditCard className="w-4 h-4 text-blue-500" /> },
+  const salesColumns: Array<Column<(typeof RECENT_SALES)[number]>> = [
+    {
+      key: 'ticket',
+      header: 'Ticket',
+      width: '110px',
+      render: (r) => <span className="font-mono text-body text-ink">{r.ticket}</span>,
+    },
+    {
+      key: 'time',
+      header: 'Hora',
+      width: '70px',
+      render: (r) => <span className="font-mono tnum text-ink-2">{r.time}</span>,
+    },
+    {
+      key: 'cashier',
+      header: 'Cajero',
+      render: (r) => <span className="text-ink-2 truncate">{r.cashier}</span>,
+    },
+    {
+      key: 'method',
+      header: 'Método',
+      width: '120px',
+      render: (r) => <Badge icon={METHOD_ICON[r.method]}>{r.method}</Badge>,
+    },
+    {
+      key: 'total',
+      header: 'Total',
+      align: 'right',
+      width: '110px',
+      render: (r) => <Money value={r.total} size="base" className="text-ink" />,
+    },
   ];
 
   return (
-    <div className="p-6 bg-gray-50 dark:bg-[#000000] h-[calc(100vh-56px)] overflow-y-auto pr-2 space-y-6 select-none transition-colors duration-200">
-      {/* 1. Header & Welcome Top Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#121212] p-5 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-            Bienvenido Administrador, 👋
-          </h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-3">
-            <span>📅 viernes, 14 de agosto de 2026</span>
-            <span>•</span>
-            <span className="font-semibold text-blue-600 dark:text-blue-400">Turno en curso: Mañana #1</span>
-            <span>•</span>
-            <span className="flex items-center gap-1 font-semibold text-gray-700 dark:text-gray-300">
-              <Store className="w-3.5 h-3.5 text-blue-500" /> Sucursal Central
-            </span>
-          </p>
-        </div>
-
-        {/* Quick Controls & Date Filter Button */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Branch Selector */}
-          <select 
-            value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
-            className="px-3 py-2 bg-gray-100 dark:bg-[#0B0C10] text-gray-900 dark:text-white rounded-xl border border-gray-200 dark:border-[#1F2833] text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="Consolidado Global">Consolidado Global</option>
-            <option value="Sucursal Centro">Sucursal Centro</option>
-            <option value="Sucursal Norte">Sucursal Norte</option>
-          </select>
-
-          {/* Time Range Selector */}
-          <select 
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value)}
-            className="px-3 py-2 bg-gray-100 dark:bg-[#0B0C10] text-gray-900 dark:text-white rounded-xl border border-gray-200 dark:border-[#1F2833] text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="30d">Últimos 30 días</option>
-            <option value="today">Hoy</option>
-            <option value="7d">Últimos 7 días</option>
-            <option value="month">Mes actual</option>
-          </select>
-
-          {/* Interactive Date Filter Button */}
-          <button 
-            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
-            title="Filtrar por fecha"
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Filtrar por fecha</span>
-          </button>
-
-          {/* Sync Status Badge */}
-          <button 
-            onClick={() => setIsOnline(!isOnline)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all ${
-              isOnline 
-                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' 
-                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800'
-            }`}
-            title="Alternar estado de sincronización simulación"
-          >
-            {isOnline ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5 animate-pulse" />}
-            {isOnline ? 'Conectado' : 'Modo Local (Offline)'}
-          </button>
-
-          {/* Refresh Button */}
-          <button 
-            onClick={handleRefresh}
-            className="p-2 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all"
-            title="Refrescar métricas"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      {/* Offline Mode Banner */}
-      {!isOnline && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-600 dark:text-amber-400 text-xs font-semibold flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" />
-            Operando en modo local (Offline). Las métricas reflejan exclusivamente la actividad almacenada localmente en SQLite hasta la próxima sincronización.
-          </span>
-        </div>
-      )}
-
-      {/* 2. Top Metric Cards Grid (8 KPIs Financieros en 2 Filas) */}
-      <div className="space-y-4">
-        {/* Fila 1: KPIs Principales de Ventas y Utilidad */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: Ventas Totales */}
-          <div className="p-5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ventas totales</span>
-              <div className="p-2.5 bg-blue-50 dark:bg-blue-950/50 rounded-xl text-blue-500">
-                <ShoppingCart className="w-5 h-5" />
-              </div>
-            </div>
-            <div>
-              <span className="text-3xl font-black font-mono text-gray-900 dark:text-white">$864.00</span>
-            </div>
-            <div className="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-              <ArrowUpRight className="w-4 h-4" />
-              <span>+14.2% respecto al periodo anterior</span>
-            </div>
+    <div className="h-full overflow-y-auto bg-canvas">
+      <div className="max-w-[1600px] mx-auto p-6 space-y-5">
+        {/* Encabezado */}
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-display text-ink">Resumen de operación</h1>
+            <p className="text-base text-ink-2 mt-1">
+              viernes, 14 de agosto de 2026 · Turno Mañana #1 · Sucursal Central
+            </p>
           </div>
 
-          {/* Card 2: Margen Neto */}
-          <div className="p-5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                <span>Neto</span>
-                <div className="group relative cursor-pointer">
-                  <Info className="w-3.5 h-3.5 text-gray-400" />
-                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-gray-900 text-white text-[10px] rounded-lg shadow-lg z-20">
-                    Ganancia bruta menos el Costo Promedio Ponderado (CPP) de la mercadería vendida.
-                  </div>
-                </div>
-              </div>
-              <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl text-emerald-500">
-                <Wallet className="w-5 h-5" />
-              </div>
-            </div>
-            <div>
-              <span className="text-3xl font-black font-mono text-gray-900 dark:text-white">$864.00</span>
-            </div>
-            <div className="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>32.3% de margen de rentabilidad</span>
-            </div>
-          </div>
-
-          {/* Card 3: Facturas Vencidas */}
-          <div className="p-5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Facturas vencidas</span>
-              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 rounded-xl text-rose-500">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-            </div>
-            <div>
-              <span className="text-3xl font-black font-mono text-gray-900 dark:text-white">$0.00</span>
-            </div>
-            <div className="text-xs font-semibold text-rose-600 dark:text-rose-400">
-              0 facturas pendientes de cobro/pago
-            </div>
-          </div>
-
-          {/* Card 4: Retorno Total de Compras */}
-          <div className="p-5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Retorno de compras</span>
-              <div className="p-2.5 bg-purple-50 dark:bg-purple-950/50 rounded-xl text-purple-500">
-                <Download className="w-5 h-5 rotate-180" />
-              </div>
-            </div>
-            <div>
-              <span className="text-3xl font-black font-mono text-gray-900 dark:text-white">$0.00</span>
-            </div>
-            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-              Notas de crédito de proveedores
-            </div>
-          </div>
-        </div>
-
-        {/* Fila 2: KPIs Secundarios de Compras, Devoluciones y Gastos */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 5: Compra Total */}
-          <div className="p-5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Compra total</span>
-              <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/50 rounded-xl text-indigo-500">
-                <Download className="w-5 h-5" />
-              </div>
-            </div>
-            <div>
-              <span className="text-3xl font-black font-mono text-gray-900 dark:text-white">$0.00</span>
-            </div>
-            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-              0 órdenes de compra procesadas
-            </div>
-          </div>
-
-          {/* Card 6: Compra Pendiente */}
-          <div className="p-5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Compra pendiente</span>
-              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/50 rounded-xl text-amber-500">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-            </div>
-            <div>
-              <span className="text-3xl font-black font-mono text-gray-900 dark:text-white">$0.00</span>
-            </div>
-            <div className="text-xs font-semibold text-amber-600 dark:text-amber-400">
-              0 pedidos pendientes por recibir
-            </div>
-          </div>
-
-          {/* Card 7: Registro de Devoluciones Totales */}
-          <div className="p-5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Devoluciones totales</span>
-              <div className="p-2.5 bg-[#FF6B6B]/10 rounded-xl text-[#FF6B6B]">
-                <ShoppingCart className="w-5 h-5 rotate-180" />
-              </div>
-            </div>
-            <div>
-              <span className="text-3xl font-black font-mono text-gray-900 dark:text-white">$0.00</span>
-            </div>
-            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-              Devoluciones de clientes en mostrador
-            </div>
-          </div>
-
-          {/* Card 8: Control Acumulado de Gastos Operativos */}
-          <div className="p-5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Gastos operativos</span>
-              <div className="p-2.5 bg-cyan-50 dark:bg-cyan-950/50 rounded-xl text-cyan-500">
-                <Wallet className="w-5 h-5" />
-              </div>
-            </div>
-            <div>
-              <span className="text-3xl font-black font-mono text-gray-900 dark:text-white">$0.00</span>
-            </div>
-            <div className="text-xs font-semibold text-cyan-600 dark:text-cyan-400">
-              Egresos acumulados de caja chica
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Central Module: Sales Trend Chart (30 Days) */}
-      <div className="p-6 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-5">
-        {/* Chart Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 dark:border-[#1F2833] pb-4">
+          {/* Los filtros van en una sola fila sobre los gráficos */}
           <div className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-blue-500" />
-            <h2 className="font-extrabold text-base text-gray-900 dark:text-white">Ventas de los últimos 30 días</h2>
+            <Select
+              value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+              aria-label="Sucursal"
+            >
+              <option>Consolidado Global</option>
+              <option>Sucursal Centro</option>
+              <option>Sucursal Norte</option>
+            </Select>
+            <Select
+              value={range}
+              onChange={(e) => setRange(e.target.value)}
+              aria-label="Rango de fechas"
+            >
+              <option value="today">Hoy</option>
+              <option value="7d">Últimos 7 días</option>
+              <option value="30d">Últimos 30 días</option>
+              <option value="month">Mes actual</option>
+            </Select>
+            <Button variant="secondary" icon={<Calendar className="w-3.5 h-3.5" />}>
+              Fechas
+            </Button>
+            <Button
+              variant="ghost"
+              icon={<RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />}
+              onClick={refresh}
+              aria-label="Actualizar"
+            >
+              Actualizar
+            </Button>
           </div>
+        </header>
 
-          <div className="flex items-center gap-3">
-            {/* View Mode Toggle */}
-            <div className="flex items-center bg-gray-100 dark:bg-[#0B0C10] p-1 rounded-xl border border-gray-200 dark:border-[#1F2833]">
-              <button 
-                onClick={() => setChartType('line')}
-                className={`p-1.5 rounded-lg text-xs font-bold transition-all ${chartType === 'line' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'}`}
-                title="Vista de Línea con área"
-              >
-                <LineChartIcon className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={() => setChartType('bar')}
-                className={`p-1.5 rounded-lg text-xs font-bold transition-all ${chartType === 'bar' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'}`}
-                title="Vista de Barras verticales"
-              >
-                <BarChart3 className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Metric Toggle */}
-            <div className="flex items-center bg-gray-100 dark:bg-[#0B0C10] p-1 rounded-xl border border-gray-200 dark:border-[#1F2833]">
-              <button 
-                onClick={() => setChartMetric('amount')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${chartMetric === 'amount' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'}`}
-              >
-                Monto ($)
-              </button>
-              <button 
-                onClick={() => setChartMetric('tickets')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${chartMetric === 'tickets' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'}`}
-              >
-                Tickets
-              </button>
-            </div>
-          </div>
+        {/* Indicadores */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+          <StatTile
+            label="Ventas del periodo"
+            value={<Money value={25_940.5} size="display" />}
+            delta={14.2}
+            hint="vs. periodo anterior"
+            icon={<ShoppingCart className="w-4 h-4" />}
+            tone="accent"
+          />
+          <StatTile
+            label="Margen neto"
+            value={<Money value={8_378.4} size="display" />}
+            delta={3.1}
+            hint="32.3% de rentabilidad"
+            icon={<Wallet className="w-4 h-4" />}
+            tone="success"
+          />
+          <StatTile
+            label="Ticket promedio"
+            value={<Money value={86.4} size="display" />}
+            delta={-1.8}
+            hint="300 tickets emitidos"
+            icon={<ArrowUpRight className="w-4 h-4" />}
+          />
+          <StatTile
+            label="Stock crítico"
+            value={CRITICAL_STOCK.length}
+            hint="productos bajo mínimo"
+            icon={<Package className="w-4 h-4" />}
+            tone="warning"
+          />
         </div>
 
-        {/* Visual Chart Area */}
-        <div className="relative h-64 w-full pt-4">
-          {/* Y Axis Guide Lines */}
-          <div className="absolute inset-0 flex flex-col justify-between text-[10px] font-mono text-gray-400 pointer-events-none pb-6">
-            <div className="border-b border-gray-100 dark:border-[#1F2833]/50 w-full flex justify-between"><span>10k</span></div>
-            <div className="border-b border-gray-100 dark:border-[#1F2833]/50 w-full flex justify-between"><span>7.5k</span></div>
-            <div className="border-b border-gray-100 dark:border-[#1F2833]/50 w-full flex justify-between"><span>5k</span></div>
-            <div className="border-b border-gray-100 dark:border-[#1F2833]/50 w-full flex justify-between"><span>2.5k</span></div>
-            <div className="w-full flex justify-between"><span>0k</span></div>
-          </div>
-
-          {/* Interactive Trend Bar/Line Rendering */}
-          <div className="relative h-48 w-full flex items-end justify-between gap-1 pt-4 z-10">
-            {salesTrendData.map((d, i) => {
-              const val = chartMetric === 'amount' ? d.amount : d.tickets * 80;
-              const maxVal = 800;
-              const heightPct = Math.min(100, Math.max(10, (val / maxVal) * 100));
-
-              return (
-                <div 
-                  key={i} 
-                  className="flex-1 flex flex-col items-center group relative h-full justify-end"
-                  onMouseEnter={() => setHoveredDay(i)}
-                  onMouseLeave={() => setHoveredDay(null)}
-                >
-                  {/* Tooltip Hover Box */}
-                  {hoveredDay === i && (
-                    <div className="absolute bottom-full mb-2 bg-gray-900 text-white text-xs p-2.5 rounded-xl shadow-xl z-30 w-44 pointer-events-none border border-gray-700">
-                      <p className="font-bold border-b border-gray-700 pb-1 text-blue-400">{d.date}</p>
-                      <div className="mt-1 space-y-0.5 text-[11px] font-mono">
-                        <p className="flex justify-between"><span>Facturado:</span> <span className="font-bold text-white">${d.amount}.00</span></p>
-                        <p className="flex justify-between"><span>Ventas:</span> <span>{d.tickets} tickets</span></p>
-                        <p className="flex justify-between"><span>Promedio:</span> <span>${d.avgTicket.toFixed(2)}</span></p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Render Chart Representation */}
-                  {chartType === 'bar' ? (
-                    <div 
-                      style={{ height: `${heightPct}%` }}
-                      className="w-full bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-400 rounded-t transition-all duration-200"
-                    />
-                  ) : (
-                    <div className="w-full flex flex-col items-center justify-end h-full">
-                      <div 
-                        style={{ height: `${heightPct}%` }}
-                        className="w-2 bg-gradient-to-t from-blue-500/20 to-blue-500 rounded-t group-hover:bg-blue-400 transition-all duration-200 relative"
-                      >
-                        <div className="w-2.5 h-2.5 bg-blue-600 rounded-full absolute top-0 -left-0.25 shadow" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* X Axis Label */}
-                  <span className="text-[9px] font-mono text-gray-400 mt-2">{d.day}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Support Panels & Operational Widgets */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Block A: Critical Stock Alert */}
-        <div className="p-5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#1F2833] pb-3">
-            <div className="flex items-center gap-2 text-amber-500">
-              <AlertTriangle className="w-5 h-5" />
-              <h3 className="font-bold text-base text-gray-900 dark:text-white">Alerta de Stock Crítico</h3>
-            </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-full border border-amber-200">
-              5 Ítems
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            {criticalStockItems.map((item, idx) => (
-              <div key={idx} className="p-3 bg-gray-50 dark:bg-[#0B0C10] rounded-xl flex items-center justify-between border border-gray-100 dark:border-[#1F2833] text-xs">
-                <div>
-                  <p className="font-bold text-gray-900 dark:text-white leading-tight">{item.name}</p>
-                  <span className="text-[10px] text-gray-400 font-mono">SKU: {item.sku}</span>
-                </div>
-                <div className="text-right space-y-1">
-                  <span className="block font-mono font-bold text-red-500">{item.stock}</span>
-                  <button className="px-2 py-0.5 bg-blue-600 text-white rounded text-[10px] font-bold hover:bg-blue-700 transition-colors">
-                    Generar OC
+        {/* Tendencia */}
+        <Card
+          title="Ventas de los últimos 30 días"
+          icon={<LineChartIcon className="w-4 h-4" />}
+          action={
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-md border border-line overflow-hidden">
+                {(['amount', 'tickets'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMetric(m)}
+                    className={cn(
+                      'h-8 px-3 text-body font-semibold transition-colors duration-fast ease-ease',
+                      metric === m
+                        ? 'bg-accent-soft text-accent-ink'
+                        : 'bg-raised text-ink-2 hover:text-ink',
+                    )}
+                  >
+                    {m === 'amount' ? 'Monto' : 'Tickets'}
                   </button>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Block B: Live Shift Sales Feed */}
-        <div className="p-5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#1F2833] pb-3">
-            <div className="flex items-center gap-2 text-emerald-500">
-              <Clock className="w-5 h-5" />
-              <h3 className="font-bold text-base text-gray-900 dark:text-white">Últimas Ventas del Turno</h3>
+              <div className="flex rounded-md border border-line overflow-hidden">
+                {(['line', 'bar'] as const).map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => setKind(k)}
+                    aria-label={k === 'line' ? 'Ver como línea' : 'Ver como barras'}
+                    className={cn(
+                      'h-8 w-9 flex items-center justify-center transition-colors duration-fast ease-ease',
+                      kind === k
+                        ? 'bg-accent-soft text-accent-ink'
+                        : 'bg-raised text-ink-2 hover:text-ink',
+                    )}
+                  >
+                    {k === 'line' ? (
+                      <LineChartIcon className="w-4 h-4" />
+                    ) : (
+                      <BarChart3 className="w-4 h-4" />
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-200">
-              En Vivo
-            </span>
-          </div>
+          }
+        >
+          <TrendChart data={trend} metric={metric} kind={kind} />
+        </Card>
 
-          <div className="space-y-2">
-            {recentSales.map((sale, idx) => (
-              <div key={idx} className="p-3 bg-gray-50 dark:bg-[#0B0C10] rounded-xl flex items-center justify-between border border-gray-100 dark:border-[#1F2833] text-xs">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-white dark:bg-[#121212] rounded-lg border border-gray-200 dark:border-[#1F2833]">
-                    {sale.icon}
-                  </div>
-                  <div>
-                    <p className="font-bold font-mono text-gray-900 dark:text-white">{sale.ticket}</p>
-                    <span className="text-[10px] text-gray-400">{sale.time} • {sale.cashier}</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="block font-mono font-bold text-gray-900 dark:text-white">{sale.total}</span>
-                  <span className="text-[10px] text-gray-500 font-semibold">{sale.method}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* Atención inmediata */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Card
+            title="Stock bajo mínimo"
+            subtitle="Ordenado por urgencia"
+            icon={<AlertTriangle className="w-4 h-4" />}
+            padding="none"
+          >
+            <DataTable
+              columns={stockColumns}
+              rows={CRITICAL_STOCK}
+              rowKey={(r) => r.sku}
+              dense
+              className="border-0 rounded-none"
+              empty={<EmptyState icon={<Package className="w-6 h-6" />} title="Sin faltantes" />}
+            />
+          </Card>
 
-          <div className="pt-2 border-t border-gray-100 dark:border-[#1F2833] text-center">
-            <button className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline">
-              Ver historial completo de ventas →
-            </button>
-          </div>
-        </div>
-
-        {/* Block C: Quick Action Buttons */}
-        <div className="p-5 bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#1F2833] pb-3">
-            <h3 className="font-bold text-base text-gray-900 dark:text-white">Accesos Directos</h3>
-            <span className="text-xs text-gray-400">Operaciones frecuentes</span>
-          </div>
-
-          <div className="space-y-3">
-            {/* Direct Action 1: Open POS Terminal */}
-            <button 
-              onClick={onNavigateToPos}
-              className="w-full p-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl shadow-md flex items-center justify-between group transition-all"
-            >
-              <span className="flex items-center gap-3">
-                <ShoppingCart className="w-5 h-5" />
-                <span>Abrir Terminal POS (Caja)</span>
-              </span>
-              <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-            </button>
-
-            {/* Direct Action 2: Petty Cash Expense */}
-            <button 
-              onClick={onNavigateToShift}
-              className="w-full p-3 bg-gray-50 dark:bg-[#0B0C10] hover:bg-gray-100 dark:hover:bg-[#1A1D20] text-gray-900 dark:text-white font-bold text-xs rounded-xl border border-gray-200 dark:border-[#1F2833] flex items-center justify-between transition-all"
-            >
-              <span className="flex items-center gap-2">
-                <Wallet className="w-4 h-4 text-emerald-500" />
-                <span>Registrar Gasto de Caja Chica</span>
-              </span>
-              <span>→</span>
-            </button>
-
-            {/* Direct Action 3: Shift Closing Audit */}
-            <button 
-              onClick={onNavigateToShift}
-              className="w-full p-3 bg-gray-50 dark:bg-[#0B0C10] hover:bg-gray-100 dark:hover:bg-[#1A1D20] text-gray-900 dark:text-white font-bold text-xs rounded-xl border border-gray-200 dark:border-[#1F2833] flex items-center justify-between transition-all"
-            >
-              <span className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-purple-500" />
-                <span>Realizar Conteo / Arqueo de Caja</span>
-              </span>
-              <span>→</span>
-            </button>
-
-            {/* Direct Action 4: Quick New Product */}
-            <button className="w-full p-3 bg-gray-50 dark:bg-[#0B0C10] hover:bg-gray-100 dark:hover:bg-[#1A1D20] text-gray-900 dark:text-white font-bold text-xs rounded-xl border border-gray-200 dark:border-[#1F2833] flex items-center justify-between transition-all">
-              <span className="flex items-center gap-2">
-                <PlusCircle className="w-4 h-4 text-blue-500" />
-                <span>Nuevo Producto Rápido</span>
-              </span>
-              <span>+</span>
-            </button>
-          </div>
+          <Card
+            title="Últimas ventas"
+            subtitle="Turno en curso"
+            icon={<ShoppingCart className="w-4 h-4" />}
+            padding="none"
+          >
+            <DataTable
+              columns={salesColumns}
+              rows={RECENT_SALES}
+              rowKey={(r) => r.ticket}
+              dense
+              className="border-0 rounded-none"
+              empty={
+                <EmptyState icon={<ShoppingCart className="w-6 h-6" />} title="Sin ventas aún" />
+              }
+            />
+          </Card>
         </div>
       </div>
     </div>
   );
 };
-

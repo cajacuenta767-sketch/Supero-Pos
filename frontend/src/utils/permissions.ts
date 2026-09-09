@@ -113,7 +113,10 @@ export const ROLE_PERMISSIONS: Record<string, Record<PermissionKey, boolean>> = 
   },
 };
 
-export function hasPermission(role: UserRole | undefined | null, permission: PermissionKey): boolean {
+export function hasPermission(
+  role: UserRole | undefined | null,
+  permission: PermissionKey,
+): boolean {
   if (!role) return false;
   const normalizedRole = role.toUpperCase();
   if (normalizedRole === 'ADMIN') return true;

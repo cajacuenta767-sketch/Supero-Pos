@@ -1,6 +1,8 @@
-﻿node_modules/
-dist/
-build/
-.env
 .DS_Store
-.gemini/
+.env
+.gemini/dist/
+build/
+dist/
+dist-demo/
+dist-electron/
+node_modules/

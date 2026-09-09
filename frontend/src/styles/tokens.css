@@ -1,0 +1,98 @@
+/* ============================================================================
+   OBSIDIANA — Design Tokens · Supero POS
+   Única fuente de verdad visual. Ningún componente define color literal.
+   Canales RGB para soportar los modificadores de opacidad de Tailwind.
+   ========================================================================= */
+
+:root {
+  /* --- Superficies ------------------------------------------------------ */
+  --bg-canvas: 246 247 249;
+  --bg-surface: 255 255 255;
+  --bg-raised: 255 255 255;
+  --bg-sunken: 239 241 244;
+
+  /* --- Líneas ----------------------------------------------------------- */
+  --line-subtle: 231 233 238;
+  --line-strong: 212 216 224;
+
+  /* --- Texto ------------------------------------------------------------ */
+  --ink-1: 18 20 26;
+  --ink-2: 90 98 114;
+  --ink-3: 138 146 163;
+
+  /* --- Acento ----------------------------------------------------------- */
+  --accent: 13 91 240;
+  --accent-hover: 10 76 205;
+  --accent-soft: 232 240 254;
+  --accent-ink: 13 91 240;
+
+  /* --- Semántica de estado --------------------------------------------- */
+  --ok: 14 159 110;
+  --ok-soft: 220 246 236;
+  --ok-ink: 7 110 76;
+
+  --warn: 217 119 6;
+  --warn-soft: 254 243 218;
+  --warn-ink: 146 76 6;
+
+  --danger: 220 38 38;
+  --danger-soft: 254 231 231;
+  --danger-ink: 166 26 26;
+
+  /* --- Forma: tres radios, no siete ------------------------------------ */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+
+  /* --- Elevación: en claro es sombra ----------------------------------- */
+  --e-1: 0 1px 2px rgb(18 20 26 / 0.06);
+  --e-2: 0 4px 12px rgb(18 20 26 / 0.08), 0 1px 2px rgb(18 20 26 / 0.04);
+  --e-3: 0 24px 48px rgb(18 20 26 / 0.18), 0 2px 8px rgb(18 20 26 / 0.08);
+
+  /* --- Movimiento: una sola curva --------------------------------------- */
+  --t-fast: 120ms;
+  --t-base: 180ms;
+  --t-slow: 280ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  color-scheme: light;
+}
+
+.dark {
+  /* Negro real: en OLED apaga el píxel. Menos fatiga, contraste absoluto. */
+  --bg-canvas: 0 0 0;
+  --bg-surface: 11 12 16;
+  --bg-raised: 18 19 22;
+  --bg-sunken: 8 9 11;
+
+  --line-subtle: 26 28 34;
+  --line-strong: 40 44 54;
+
+  --ink-1: 244 245 247;
+  --ink-2: 160 166 180;
+  --ink-3: 107 114 128;
+
+  --accent: 59 130 246;
+  --accent-hover: 96 155 250;
+  --accent-soft: 15 30 61;
+  --accent-ink: 147 197 253;
+
+  --ok: 52 211 153;
+  --ok-soft: 6 46 35;
+  --ok-ink: 110 231 183;
+
+  --warn: 251 191 36;
+  --warn-soft: 52 35 4;
+  --warn-ink: 253 224 118;
+
+  --danger: 248 113 113;
+  --danger-soft: 56 16 16;
+  --danger-ink: 252 165 165;
+
+  /* Sobre negro la sombra no existe. La elevación se expresa con luz. */
+  --e-1: inset 0 1px 0 rgb(255 255 255 / 0.03);
+  --e-2: 0 2px 12px rgb(0 0 0 / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.04);
+  --e-3: 0 32px 64px rgb(0 0 0 / 0.8), inset 0 1px 0 rgb(255 255 255 / 0.06);
+
+  color-scheme: dark;
+}

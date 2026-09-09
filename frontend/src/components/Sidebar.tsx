@@ -1,11 +1,26 @@
-import React from 'react';
-import { 
-  Home, Users, Contact, Package, ShoppingCart, ShoppingBag, 
-  ArrowLeftRight, Sliders, DollarSign, CreditCard, BarChart3, 
-  Bell, Settings, Sun, Moon, UserCheck, LogOut
+import React, { useState } from 'react';
+import {
+  Home,
+  Users,
+  Contact,
+  Package,
+  ShoppingCart,
+  ShoppingBag,
+  ArrowLeftRight,
+  Sliders,
+  DollarSign,
+  CreditCard,
+  BarChart3,
+  Bell,
+  Settings,
+  Sun,
+  Moon,
+  UserCheck,
+  LogOut,
 } from 'lucide-react';
 import { useAuthStore, UserRole } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
+import { cn } from '../ui';
 
 interface SidebarItem {
   id: string;
@@ -14,107 +29,264 @@ interface SidebarItem {
   roles: UserRole[];
 }
 
+interface SidebarGroup {
+  label: string;
+  items: SidebarItem[];
+}
+
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
 }
 
+const ico = 'w-[18px] h-[18px]';
+
+/* Agrupado por intención de uso, no por numeración de especificación. */
+const GROUPS: SidebarGroup[] = [
+  {
+    label: 'Operación',
+    items: [
+      {
+        id: 'home',
+        name: 'Hogar',
+        icon: <Home className={ico} />,
+        roles: ['ADMIN', 'SUPERVISOR', 'CAJERO', 'ALMACENERO'],
+      },
+      {
+        id: 'pos',
+        name: 'Vender',
+        icon: <ShoppingBag className={ico} />,
+        roles: ['ADMIN', 'SUPERVISOR', 'CAJERO'],
+      },
+      {
+        id: 'purchases',
+        name: 'Compras',
+        icon: <ShoppingCart className={ico} />,
+        roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'],
+      },
+      {
+        id: 'transfers',
+        name: 'Transferencias',
+        icon: <ArrowLeftRight className={ico} />,
+        roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'],
+      },
+    ],
+  },
+  {
+    label: 'Catálogo',
+    items: [
+      {
+        id: 'products',
+        name: 'Productos',
+        icon: <Package className={ico} />,
+        roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'],
+      },
+      {
+        id: 'contacts',
+        name: 'Contactos',
+        icon: <Contact className={ico} />,
+        roles: ['ADMIN', 'SUPERVISOR'],
+      },
+      {
+        id: 'stock-adjust',
+        name: 'Ajuste de Stock',
+        icon: <Sliders className={ico} />,
+        roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'],
+      },
+    ],
+  },
+  {
+    label: 'Gestión',
+    items: [
+      {
+        id: 'reports',
+        name: 'Informes',
+        icon: <BarChart3 className={ico} />,
+        roles: ['ADMIN', 'SUPERVISOR', 'CAJERO'],
+      },
+      {
+        id: 'accounts',
+        name: 'Cuentas',
+        icon: <CreditCard className={ico} />,
+        roles: ['ADMIN', 'SUPERVISOR'],
+      },
+      {
+        id: 'expenses',
+        name: 'Gastos',
+        icon: <DollarSign className={ico} />,
+        roles: ['ADMIN', 'SUPERVISOR'],
+      },
+      { id: 'users', name: 'Usuarios', icon: <Users className={ico} />, roles: ['ADMIN'] },
+      { id: 'hr', name: 'Recursos Humanos', icon: <UserCheck className={ico} />, roles: ['ADMIN'] },
+      {
+        id: 'notifications',
+        name: 'Notificaciones',
+        icon: <Bell className={ico} />,
+        roles: ['ADMIN', 'SUPERVISOR'],
+      },
+      { id: 'settings', name: 'Ajustes', icon: <Settings className={ico} />, roles: ['ADMIN'] },
+    ],
+  },
+];
+
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const { user, logout } = useAuthStore();
   const { isDarkMode, toggleTheme } = useThemeStore();
+  const [open, setOpen] = useState(false);
+
   const userRole = user?.role || 'ADMIN';
+  const initials = (user?.name || 'Usuario')
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
 
-  const menuItems: SidebarItem[] = [
-    { id: 'home', name: '1. Hogar (Dashboard)', icon: <Home className="w-5 h-5" />, roles: ['ADMIN', 'SUPERVISOR', 'CAJERO', 'ALMACENERO'] },
-    { id: 'users', name: '2. Gestión de Usuarios', icon: <Users className="w-5 h-5" />, roles: ['ADMIN'] },
-    { id: 'contacts', name: '3. Contactos', icon: <Contact className="w-5 h-5" />, roles: ['ADMIN', 'SUPERVISOR'] },
-    { id: 'products', name: '4. Productos', icon: <Package className="w-5 h-5" />, roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'] },
-    { id: 'purchases', name: '5. Compras y Abastecimiento', icon: <ShoppingCart className="w-5 h-5" />, roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'] },
-    { id: 'pos', name: '6. Vender (POS)', icon: <ShoppingBag className="w-5 h-5" />, roles: ['ADMIN', 'SUPERVISOR', 'CAJERO'] },
-    { id: 'transfers', name: '7. Transferencias y Traspasos', icon: <ArrowLeftRight className="w-5 h-5" />, roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'] },
-    { id: 'stock-adjust', name: '8. Ajuste de Stock & Mermas', icon: <Sliders className="w-5 h-5" />, roles: ['ADMIN', 'SUPERVISOR', 'ALMACENERO'] },
-    { id: 'expenses', name: '9. Gastos Operativos', icon: <DollarSign className="w-5 h-5" />, roles: ['ADMIN', 'SUPERVISOR'] },
-    { id: 'accounts', name: '10. Cuentas Pago/Cobro', icon: <CreditCard className="w-5 h-5" />, roles: ['ADMIN', 'SUPERVISOR'] },
-    { id: 'reports', name: '11. Historial Ventas & Informes', icon: <BarChart3 className="w-5 h-5" />, roles: ['ADMIN', 'SUPERVISOR', 'CAJERO'] },
-    { id: 'notifications', name: '12. Plantillas Notificación & Tickets', icon: <Bell className="w-5 h-5" />, roles: ['ADMIN', 'SUPERVISOR'] },
-    { id: 'settings', name: '13. Ajustes', icon: <Settings className="w-5 h-5" />, roles: ['ADMIN'] },
-    { id: 'hr', name: '14. Recursos Humanos & Fichaje', icon: <UserCheck className="w-5 h-5" />, roles: ['ADMIN'] },
-  ];
-
-  // RBAC Filter: Show allowed sidebar modules
-  const visibleItems = menuItems.filter(item => item.roles.includes(userRole));
-
+  /* Riel de 72px que expande a 248px al hover: +176px para el catálogo del POS. */
   return (
-    <aside className="w-64 bg-white dark:bg-[#0B0C10] border-r border-gray-200 dark:border-[#1F2833] flex flex-col justify-between transition-colors duration-200 h-screen select-none">
-      <div>
-        {/* Brand Header */}
-        <div className="p-4 border-b border-gray-200 dark:border-[#1F2833] flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
-              S
-            </div>
-            <div>
-              <h1 className="font-bold text-gray-900 dark:text-white leading-none text-base">SUPERO POS</h1>
-              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Enterprise v2.0</span>
-            </div>
+    <div className="relative shrink-0 w-[72px] h-screen">
+      <aside
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        className={cn(
+          'absolute inset-y-0 left-0 bg-surface border-r border-line flex flex-col',
+          'transition-[width] duration-base ease-ease select-none z-30',
+          /* La expansión se superpone en lugar de empujar: el ancho reservado
+             al contenido es siempre 72px, sea cual sea el tamaño de ventana. */
+          open ? 'w-[248px] shadow-e2' : 'w-[72px]',
+        )}
+      >
+        {/* Marca */}
+        <div className="h-14 flex items-center gap-3 px-4 border-b border-line shrink-0">
+          <div className="w-9 h-9 shrink-0 rounded-md bg-accent text-white flex items-center justify-center font-bold text-title">
+            S
+          </div>
+          <div
+            className={cn(
+              'min-w-0 transition-opacity duration-base ease-ease',
+              open ? 'opacity-100' : 'opacity-0',
+            )}
+          >
+            <p className="text-base font-bold text-ink leading-tight whitespace-nowrap">
+              SUPERO POS
+            </p>
+            <p className="text-micro text-ink-3 whitespace-nowrap">Enterprise v2.0</p>
           </div>
         </div>
 
-        {/* User Info Capsule */}
-        <div className="p-3 mx-3 my-3 bg-gray-100 dark:bg-[#121212] rounded-lg border border-gray-200 dark:border-[#1F2833] flex items-center justify-between">
-          <div className="truncate">
-            <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{user?.name || 'Juan Pérez (Cajero)'}</p>
-            <span className="inline-block mt-0.5 px-2 py-0.5 text-[10px] font-bold rounded bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300">
-              {userRole || 'CAJERO'}
-            </span>
-          </div>
-        </div>
+        {/* Navegación agrupada */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3">
+          {GROUPS.map((group) => {
+            const visible = group.items.filter((i) => i.roles.includes(userRole));
+            if (visible.length === 0) return null;
 
-        {/* 13-Module Menu List */}
-        <nav className="px-2 space-y-1 overflow-y-auto max-h-[calc(100vh-270px)]">
-          {visibleItems.map((item) => {
-            const isActive = activeTab === item.id;
             return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#121212]'
-                }`}
-              >
-                <span className={isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400'}>{item.icon}</span>
-                <span className="truncate">{item.name}</span>
-              </button>
+              <div key={group.label} className="mb-4 last:mb-0">
+                <p
+                  className={cn(
+                    'px-5 mb-1.5 text-micro uppercase text-ink-3 whitespace-nowrap',
+                    'transition-opacity duration-base ease-ease',
+                    open ? 'opacity-100' : 'opacity-0',
+                  )}
+                >
+                  {group.label}
+                </p>
+
+                <div className="px-2 space-y-0.5">
+                  {visible.map((item) => {
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setActiveTab(item.id)}
+                        title={item.name}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={cn(
+                          'relative w-full h-11 flex items-center gap-3 px-[14px] rounded-md',
+                          'text-base font-medium transition-colors duration-fast ease-ease',
+                          isActive
+                            ? 'bg-accent-soft text-accent-ink'
+                            : 'text-ink-2 hover:bg-sunken hover:text-ink',
+                        )}
+                      >
+                        {/* Barra de acento en lugar de bloque azul sólido */}
+                        {isActive && (
+                          <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-accent" />
+                        )}
+                        <span className="shrink-0">{item.icon}</span>
+                        <span
+                          className={cn(
+                            'whitespace-nowrap transition-opacity duration-base ease-ease',
+                            open ? 'opacity-100' : 'opacity-0',
+                          )}
+                        >
+                          {item.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </nav>
-      </div>
 
-      {/* Theme Switcher & Logout */}
-      <div className="p-3 border-t border-gray-200 dark:border-[#1F2833] space-y-2">
-        <button
-          onClick={toggleTheme}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-[#121212] text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-[#1F2833] transition-colors"
-        >
-          <span className="flex items-center space-x-2">
-            {isDarkMode ? <Moon className="w-4 h-4 text-blue-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
-            <span>{isDarkMode ? 'Modo Oscuro' : 'Modo Claro'}</span>
-          </span>
-          <span className="text-xs px-2 py-0.5 rounded font-mono bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-            {isDarkMode ? 'DARK' : 'LIGHT'}
-          </span>
-        </button>
+        {/* Usuario, tema y salida */}
+        <div className="border-t border-line p-2 space-y-0.5 shrink-0">
+          <div className="h-11 flex items-center gap-3 px-[14px]">
+            <span className="w-7 h-7 shrink-0 rounded-full bg-sunken text-ink-2 flex items-center justify-center text-micro font-bold">
+              {initials}
+            </span>
+            <div
+              className={cn(
+                'min-w-0 transition-opacity duration-base ease-ease',
+                open ? 'opacity-100' : 'opacity-0',
+              )}
+            >
+              <p className="text-body font-semibold text-ink truncate leading-tight">
+                {user?.name || 'Usuario'}
+              </p>
+              <p className="text-micro text-ink-3">{userRole}</p>
+            </div>
+          </div>
 
-        <button
-          onClick={logout}
-          className="w-full flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Cerrar Sesión</span>
-        </button>
-      </div>
-    </aside>
+          <button
+            onClick={toggleTheme}
+            title={isDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            className="w-full h-11 flex items-center gap-3 px-[14px] rounded-md text-base font-medium text-ink-2 hover:bg-sunken hover:text-ink transition-colors duration-fast ease-ease"
+          >
+            <span className="shrink-0">
+              {isDarkMode ? <Moon className={ico} /> : <Sun className={ico} />}
+            </span>
+            <span
+              className={cn(
+                'whitespace-nowrap transition-opacity duration-base ease-ease',
+                open ? 'opacity-100' : 'opacity-0',
+              )}
+            >
+              {isDarkMode ? 'Modo oscuro' : 'Modo claro'}
+            </span>
+          </button>
+
+          <button
+            onClick={logout}
+            title="Cerrar sesión"
+            className="w-full h-11 flex items-center gap-3 px-[14px] rounded-md text-base font-medium text-ink-2 hover:bg-danger-soft hover:text-danger transition-colors duration-fast ease-ease"
+          >
+            <span className="shrink-0">
+              <LogOut className={ico} />
+            </span>
+            <span
+              className={cn(
+                'whitespace-nowrap transition-opacity duration-base ease-ease',
+                open ? 'opacity-100' : 'opacity-0',
+              )}
+            >
+              Cerrar sesión
+            </span>
+          </button>
+        </div>
+      </aside>
+    </div>
   );
 };

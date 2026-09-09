@@ -37,4 +37,3 @@ export const useOfflineSync = () => {
 
   return { isOnline, pendingCount, syncWorker };
 };
-

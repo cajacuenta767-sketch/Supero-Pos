@@ -1,12 +1,46 @@
 import React, { useState } from 'react';
-import { 
-  ArrowLeftRight, 
-  Plus, 
-  Search, 
-  Truck, 
-  Printer, 
-  Eye
-} from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Eye, Plus, Truck } from 'lucide-react';
+import {
+  Badge,
+  Button,
+  DataTable,
+  DescriptionList,
+  EmptyState,
+  IconButton,
+  Modal,
+  PageHeader,
+  Select,
+  Tabs,
+  Textarea,
+  Toolbar,
+  ToolbarSelect,
+  useToast,
+} from '../ui';
+import type { Column, TabItem } from '../ui';
+
+type SubTab = 'catalog' | 'reception' | 'discrepancies';
+
+const TABS: TabItem[] = [
+  { id: 'catalog', label: 'Guías', icon: <ArrowLeftRight className="w-4 h-4" /> },
+  { id: 'reception', label: 'Recepción', icon: <Truck className="w-4 h-4" /> },
+  { id: 'discrepancies', label: 'Diferencias', icon: <Eye className="w-4 h-4" /> },
+];
+
+const STATUS_LABEL: Record<TransferGuide['status'], string> = {
+  PENDING: 'Pendiente de envío',
+  IN_TRANSIT: 'En tránsito',
+  COMPLETED: 'Recibida',
+  CANCELLED: 'Anulada',
+};
+
+const STATUS_TONE: Record<TransferGuide['status'], 'warning' | 'accent' | 'success' | 'danger'> = {
+  PENDING: 'warning',
+  IN_TRANSIT: 'accent',
+  COMPLETED: 'success',
+  CANCELLED: 'danger',
+};
+
+const BRANCHES = ['Almacén Central', 'Sucursal Centro', 'Sucursal Norte', 'Sucursal Sur'];
 
 interface TransferItem {
   id: number;
@@ -30,7 +64,9 @@ interface TransferGuide {
 }
 
 export const TransfersView: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'reception' | 'discrepancies'>('catalog');
+  const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'reception' | 'discrepancies'>(
+    'catalog',
+  );
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,9 +95,24 @@ export const TransfersView: React.FC = () => {
       status: 'IN_TRANSIT',
       notes: 'Reabastecimiento urgente por alta demanda en fin de semana',
       items: [
-        { id: 1, sku: 'SKU-1001', name: 'Coca Cola 2 Litros Retornable', source_stock: 120, qty: 30, unit_type: 'UNIT' },
-        { id: 3, sku: 'SKU-1003', name: 'Smartphone Samsung Galaxy A54 128GB', source_stock: 8, qty: 2, unit_type: 'SERIALIZED', serials: ['IMEI-358492019482710', 'IMEI-358492019482711'] }
-      ]
+        {
+          id: 1,
+          sku: 'SKU-1001',
+          name: 'Coca Cola 2 Litros Retornable',
+          source_stock: 120,
+          qty: 30,
+          unit_type: 'UNIT',
+        },
+        {
+          id: 3,
+          sku: 'SKU-1003',
+          name: 'Smartphone Samsung Galaxy A54 128GB',
+          source_stock: 8,
+          qty: 2,
+          unit_type: 'SERIALIZED',
+          serials: ['IMEI-358492019482710', 'IMEI-358492019482711'],
+        },
+      ],
     },
     {
       id: 'TR-3002',
@@ -72,308 +123,338 @@ export const TransfersView: React.FC = () => {
       status: 'COMPLETED',
       notes: 'Devolución de excedente de inventario',
       items: [
-        { id: 2, sku: 'SKU-1002', name: 'Queso Criollo San Javier (Kg)', source_stock: 15, qty: 5.500, unit_type: 'FRACTION' }
-      ]
-    }
+        {
+          id: 2,
+          sku: 'SKU-1002',
+          name: 'Queso Criollo San Javier (Kg)',
+          source_stock: 15,
+          qty: 5.5,
+          unit_type: 'FRACTION',
+        },
+      ],
+    },
   ]);
 
-  const filteredTransfers = transfers.filter(tr => {
-    const matchesSearch = tr.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          tr.source_branch.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          tr.destination_branch.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'ALL' || tr.status === statusFilter;
-    const matchesSource = sourceFilter === 'ALL' || tr.source_branch === sourceFilter;
+  const toast = useToast();
+
+  const filteredTransfers = transfers.filter((t) => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      t.id.toLowerCase().includes(q) ||
+      t.source_branch.toLowerCase().includes(q) ||
+      t.destination_branch.toLowerCase().includes(q);
+    const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
+    const matchesSource = sourceFilter === 'ALL' || t.source_branch === sourceFilter;
     return matchesSearch && matchesStatus && matchesSource;
   });
 
-  const handleConfirmReception = () => {
-    if (!selectedTransfer) return;
-
-    setTransfers(prev => prev.map(t => t.id === selectedTransfer.id ? {
-      ...t,
-      status: 'COMPLETED'
-    } : t));
-
-    alert(`✅ Transferencia ${selectedTransfer.id} RECIBIDA y auditada al 100%. Stock incrementado en ${selectedTransfer.destination_branch} y seriales/IMEIs liberados a inventario activo.`);
+  const confirmReception = (t: TransferGuide) => {
+    setTransfers((prev) =>
+      prev.map((x) => (x.id === t.id ? { ...x, status: 'COMPLETED' as const } : x)),
+    );
     setIsReceptionModalOpen(false);
+    setSelectedTransfer(null);
+    toast(`Guía ${t.id} recibida`, 'success');
   };
 
-  return (
-    <div className="p-6 bg-gray-50 dark:bg-[#000000] h-[calc(100vh-56px)] overflow-y-auto pr-2 space-y-6 select-none transition-colors duration-200">
-      {/* 1. Header & Tab Navigation */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#121212] p-5 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-            <ArrowLeftRight className="w-7 h-7 text-blue-500" />
-            7. Transferencias de Existencias y Traspasos
-          </h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Control de traspasos de stock entre depósitos, guías de remisión y auditoría física de recepción
+  const columns: Array<Column<TransferGuide>> = [
+    {
+      key: 'id',
+      header: 'N.º guía',
+      width: '120px',
+      render: (t) => <span className="font-mono text-body text-ink">{t.id}</span>,
+    },
+    {
+      key: 'route',
+      header: 'Origen y destino',
+      render: (t) => (
+        <div className="min-w-0">
+          <p className="text-body text-ink-2 truncate">{t.source_branch}</p>
+          <p className="flex items-center gap-1.5 text-base font-semibold text-ink truncate">
+            <ArrowRight className="w-3.5 h-3.5 shrink-0 text-ink-3" />
+            {t.destination_branch}
           </p>
         </div>
-
-        {/* Sub-tabs Navigation */}
-        <div className="flex items-center bg-gray-100 dark:bg-[#0B0C10] p-1.5 rounded-xl border border-gray-200 dark:border-[#1F2833]">
-          <button
-            onClick={() => setActiveSubTab('catalog')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
-              activeSubTab === 'catalog' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'
-            }`}
+      ),
+    },
+    {
+      key: 'date',
+      header: 'Fecha de emisión',
+      width: '160px',
+      render: (t) => <span className="font-mono tnum text-body text-ink-2">{t.date}</span>,
+    },
+    {
+      key: 'items',
+      header: 'Ítems',
+      align: 'right',
+      width: '90px',
+      render: (t) => <span className="font-mono tnum text-ink-2">{t.items_count}</span>,
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      width: '180px',
+      render: (t) => <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>,
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      width: '110px',
+      render: (t) => (
+        <div className="flex items-center justify-end gap-0.5">
+          <IconButton
+            label={`Ver guía ${t.id}`}
+            tone="accent"
+            onClick={() => {
+              setSelectedTransfer(t);
+              setIsDetailModalOpen(true);
+            }}
           >
-            <ArrowLeftRight className="w-4 h-4" />
-            Historial Traspasos
-          </button>
-          <button
-            onClick={() => setActiveSubTab('reception')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
-              activeSubTab === 'reception' ? 'bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500'
-            }`}
-          >
-            <Truck className="w-4 h-4" />
-            Entradas Pendientes
-          </button>
+            <Eye className="w-4 h-4" />
+          </IconButton>
+          {t.status === 'IN_TRANSIT' && (
+            <IconButton
+              label={`Recibir guía ${t.id}`}
+              onClick={() => {
+                setSelectedTransfer(t);
+                setIsReceptionModalOpen(true);
+              }}
+            >
+              <Truck className="w-4 h-4" />
+            </IconButton>
+          )}
         </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="h-full overflow-y-auto bg-canvas select-none">
+      <div className="max-w-[1600px] mx-auto p-6 space-y-5">
+        <PageHeader
+          title="Transferencias"
+          subtitle="Traslados de mercadería entre almacenes y sucursales."
+          actions={
+            <Button
+              icon={<Plus className="w-4 h-4" />}
+              onClick={() => setIsNewTransferModalOpen(true)}
+            >
+              Nueva guía
+            </Button>
+          }
+          tabs={
+            <Tabs
+              items={TABS}
+              value={activeSubTab}
+              onChange={(id) => setActiveSubTab(id as SubTab)}
+              label="Secciones de transferencias"
+            />
+          }
+        />
+
+        <Toolbar
+          search={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Buscar por número de guía, origen o destino…"
+          filters={
+            <ToolbarSelect
+              aria-label="Estado"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="ALL">Todos los estados</option>
+              {(Object.keys(STATUS_LABEL) as Array<TransferGuide['status']>).map((k) => (
+                <option key={k} value={k}>
+                  {STATUS_LABEL[k]}
+                </option>
+              ))}
+            </ToolbarSelect>
+          }
+        />
+
+        <DataTable
+          columns={columns}
+          rows={filteredTransfers}
+          rowKey={(t) => t.id}
+          empty={
+            <EmptyState
+              icon={<ArrowLeftRight className="w-6 h-6" />}
+              title="Sin guías que coincidan"
+              hint="Ajuste la búsqueda o el filtro de estado."
+              action={
+                <Button
+                  size="sm"
+                  icon={<Plus className="w-4 h-4" />}
+                  onClick={() => setIsNewTransferModalOpen(true)}
+                >
+                  Nueva guía
+                </Button>
+              }
+            />
+          }
+        />
       </div>
 
-      {/* SUB-TAB 1: CATALOG & TRANSFERS LIST */}
-      {activeSubTab === 'catalog' && (
+      {/* Detalle de la guía */}
+      <Modal
+        isOpen={!!selectedTransfer && !isReceptionModalOpen}
+        onClose={() => setSelectedTransfer(null)}
+        icon={<ArrowLeftRight className="w-4 h-4" />}
+        title={selectedTransfer ? `Guía ${selectedTransfer.id}` : ''}
+        subtitle={
+          selectedTransfer
+            ? `${selectedTransfer.source_branch} → ${selectedTransfer.destination_branch}`
+            : undefined
+        }
+        size="lg"
+        footer={
+          <Button variant="ghost" onClick={() => setSelectedTransfer(null)}>
+            Cerrar
+          </Button>
+        }
+      >
+        {selectedTransfer && (
+          <div className="space-y-5">
+            <DescriptionList
+              items={[
+                {
+                  label: 'Fecha de emisión',
+                  value: <span className="font-mono">{selectedTransfer.date}</span>,
+                },
+                {
+                  label: 'Estado',
+                  value: (
+                    <Badge tone={STATUS_TONE[selectedTransfer.status]}>
+                      {STATUS_LABEL[selectedTransfer.status]}
+                    </Badge>
+                  ),
+                },
+                { label: 'Origen', value: selectedTransfer.source_branch },
+                { label: 'Destino', value: selectedTransfer.destination_branch },
+                { label: 'Notas', value: selectedTransfer.notes || '—', wide: true },
+              ]}
+            />
+            <div className="space-y-2">
+              <p className="text-micro uppercase text-ink-3">Ítems trasladados</p>
+              <div className="divide-y divide-line border border-line rounded-md">
+                {selectedTransfer.items.map((it) => (
+                  <div key={it.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base text-ink truncate">{it.name}</p>
+                      <p className="font-mono text-micro text-ink-3">{it.sku}</p>
+                    </div>
+                    <span className="font-mono tnum text-base text-ink">
+                      {it.qty} {it.unit_type === 'FRACTION' ? 'kg' : 'u.'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Recepción */}
+      <Modal
+        isOpen={isReceptionModalOpen}
+        onClose={() => setIsReceptionModalOpen(false)}
+        icon={<Truck className="w-4 h-4" />}
+        title="Confirmar recepción"
+        subtitle={selectedTransfer ? `Guía ${selectedTransfer.id}` : undefined}
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setIsReceptionModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="success"
+              onClick={() => selectedTransfer && confirmReception(selectedTransfer)}
+            >
+              Confirmar
+            </Button>
+          </>
+        }
+      >
+        {selectedTransfer && (
+          <div className="space-y-4">
+            <p className="text-base text-ink-2 leading-relaxed">
+              Al confirmar, la mercadería se suma al stock de{' '}
+              <strong className="text-ink">{selectedTransfer.destination_branch}</strong> y la guía
+              queda cerrada.
+            </p>
+            <div className="divide-y divide-line border border-line rounded-md">
+              {selectedTransfer.items.map((it) => (
+                <div key={it.id} className="flex items-center gap-3 px-3 py-2.5">
+                  <span className="flex-1 text-base text-ink truncate">{it.name}</span>
+                  <span className="font-mono tnum text-base text-ink">
+                    {it.qty} {it.unit_type === 'FRACTION' ? 'kg' : 'u.'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Nueva guía */}
+      <Modal
+        isOpen={isNewTransferModalOpen}
+        onClose={() => setIsNewTransferModalOpen(false)}
+        icon={<Plus className="w-4 h-4" />}
+        title="Nueva guía de traslado"
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setIsNewTransferModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={sourceBranch === destBranch}
+              onClick={() => {
+                setIsNewTransferModalOpen(false);
+                toast('Guía creada', 'success');
+              }}
+            >
+              Crear guía
+            </Button>
+          </>
+        }
+      >
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#121212] p-4 rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por # Guía, Origen o Destino..."
-                className="w-full pl-9 pr-4 py-2 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 bg-gray-100 dark:bg-[#0B0C10] text-gray-900 dark:text-white rounded-xl border border-gray-200 dark:border-[#1F2833] text-xs font-semibold focus:outline-none"
-              >
-                <option value="ALL">Todos los Estados</option>
-                <option value="IN_TRANSIT">En Tránsito</option>
-                <option value="COMPLETED">Completadas</option>
-                <option value="CANCELLED">Anuladas</option>
-              </select>
-
-              <button
-                onClick={() => setIsNewTransferModalOpen(true)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Nueva Transferencia
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-[#121212] rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-sm overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-[#0B0C10] text-gray-500 dark:text-gray-400 text-[11px] font-extrabold uppercase tracking-wider border-b border-gray-200 dark:border-[#1F2833]">
-                  <th className="p-4"># Guía Traspaso</th>
-                  <th className="p-4">Fecha & Hora Emission</th>
-                  <th className="p-4">Almacén Origen → Destino</th>
-                  <th className="p-4 font-mono">Ítems Trasladados</th>
-                  <th className="p-4 text-center">Estado Logístico</th>
-                  <th className="p-4 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-[#1F2833] text-xs">
-                {filteredTransfers.map((tr) => {
-                  const statusBadge = {
-                    PENDING: { label: 'PENDIENTE SALIDA', color: 'bg-amber-100 text-amber-800 dark:bg-amber-950 border-amber-200' },
-                    IN_TRANSIT: { label: 'EN TRÁNSITO (EN RUTA)', color: 'bg-blue-100 text-blue-800 dark:bg-blue-950 border-blue-200' },
-                    COMPLETED: { label: 'RECIBIDO (COMPLETADO)', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 border-emerald-200' },
-                    CANCELLED: { label: 'ANULADA', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 border-rose-200' },
-                  }[tr.status];
-
-                  return (
-                    <tr key={tr.id} className="hover:bg-gray-50 dark:hover:bg-[#1A1D20]">
-                      <td className="p-4 font-mono font-extrabold text-blue-600 dark:text-blue-400">
-                        {tr.id}
-                      </td>
-                      <td className="p-4 font-mono text-gray-600 dark:text-gray-300">
-                        {tr.date}
-                      </td>
-                      <td className="p-4 font-bold text-gray-900 dark:text-white">
-                        <span className="text-gray-500 font-normal">{tr.source_branch}</span>
-                        <span className="mx-2 text-blue-500">→</span>
-                        <span className="text-blue-600 dark:text-blue-400 font-extrabold">{tr.destination_branch}</span>
-                      </td>
-                      <td className="p-4 font-mono font-bold">
-                        {tr.items_count} productos
-                      </td>
-                      <td className="p-4 text-center">
-                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${statusBadge.color}`}>
-                          {statusBadge.label}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right space-x-1">
-                        <button
-                          onClick={() => {
-                            setSelectedTransfer(tr);
-                            setIsDetailModalOpen(true);
-                          }}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title="Ver Guía de Remisión"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg" title="Imprimir Comprobante">
-                          <Printer className="w-4 h-4" />
-                        </button>
-                        {tr.status === 'IN_TRANSIT' && (
-                          <button
-                            onClick={() => {
-                              setSelectedTransfer(tr);
-                              setIsReceptionModalOpen(true);
-                            }}
-                            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg font-bold flex items-center gap-1 inline-flex" title="Confirmar Recepción"
-                          >
-                            <Truck className="w-4 h-4" /> Recibir
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* NEW TRANSFER FORM MODAL (TransferOrderForm) */}
-      {isNewTransferModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#121212] rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-2xl w-full max-w-xl overflow-hidden space-y-4">
-            <div className="p-5 border-b border-gray-100 dark:border-[#1F2833] flex items-center justify-between">
-              <h3 className="font-extrabold text-base text-gray-900 dark:text-white">Emisión de Nueva Transferencia de Stock</h3>
-              <button onClick={() => setIsNewTransferModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
-            </div>
-
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              if (sourceBranch === destBranch) {
-                alert('⚠️ La sucursal de origen y destino no pueden ser la misma.');
-                return;
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Almacén de origen"
+              value={sourceBranch}
+              onChange={(e) => setSourceBranch(e.target.value)}
+            >
+              {BRANCHES.map((b) => (
+                <option key={b}>{b}</option>
+              ))}
+            </Select>
+            <Select
+              label="Destino"
+              value={destBranch}
+              onChange={(e) => setDestBranch(e.target.value)}
+              error={
+                sourceBranch === destBranch ? 'Origen y destino no pueden coincidir.' : undefined
               }
-              const newTr: TransferGuide = {
-                id: 'TR-3003',
-                date: new Date().toLocaleString('es-ES'),
-                source_branch: sourceBranch,
-                destination_branch: destBranch,
-                items_count: 1,
-                status: 'IN_TRANSIT',
-                notes: transferNotes,
-                items: [{ id: 1, sku: 'SKU-1001', name: 'Coca Cola 2 Litros Retornable', source_stock: 120, qty: 10, unit_type: 'UNIT' }]
-              };
-              setTransfers(prev => [newTr, ...prev]);
-              setIsNewTransferModalOpen(false);
-            }} className="p-5 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-gray-700 dark:text-gray-300">Sucursal / Almacén Origen *</label>
-                  <select
-                    value={sourceBranch}
-                    onChange={(e) => setSourceBranch(e.target.value)}
-                    className="w-full mt-1 p-2 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-bold"
-                  >
-                    <option value="Almacén Central">Almacén Central</option>
-                    <option value="Sucursal Centro">Sucursal Centro</option>
-                    <option value="Sucursal Norte">Sucursal Norte</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="font-bold text-gray-700 dark:text-gray-300">Sucursal / Almacén Destino *</label>
-                  <select
-                    value={destBranch}
-                    onChange={(e) => setDestBranch(e.target.value)}
-                    className="w-full mt-1 p-2 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl font-bold"
-                  >
-                    <option value="Sucursal Centro">Sucursal Centro</option>
-                    <option value="Sucursal Norte">Sucursal Norte</option>
-                    <option value="Almacén Central">Almacén Central</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 dark:text-gray-300">Motivo / Notas del Traspaso</label>
-                <textarea
-                  rows={2}
-                  value={transferNotes}
-                  onChange={(e) => setTransferNotes(e.target.value)}
-                  placeholder="Ej. Redistribución por reabastecimiento urgente de stock"
-                  className="w-full mt-1 p-2 bg-gray-100 dark:bg-[#0B0C10] border border-gray-200 dark:border-[#1F2833] rounded-xl"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsNewTransferModalOpen(false)} className="px-4 py-2 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-extrabold shadow">
-                  Emitir Guía de Remisión & Descontar Stock Origen
-                </button>
-              </div>
-            </form>
+            >
+              {BRANCHES.map((b) => (
+                <option key={b}>{b}</option>
+              ))}
+            </Select>
           </div>
+          <Textarea
+            label="Notas"
+            rows={3}
+            value={transferNotes}
+            onChange={(e) => setTransferNotes(e.target.value)}
+            placeholder="Motivo del traslado, transportista, observaciones…"
+          />
         </div>
-      )}
-
-      {/* RECEPTION AUDIT MODAL (TransferReception) */}
-      {isReceptionModalOpen && selectedTransfer && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#121212] rounded-2xl border border-gray-200 dark:border-[#1F2833] shadow-2xl w-full max-w-xl overflow-hidden space-y-4">
-            <div className="p-5 border-b border-gray-100 dark:border-[#1F2833] flex items-center justify-between">
-              <div>
-                <h3 className="font-extrabold text-base text-gray-900 dark:text-white">Auditoría Física de Entrada: {selectedTransfer.id}</h3>
-                <p className="text-xs text-gray-500">Destino: {selectedTransfer.destination_branch}</p>
-              </div>
-              <button onClick={() => setIsReceptionModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
-            </div>
-
-            <div className="p-5 space-y-4 text-xs">
-              <div className="border border-gray-200 dark:border-[#1F2833] rounded-xl overflow-hidden">
-                <table className="w-full text-left">
-                  <thead className="bg-gray-100 dark:bg-[#0B0C10] text-[10px] font-bold uppercase text-gray-500">
-                    <tr>
-                      <th className="p-3">Producto / SKU</th>
-                      <th className="p-3 text-center">Cant. Despachada</th>
-                      <th className="p-3 text-center">Cant. Recibida Físicamente</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-[#1F2833] font-mono">
-                    {selectedTransfer.items.map(item => (
-                      <tr key={item.id}>
-                        <td className="p-3 font-sans font-bold text-gray-900 dark:text-white">
-                          {item.name}
-                          <span className="block text-[10px] text-gray-400 font-mono">SKU: {item.sku}</span>
-                        </td>
-                        <td className="p-3 text-center font-bold">{item.qty}</td>
-                        <td className="p-3 text-center">
-                          <input type="number" defaultValue={item.qty} className="w-16 p-1 bg-gray-100 text-center font-bold rounded" />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsReceptionModalOpen(false)} className="px-4 py-2 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl font-bold">Cancelar</button>
-                <button onClick={handleConfirmReception} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold shadow">
-                  Aprobar Ingreso al Stock Destino
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 };

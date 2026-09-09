@@ -50,7 +50,7 @@ export const usePosStore = create<PosState>((set, get) => ({
     registerName: 'Caja 1 Principal',
     userId: 'usr-1',
     userName: 'Juan Pérez',
-    initialFloat: 200.00,
+    initialFloat: 200.0,
     openedAt: new Date().toISOString(),
     status: 'OPEN',
   },
@@ -83,7 +83,10 @@ export const usePosStore = create<PosState>((set, get) => ({
     // Limits: Manual discounts > 10% require supervisor PIN validation
     if (discount > 10) {
       if (pinInput !== get().supervisorPin) {
-        return { success: false, message: 'PIN de Supervisor incorrecto. Descuento > 10% requiere autorización.' };
+        return {
+          success: false,
+          message: 'PIN de Supervisor incorrecto. Descuento > 10% requiere autorización.',
+        };
       }
     }
     const validDiscount = Math.min(100, Math.max(0, discount));
