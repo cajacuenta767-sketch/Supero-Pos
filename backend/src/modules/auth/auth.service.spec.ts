@@ -20,9 +20,12 @@ describe('AuthService (Sprint 1 QA & Auth Engine)', () => {
     branch: { id: 'branch-1', name: 'Sucursal Central' },
   };
 
+  /* `validateUser` busca con `findFirst` + `mode: 'insensitive'`: el bloqueo se
+     indexa en minúsculas y la búsqueda debe usar el mismo criterio, o «Admin» y
+     «admin» serían cuentas distintas con contador compartido. */
   const mockPrismaService = {
     user: {
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
     },
   };
@@ -58,7 +61,7 @@ describe('AuthService (Sprint 1 QA & Auth Engine)', () => {
   });
 
   it('should authenticate valid user and return 12h JWT token structure', async () => {
-    mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
+    mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
 
     const result = await service.login({ username: 'admin', password: 'SuperoPOS2026' });
     expect(result.success).toBe(true);
@@ -67,8 +70,34 @@ describe('AuthService (Sprint 1 QA & Auth Engine)', () => {
     expect(result.data.user.username).toBe('admin');
   });
 
+  it('busca al usuario sin distinguir mayúsculas', async () => {
+    mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
+
+    await service.login({ username: 'ADMIN', password: 'SuperoPOS2026' });
+
+    expect(mockPrismaService.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { username: { equals: 'admin', mode: 'insensitive' } },
+      }),
+    );
+  });
+
+  it('no revela si la cuenta existe: verifica un hash señuelo', async () => {
+    mockPrismaService.user.findFirst.mockResolvedValue(null);
+    const spy = jest.spyOn(service, 'verifyPassword');
+
+    await expect(
+      service.login({ username: 'inexistente', password: 'loquesea' }),
+    ).rejects.toThrow(UnauthorizedException);
+
+    // Sin el señuelo, un usuario inexistente respondería antes que uno real y
+    // esa diferencia de tiempo delataría qué cuentas existen.
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
   it('should lock out account after 5 failed login attempts', async () => {
-    mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
+    mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
 
     // Attempt 1 to 4 should throw UnauthorizedException
     for (let i = 1; i <= 4; i++) {

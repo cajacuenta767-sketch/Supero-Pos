@@ -1,11 +1,9 @@
-import { Controller, Post, Get, Body, Query, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { CashRegistersService, OpenShiftDto, CloseShiftDto } from './cash-registers.service';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { RolesGuard } from '../../common/guards/roles.guard';
 import { CurrentUser, UserContext } from '../../common/decorators/current-user.decorator';
 
-@Controller('api/v1/cash-registers')
-@UseGuards(RolesGuard)
+@Controller('cash-registers')
 export class CashRegistersController {
   constructor(private readonly cashRegistersService: CashRegistersService) {}
 

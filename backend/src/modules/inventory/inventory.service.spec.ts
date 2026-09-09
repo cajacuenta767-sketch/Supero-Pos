@@ -15,6 +15,15 @@ describe('InventoryService (Sprint 3 QA - Kardex & Audit Log)', () => {
         stockAdjustment: {
           create: jest.fn().mockResolvedValue({ id: 'adj-99' }),
         },
+        /* El servicio consulta el producto para tomar su costo unitario y
+           registra el movimiento de kardex; sin estos dos el mock rompía la
+           transacción y la prueba fallaba por el andamiaje, no por el código. */
+        product: {
+          findUnique: jest.fn().mockResolvedValue({ id: 'prod-1', costPrice: 12.5 }),
+        },
+        kardexMovement: {
+          create: jest.fn().mockResolvedValue({ id: 'kdx-1' }),
+        },
       })
     ),
   };

@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 
@@ -14,6 +15,42 @@ export class AuthService {
   private failedAttemptsMap = new Map<string, LockoutState>();
   private readonly MAX_FAILED_ATTEMPTS = 5;
   private readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutos
+  /* El mapa vive en memoria y crecía sin techo: bastaba probar usuarios
+     inventados para agotarla. Al llegar al límite se descartan las entradas
+     caducadas y, si aún sobra, las más antiguas. */
+  private readonly MAX_TRACKED_ACCOUNTS = 10_000;
+
+  /**
+   * Hash de referencia para comparar contra usuarios inexistentes.
+   *
+   * Sin él, un usuario que no existe responde mucho antes que uno que sí,
+   * porque nunca se llega a verificar contraseña. Esa diferencia de tiempo
+   * revela qué cuentas existen. Se calcula una vez y se reutiliza.
+   */
+  private decoyHash: Promise<string> | null = null;
+
+  private getDecoyHash(): Promise<string> {
+    if (!this.decoyHash) {
+      this.decoyHash = argon2.hash('contrasena-inexistente', { type: argon2.argon2id });
+    }
+    return this.decoyHash;
+  }
+
+  private evictStaleLockStates() {
+    if (this.failedAttemptsMap.size < this.MAX_TRACKED_ACCOUNTS) return;
+    const now = Date.now();
+    for (const [key, state] of this.failedAttemptsMap) {
+      if (!state.lockedUntil || state.lockedUntil.getTime() <= now) {
+        this.failedAttemptsMap.delete(key);
+      }
+    }
+    // Si todas seguían vigentes, se sueltan las más antiguas por orden de inserción.
+    while (this.failedAttemptsMap.size >= this.MAX_TRACKED_ACCOUNTS) {
+      const oldest = this.failedAttemptsMap.keys().next();
+      if (oldest.done) break;
+      this.failedAttemptsMap.delete(oldest.value);
+    }
+  }
 
   constructor(
     private prisma: PrismaService,
@@ -23,21 +60,25 @@ export class AuthService {
   private getLockState(username: string): LockoutState {
     const key = username.toLowerCase().trim();
     if (!this.failedAttemptsMap.has(key)) {
+      this.evictStaleLockStates();
       this.failedAttemptsMap.set(key, { count: 0, lockedUntil: null });
     }
     return this.failedAttemptsMap.get(key)!;
   }
 
+  /**
+   * Verifica una contraseña contra su hash.
+   *
+   * Acepta hashes bcrypt heredados además de argon2. Antes bcryptjs se cargaba
+   * con un `require` dentro de un try/catch y no figuraba en package.json: la
+   * carga fallaba siempre y devolvía `false`, de modo que ningún usuario con
+   * hash bcrypt podía entrar y nadie se enteraba. Ahora es una dependencia
+   * declarada y se importa arriba.
+   */
   async verifyPassword(hash: string, plainText: string): Promise<boolean> {
     try {
       if (hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$')) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
-          const bcrypt = require('bcryptjs');
-          return await bcrypt.compare(plainText, hash);
-        } catch {
-          return false;
-        }
+        return await bcrypt.compare(plainText, hash);
       }
       return await argon2.verify(hash, plainText);
     } catch {
@@ -67,12 +108,17 @@ export class AuthService {
       lockState.lockedUntil = null;
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { username },
+    /* El bloqueo se indexa en minúsculas pero la búsqueda era sensible a
+       mayúsculas: «Admin» y «admin» compartían contador y eran cuentas
+       distintas. Ahora ambas cosas usan el mismo criterio. */
+    const user = await this.prisma.user.findFirst({
+      where: { username: { equals: key, mode: 'insensitive' } },
       include: { role: true, branch: true },
     });
 
     if (!user || !user.isActive) {
+      // Se consume el mismo tiempo que una verificación real (ver `getDecoyHash`).
+      await this.verifyPassword(await this.getDecoyHash(), pass);
       lockState.count += 1;
       if (lockState.count >= this.MAX_FAILED_ATTEMPTS) {
         lockState.lockedUntil = new Date(Date.now() + this.LOCKOUT_DURATION_MS);

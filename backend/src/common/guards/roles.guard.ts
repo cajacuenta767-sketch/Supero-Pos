@@ -1,12 +1,19 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) return true;
+
     const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -17,33 +24,26 @@ export class RolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
-    const user = request.user;
-    const userRole = user?.role || request.headers['x-user-role'];
+
+    /* El rol sale EXCLUSIVAMENTE del token verificado que dejó JwtAuthGuard en
+       `request.user`. Antes existía un respaldo por cabecera `x-user-role`, y
+       como ningún controlador aplicaba JwtAuthGuard, `request.user` nunca
+       existía: cualquiera se declaraba ADMIN con una cabecera. */
+    const userRole: string | undefined = request.user?.role;
 
     if (!userRole) {
       throw new ForbiddenException({
-        type: 'https://httpstatuses.com/403',
-        title: 'Forbidden',
-        status: 403,
-        detail: 'Acceso denegado: El usuario no posee un rol válido.',
-        instance: request.url,
         success: false,
         status_code: 403,
-        message: 'Acceso denegado: El usuario no posee un rol válido.',
+        message: 'Acceso denegado: el usuario no posee un rol válido.',
       });
     }
 
-    const hasRole = requiredRoles.includes(userRole);
-    if (!hasRole) {
+    if (!requiredRoles.includes(userRole)) {
       throw new ForbiddenException({
-        type: 'https://httpstatuses.com/403',
-        title: 'Forbidden',
-        status: 403,
-        detail: `Acceso restringido: Se requiere uno de los siguientes roles: [${requiredRoles.join(', ')}]`,
-        instance: request.url,
         success: false,
         status_code: 403,
-        message: `Acceso restringido: Se requiere uno de los siguientes roles: [${requiredRoles.join(', ')}]`,
+        message: `Acceso restringido: se requiere uno de los siguientes roles: [${requiredRoles.join(', ')}].`,
       });
     }
 
