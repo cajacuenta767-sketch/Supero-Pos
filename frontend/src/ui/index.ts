@@ -36,5 +36,6 @@ export { Badge } from './Badge';
 export { Barcode, ean13CheckDigit, isValidEan13 } from './Barcode';
 export { Kbd } from './Kbd';
 export { EmptyState } from './EmptyState';
+export { ErrorBoundary } from './ErrorBoundary';
 export { Skeleton } from './Skeleton';
 export { ToastProvider, useToast } from './Toast';

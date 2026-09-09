@@ -1,4 +1,6 @@
 import { usePersistentState } from '../store/persist';
+import { useCatalogStore } from '../store/useCatalogStore';
+import { formatDateTime } from '../utils/dates';
 import React, { useState } from 'react';
 import { ArrowLeftRight, ArrowRight, Eye, Plus, Truck } from 'lucide-react';
 import {
@@ -8,6 +10,7 @@ import {
   DescriptionList,
   EmptyState,
   IconButton,
+  Input,
   Modal,
   PageHeader,
   Select,
@@ -47,6 +50,8 @@ const BRANCHES = ['Almacén Central', 'Sucursal Centro', 'Sucursal Norte', 'Sucu
 
 interface TransferItem {
   id: number;
+  /** Producto del catálogo. El `id` identifica la línea de la guía. */
+  product_id: number;
   sku: string;
   name: string;
   source_stock: number;
@@ -87,6 +92,12 @@ export const TransfersView: React.FC = () => {
   // New Transfer Form State
   const [sourceBranch, setSourceBranch] = useState('Almacén Central');
   const [destBranch, setDestBranch] = useState('Sucursal Centro');
+  const [guideProductId, setGuideProductId] = useState(0);
+  const [guideQty, setGuideQty] = useState(1);
+
+  const catalog = useCatalogStore((state) => state.products);
+  const applyMovements = useCatalogStore((state) => state.applyMovements);
+  const guideProduct = catalog.find((p) => p.id === guideProductId);
   const [transferNotes, setTransferNotes] = useState('');
 
   // Mock Transfer Guides Data
@@ -102,6 +113,7 @@ export const TransfersView: React.FC = () => {
       items: [
         {
           id: 1,
+          product_id: 107,
           sku: 'SKU-1001',
           name: 'Coca Cola 2 Litros Retornable',
           source_stock: 120,
@@ -110,6 +122,7 @@ export const TransfersView: React.FC = () => {
         },
         {
           id: 3,
+          product_id: 101,
           sku: 'SKU-1003',
           name: 'Smartphone Samsung Galaxy A54 128GB',
           source_stock: 8,
@@ -130,6 +143,7 @@ export const TransfersView: React.FC = () => {
       items: [
         {
           id: 2,
+          product_id: 102,
           sku: 'SKU-1002',
           name: 'Queso Criollo San Javier (Kg)',
           source_stock: 15,
@@ -160,9 +174,72 @@ export const TransfersView: React.FC = () => {
     setTransfers((prev) =>
       prev.map((x) => (x.id === t.id ? { ...x, status: 'COMPLETED' as const } : x)),
     );
+
+    /* La mercadería vuelve a estar disponible al llegar a destino. Mientras
+       viaja no lo está, y por eso la salida ya la descontó al emitir la guía. */
+    applyMovements(
+      t.items.map((item) => ({
+        productId: item.product_id,
+        type: 'TRANSFER_IN' as const,
+        quantity: item.qty,
+        reference: t.id,
+        reason: `Entrada en ${t.destination_branch}`,
+      })),
+    );
+
     setIsReceptionModalOpen(false);
     setSelectedTransfer(null);
     toast(`Guía ${t.id} recibida`, 'success');
+  };
+
+  /**
+   * Emisión de la guía.
+   *
+   * Antes «Crear guía» solo cerraba el modal y mostraba un aviso: no creaba
+   * nada. Ahora la registra y descuenta la salida, porque la mercadería en
+   * tránsito deja de estar disponible en el origen.
+   */
+  const createGuide = () => {
+    if (sourceBranch === destBranch || !guideProduct || guideQty <= 0) return;
+
+    const id = `TR-${3000 + transfers.length + 1}`;
+    setTransfers((prev) => [
+      {
+        id,
+        date: formatDateTime(new Date()),
+        source_branch: sourceBranch,
+        destination_branch: destBranch,
+        items_count: guideQty,
+        status: 'IN_TRANSIT',
+        items: [
+          {
+            id: 1,
+            product_id: guideProduct.id,
+            sku: guideProduct.sku,
+            name: guideProduct.name,
+            source_stock: guideProduct.stock,
+            qty: guideQty,
+            unit_type: guideProduct.unit_type,
+          },
+        ],
+      },
+      ...prev,
+    ]);
+
+    applyMovements([
+      {
+        productId: guideProduct.id,
+        type: 'TRANSFER_OUT',
+        quantity: -guideQty,
+        reference: id,
+        reason: `Salida de ${sourceBranch}`,
+      },
+    ]);
+
+    setGuideProductId(0);
+    setGuideQty(1);
+    setIsNewTransferModalOpen(false);
+    toast(`Guía ${id} emitida`, 'success');
   };
 
   const columns: Array<Column<TransferGuide>> = [
@@ -425,11 +502,8 @@ export const TransfersView: React.FC = () => {
               Cancelar
             </Button>
             <Button
-              disabled={sourceBranch === destBranch}
-              onClick={() => {
-                setIsNewTransferModalOpen(false);
-                toast('Guía creada', 'success');
-              }}
+              disabled={sourceBranch === destBranch || !guideProduct || guideQty <= 0}
+              onClick={createGuide}
             >
               Crear guía
             </Button>
@@ -437,6 +511,41 @@ export const TransfersView: React.FC = () => {
         }
       >
         <div className="space-y-4">
+          {/* Antes la guía no pedía qué se trasladaba: se creaba «una guía» sin
+              mercadería, y por eso no podía mover existencias. */}
+          <Select
+            label="Producto"
+            value={guideProductId}
+            onChange={(e) => setGuideProductId(Number(e.target.value))}
+          >
+            <option value={0}>Elija un producto…</option>
+            {catalog.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} · quedan {p.stock}
+              </option>
+            ))}
+          </Select>
+
+          <Input
+            label="Cantidad a trasladar"
+            type="number"
+            min={0.001}
+            step="any"
+            value={guideQty}
+            onChange={(e) => setGuideQty(parseFloat(e.target.value) || 0)}
+            hint={
+              guideProduct
+                ? `En tránsito deja de estar disponible: quedarán ${Number((guideProduct.stock - guideQty).toFixed(4))}`
+                : 'Admite decimales para el granel.'
+            }
+            error={
+              guideProduct && guideQty > guideProduct.stock
+                ? 'Más de lo que hay en el origen.'
+                : undefined
+            }
+            className="[&_input]:font-mono [&_input]:text-right"
+          />
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select
               label="Almacén de origen"

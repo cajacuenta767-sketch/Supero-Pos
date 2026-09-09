@@ -63,6 +63,9 @@ interface PurchaseOrder {
 
 interface POItem {
   id: number;
+  /** Producto del catálogo al que corresponde la línea. El `id` de arriba
+   *  identifica la línea dentro de la orden, no el artículo. */
+  product_id: number;
   sku: string;
   name: string;
   ordered_qty: number;
@@ -115,6 +118,7 @@ export const PurchasesView: React.FC = () => {
       items: [
         {
           id: 1,
+          product_id: 107,
           sku: 'SKU-1001',
           name: 'Coca Cola 2 Litros Retornable',
           ordered_qty: 100,
@@ -124,6 +128,7 @@ export const PurchasesView: React.FC = () => {
         },
         {
           id: 2,
+          product_id: 102,
           sku: 'SKU-1002',
           name: 'Queso Criollo San Javier (Kg)',
           ordered_qty: 50.0,
@@ -146,6 +151,7 @@ export const PurchasesView: React.FC = () => {
       items: [
         {
           id: 3,
+          product_id: 101,
           sku: 'SKU-1003',
           name: 'Smartphone Samsung Galaxy A54 128GB',
           ordered_qty: 5,
@@ -169,6 +175,7 @@ export const PurchasesView: React.FC = () => {
       items: [
         {
           id: 4,
+          product_id: 105,
           sku: 'SKU-1005',
           name: 'Smartphone Xiaomi Redmi Note 13 256GB',
           ordered_qty: 3,
@@ -215,6 +222,7 @@ export const PurchasesView: React.FC = () => {
    *  cerrar la recepción dejando `selectedPO` puesto no devolvía a la lista:
    *  abría el detalle de la orden, como si se hubiera pulsado otra cosa. */
   const catalog = useCatalogStore((state) => state.products);
+  const applyMovements = useCatalogStore((state) => state.applyMovements);
   const selectedPoProduct = catalog.find((p) => p.id === poForm.productId);
 
   const closePOModal = () => {
@@ -265,7 +273,8 @@ export const PurchasesView: React.FC = () => {
         payment_terms: poForm.payment_terms,
         items: [
           {
-            id: selectedPoProduct.id,
+            id: 1,
+            product_id: selectedPoProduct.id,
             sku: selectedPoProduct.sku,
             name: selectedPoProduct.name,
             ordered_qty: poForm.quantity,
@@ -308,6 +317,19 @@ export const PurchasesView: React.FC = () => {
   const receiveOrder = (po: PurchaseOrder) => {
     setPurchaseOrders((prev) =>
       prev.map((p) => (p.id === po.id ? { ...p, status: 'COMPLETED' as const } : p)),
+    );
+
+    /* Recibir mercadería suma existencias. Antes solo se marcaba la orden como
+       completada: el stock no cambiaba, así que el inventario únicamente bajaba
+       —con las ventas— y nunca se reponía. */
+    applyMovements(
+      po.items.map((item) => ({
+        productId: item.product_id,
+        type: 'PURCHASE' as const,
+        quantity: item.ordered_qty,
+        reference: po.id,
+        reason: `Recepción de ${po.supplier_name}`,
+      })),
     );
     // Mismo motivo que en `closeReceiving`: confirmar tampoco debe dejar la
     // orden seleccionada, o al cerrarse la recepción aparece su detalle.

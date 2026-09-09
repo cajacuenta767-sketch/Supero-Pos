@@ -20,7 +20,7 @@ import { HrAttendanceView } from './components/HrAttendanceView';
 import { useOfflineSync } from './hooks/useOfflineSync';
 import { useAuthStore } from './store/useAuthStore';
 import { canAccessView, VIEW_PERMISSIONS } from './utils/permissions';
-import { EmptyState, ToastProvider } from './ui';
+import { EmptyState, ErrorBoundary, ToastProvider } from './ui';
 
 const VIEWS: Record<string, React.ComponentType> = {
   home: DashboardView,
@@ -78,7 +78,16 @@ export const App: React.FC = () => {
 
           <main className="flex-1 overflow-hidden">
             {ActiveView ? (
-              <ActiveView />
+              /* Cada apartado va contenido: un fallo de render aquí dejaba la
+                 pantalla en blanco y obligaba a reiniciar la terminal. La clave
+                 fuerza el remontado al cambiar de vista. */
+              <ErrorBoundary
+                key={effectiveTab ?? 'sin-vista'}
+                label={effectiveTab ?? 'apartado'}
+                onReset={() => setActiveTab('pos')}
+              >
+                <ActiveView />
+              </ErrorBoundary>
             ) : (
               <EmptyState
                 icon={<ShieldAlert className="w-6 h-6" />}

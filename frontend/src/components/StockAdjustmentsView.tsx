@@ -1,4 +1,5 @@
 import { usePersistentState } from '../store/persist';
+import { useCatalogStore } from '../store/useCatalogStore';
 import React, { useState } from 'react';
 import { AlertTriangle, Calculator, Eye, Lock, Plus, Sliders } from 'lucide-react';
 import {
@@ -106,6 +107,8 @@ export const StockAdjustmentsView: React.FC = () => {
 
   // Losses Form State
   const [lossReason, setLossReason] = useState('Vencido');
+  const [lossProductId, setLossProductId] = useState(0);
+  const [lossQty, setLossQty] = useState(1);
   const [lossNotes, setLossNotes] = useState('');
   const [lossPhoto, setLossPhoto] = useState<string | null>(null);
   const [supervisorPin, setSupervisorPin] = useState('');
@@ -193,10 +196,69 @@ export const StockAdjustmentsView: React.FC = () => {
   useViewShortcuts({});
   /* La auditoría ciega no muestra el stock esperado hasta confirmar: si lo
      mostrara, dejaría de ser ciega. */
+  const catalog = useCatalogStore((state) => state.products);
+  const applyMovement = useCatalogStore((state) => state.applyMovement);
+  const applyMovements = useCatalogStore((state) => state.applyMovements);
+  const lossProduct = catalog.find((p) => p.id === lossProductId);
+
   const [auditRevealed, setAuditRevealed] = useState(false);
 
+  /* Solo las líneas que difieren: aplicar un ajuste de cero ensucia el kardex. */
+  const auditDiffs = auditItems.filter((it) => it.difference !== 0);
+
+  /**
+   * Cierra la auditoría llevando el stock al conteo físico.
+   *
+   * Antes la auditoría se contaba, se revelaba la diferencia y ahí terminaba:
+   * el inventario quedaba igual que antes de contarlo.
+   */
+  const applyAudit = () => {
+    if (auditDiffs.length === 0) return;
+
+    applyMovements(
+      auditDiffs.map((it) => ({
+        productId: it.id,
+        type: 'AUDIT' as const,
+        quantity: it.difference,
+        reference: `AUD-${Date.now().toString().slice(-6)}`,
+        reason: `Conteo físico en ${auditBranch}`,
+      })),
+    );
+
+    setAdjustments((prev) => [
+      {
+        id: `ADJ-${4000 + prev.length + 1}`,
+        date: formatDateTime(new Date()),
+        type: 'PHYSICAL_AUDIT',
+        reason: `Auditoría ciega en ${auditBranch}`,
+        branch: auditBranch,
+        items_count: auditDiffs.length,
+        user_name: 'Administrador',
+        status: 'APPLIED',
+        items: auditDiffs,
+      },
+      ...prev,
+    ]);
+
+    setAuditRevealed(false);
+    toast(
+      `${auditDiffs.length} ${auditDiffs.length === 1 ? 'diferencia aplicada' : 'diferencias aplicadas'}`,
+      'success',
+    );
+  };
+
   const applyLoss = () => {
-    if (!lossNotes.trim() || !supervisorPin) return;
+    if (!lossNotes.trim() || !supervisorPin || !lossProduct || lossQty <= 0) return;
+
+    /* La merma descuenta de verdad. Antes solo se creaba el registro: el stock
+       no cambiaba, así que un producto dañado seguía figurando como vendible. */
+    applyMovement({
+      productId: lossProduct.id,
+      type: 'LOSS',
+      quantity: -lossQty,
+      reason: lossReason,
+    });
+
     const record: AdjustmentRecord = {
       id: `ADJ-${4000 + adjustments.length + 1}`,
       date: formatDateTime(new Date()),
@@ -206,10 +268,22 @@ export const StockAdjustmentsView: React.FC = () => {
       items_count: 1,
       user_name: 'Administrador',
       status: 'APPLIED',
-      items: [],
+      items: [
+        {
+          id: lossProduct.id,
+          sku: lossProduct.sku,
+          name: lossProduct.name,
+          theoretical_stock: lossProduct.stock,
+          physical_count: Number((lossProduct.stock - lossQty).toFixed(4)),
+          difference: -lossQty,
+          unit_type: lossProduct.unit_type,
+        },
+      ],
       evidence_photo: lossPhoto ?? undefined,
     };
     setAdjustments((prev) => [record, ...prev]);
+    setLossProductId(0);
+    setLossQty(1);
     setLossNotes('');
     setLossPhoto(null);
     setSupervisorPin('');
@@ -435,13 +509,23 @@ export const StockAdjustmentsView: React.FC = () => {
                 Conteo de <strong className="text-ink">{auditBranch}</strong> · {auditItems.length}{' '}
                 productos
               </p>
-              <Button
-                variant={auditRevealed ? 'secondary' : 'primary'}
-                icon={<Calculator className="w-4 h-4" />}
-                onClick={() => setAuditRevealed((v) => !v)}
-              >
-                {auditRevealed ? 'Ocultar esperado' : 'Revelar diferencias'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={auditRevealed ? 'secondary' : 'primary'}
+                  icon={<Calculator className="w-4 h-4" />}
+                  onClick={() => setAuditRevealed((v) => !v)}
+                >
+                  {auditRevealed ? 'Ocultar esperado' : 'Revelar diferencias'}
+                </Button>
+                {/* Un conteo que no se aplica no sirve de nada: la diferencia se
+                    veía en pantalla y el stock seguía como estaba. */}
+                {auditRevealed && (
+                  <Button variant="success" onClick={applyAudit} disabled={auditDiffs.length === 0}>
+                    Aplicar {auditDiffs.length}{' '}
+                    {auditDiffs.length === 1 ? 'diferencia' : 'diferencias'}
+                  </Button>
+                )}
+              </div>
             </div>
             <DataTable
               columns={auditColumns}
@@ -537,7 +621,7 @@ export const StockAdjustmentsView: React.FC = () => {
             </Button>
             <Button
               variant="danger"
-              disabled={!lossNotes.trim() || !supervisorPin}
+              disabled={!lossNotes.trim() || !supervisorPin || !lossProduct || lossQty <= 0}
               onClick={applyLoss}
             >
               Aplicar merma
@@ -546,11 +630,52 @@ export const StockAdjustmentsView: React.FC = () => {
         }
       >
         <div className="space-y-4">
-          <Select label="Motivo" value={lossReason} onChange={(e) => setLossReason(e.target.value)}>
-            {LOSS_REASONS.map((r) => (
-              <option key={r}>{r}</option>
+          {/* Producto y cantidad: sin ellos no había nada que descontar, así que
+              la merma se registraba y el stock seguía igual. */}
+          <Select
+            label="Producto"
+            value={lossProductId}
+            onChange={(e) => setLossProductId(Number(e.target.value))}
+          >
+            <option value={0}>Elija un producto…</option>
+            {catalog.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} · quedan {p.stock}
+              </option>
             ))}
           </Select>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Cantidad perdida"
+              type="number"
+              min={0.001}
+              step="any"
+              value={lossQty}
+              onChange={(e) => setLossQty(parseFloat(e.target.value) || 0)}
+              hint={
+                lossProduct
+                  ? `Quedarán ${Number((lossProduct.stock - lossQty).toFixed(4))}`
+                  : 'Admite decimales para el granel.'
+              }
+              error={
+                lossProduct && lossQty > lossProduct.stock
+                  ? 'Más de lo que hay registrado.'
+                  : undefined
+              }
+              className="[&_input]:font-mono [&_input]:text-right"
+            />
+            <Select
+              label="Motivo"
+              value={lossReason}
+              onChange={(e) => setLossReason(e.target.value)}
+            >
+              {LOSS_REASONS.map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </Select>
+          </div>
+
           <Textarea
             label="Detalle"
             hint="Todo ajuste exige motivo: queda en el rastro de auditoría."

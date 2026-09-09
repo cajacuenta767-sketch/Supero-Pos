@@ -66,7 +66,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
 
   const { selectedCustomer, manualDiscount, resetPosCycle, setPendingSyncCount } = usePosStore();
   const toast = useToast();
-  const adjustStock = useCatalogStore((state) => state.adjustStock);
+  const applyMovements = useCatalogStore((state) => state.applyMovements);
   const settings = useSettingsStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
@@ -231,12 +231,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       // Execute Atomic ACID transaction in local SQLite database
       const result = localDb.processLocalSaleAtomic(salePayload);
 
-      /* Las existencias bajan al vender. Antes el catálogo del punto de venta
-         era una constante y el stock mostrado no cambiaba nunca, por mucho que
-         se vendiera. */
-      for (const item of items) {
-        adjustStock(item.id, -item.quantity);
-      }
+      /* Las existencias bajan al vender, con su asiento en el kardex local. */
+      applyMovements(
+        items.map((item) => ({
+          productId: item.id,
+          type: 'SALE' as const,
+          quantity: -item.quantity,
+          reference: transaction_id.slice(0, 8).toUpperCase(),
+        })),
+      );
 
       // Update Zustand sync queue state
       const pendingCount = localDb.getPendingCount();

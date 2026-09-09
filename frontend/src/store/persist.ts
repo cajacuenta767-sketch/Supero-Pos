@@ -23,26 +23,50 @@ interface Envelope<T> {
   data: T;
 }
 
-export const readPersisted = <T>(key: string): T | null => {
+/**
+ * Acceso seguro al almacenamiento.
+ *
+ * No siempre existe: ventana privada, navegador con el almacenamiento
+ * bloqueado, captura de miniaturas, o simplemente un entorno sin DOM. Sin esta
+ * comprobación, el `catch` de abajo intentaba `localStorage.removeItem` y volvía
+ * a lanzar, así que el error escapaba y tumbaba el módulo al importarlo.
+ */
+const storage = (): Storage | null => {
   try {
-    const raw = localStorage.getItem(PREFIX + key);
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+};
+
+export const readPersisted = <T>(key: string): T | null => {
+  const store = storage();
+  if (!store) return null;
+  try {
+    const raw = store.getItem(PREFIX + key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Envelope<T>;
     if (parsed.v !== VERSION) {
-      localStorage.removeItem(PREFIX + key);
+      store.removeItem(PREFIX + key);
       return null;
     }
     return parsed.data;
   } catch {
     // Un valor corrupto no debe impedir abrir la vista: se descarta.
-    localStorage.removeItem(PREFIX + key);
+    try {
+      store.removeItem(PREFIX + key);
+    } catch {
+      /* Si ni siquiera se puede borrar, se sigue sin él. */
+    }
     return null;
   }
 };
 
 export const writePersisted = <T>(key: string, data: T): boolean => {
+  const store = storage();
+  if (!store) return false;
   try {
-    localStorage.setItem(PREFIX + key, JSON.stringify({ v: VERSION, data }));
+    store.setItem(PREFIX + key, JSON.stringify({ v: VERSION, data }));
     return true;
   } catch {
     /* Cuota agotada: las fotos en base64 la llenan rápido. No se interrumpe el
@@ -56,9 +80,11 @@ export const writePersisted = <T>(key: string, data: T): boolean => {
 };
 
 export const clearPersisted = () => {
+  const store = storage();
+  if (!store) return;
   try {
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith(PREFIX)) localStorage.removeItem(key);
+    for (const key of Object.keys(store)) {
+      if (key.startsWith(PREFIX)) store.removeItem(key);
     }
   } catch {
     /* Sin almacenamiento no hay nada que limpiar. */

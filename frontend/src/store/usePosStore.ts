@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { verifySupervisorPin } from '../utils/supervisorPin';
 import { useCartStore } from './useCartStore';
+import { readPersisted, writePersisted } from './persist';
+
+const SHIFT_KEY = 'turno_caja';
 
 export interface Customer {
   id: string;
@@ -45,7 +48,11 @@ interface PosState {
 }
 
 export const usePosStore = create<PosState>((set) => ({
-  cashShift: {
+  /* El turno es la unidad contable de la jornada. Antes vivía en estado plano:
+     se cerraba la caja, se recargaba la terminal y volvía a aparecer abierto con
+     los valores de demostración —y el arqueo, que calcula el efectivo esperado
+     desde `openedAt`, partía de un momento equivocado. */
+  cashShift: readPersisted<CashShift | null>(SHIFT_KEY) ?? {
     id: 'shift-001',
     registerId: 'caja-1',
     registerName: 'Caja 1 Principal',
@@ -70,10 +77,12 @@ export const usePosStore = create<PosState>((set) => ({
       openedAt: new Date().toISOString(),
       status: 'OPEN',
     };
+    writePersisted(SHIFT_KEY, newShift);
     set({ cashShift: newShift });
   },
 
   closeCashShift: () => {
+    writePersisted<CashShift | null>(SHIFT_KEY, null);
     set({ cashShift: null });
   },
 

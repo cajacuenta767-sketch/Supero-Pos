@@ -34,6 +34,7 @@ export interface Product {
 }
 
 const STORAGE_KEY = 'catalogo';
+const MOVEMENTS_KEY = 'movimientos_stock';
 
 const SEED: Product[] = [
   {
@@ -164,14 +165,70 @@ const SEED: Product[] = [
   },
 ];
 
+/**
+ * Motivo de un cambio de existencias.
+ *
+ * Todo movimiento deja asiento: sin él, un stock que no cuadra no se puede
+ * explicar, y explicar la diferencia es la mitad del trabajo de un almacén.
+ */
+export type MovementType =
+  'SALE' | 'SALE_RETURN' | 'PURCHASE' | 'LOSS' | 'TRANSFER_OUT' | 'TRANSFER_IN' | 'AUDIT';
+
+export const MOVEMENT_LABEL: Record<MovementType, string> = {
+  SALE: 'Venta',
+  SALE_RETURN: 'Devolución de venta',
+  PURCHASE: 'Recepción de compra',
+  LOSS: 'Merma o daño',
+  TRANSFER_OUT: 'Salida por traslado',
+  TRANSFER_IN: 'Entrada por traslado',
+  AUDIT: 'Ajuste por auditoría',
+};
+
+export interface StockMovement {
+  id: string;
+  productId: number;
+  productName: string;
+  type: MovementType;
+  /** Con signo: negativo descuenta. */
+  quantity: number;
+  stockBefore: number;
+  stockAfter: number;
+  /** Documento que lo origina: ticket, orden de compra, guía de traslado… */
+  reference?: string;
+  reason?: string;
+  at: string;
+}
+
+export interface MovementInput {
+  productId: number;
+  type: MovementType;
+  quantity: number;
+  reference?: string;
+  reason?: string;
+}
+
+/** Cuántos asientos se conservan en la terminal. Lo viejo vive en el servidor. */
+const MOVEMENT_LIMIT = 500;
+
 interface CatalogState {
   products: Product[];
+  movements: StockMovement[];
   addProduct: (product: Omit<Product, 'id'>) => Product;
   updateProduct: (id: number, patch: Partial<Product>) => void;
   removeProduct: (id: number) => void;
   toggleActive: (id: number) => void;
-  /** Descuenta existencias tras una venta. Admite decimales por el granel. */
-  adjustStock: (id: number, delta: number) => void;
+  /**
+   * Único punto por el que cambian las existencias.
+   *
+   * Antes solo la venta tocaba el stock: recibir una compra, registrar una merma
+   * o mover mercadería entre almacenes no cambiaban nada, así que el inventario
+   * solo bajaba y la cifra dejaba de significar algo. Ahora toda operación pasa
+   * por aquí y deja su asiento.
+   */
+  applyMovement: (input: MovementInput) => StockMovement | null;
+  /** Varios movimientos como una sola operación: una recepción de N líneas. */
+  applyMovements: (inputs: MovementInput[]) => StockMovement[];
+  movementsFor: (productId: number) => StockMovement[];
   findByBarcode: (barcode: string) => Product | undefined;
   /** Solo lo vendible: activo y con existencias registradas. */
   sellableProducts: () => Product[];
@@ -185,6 +242,7 @@ const persist = (products: Product[]) => {
 
 export const useCatalogStore = create<CatalogState>((set, get) => ({
   products: readPersisted<Product[]>(STORAGE_KEY) ?? SEED,
+  movements: readPersisted<StockMovement[]>(MOVEMENTS_KEY) ?? [],
 
   addProduct: (product) => {
     const id = Math.max(0, ...get().products.map((p) => p.id)) + 1;
@@ -208,14 +266,63 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       ),
     })),
 
-  adjustStock: (id, delta) =>
-    set((state) => ({
-      products: persist(
-        state.products.map((p) =>
-          p.id === id ? { ...p, stock: Number((p.stock + delta).toFixed(4)) } : p,
-        ),
-      ),
-    })),
+  applyMovement: (input) => {
+    const [movement] = get().applyMovements([input]);
+    return movement ?? null;
+  },
+
+  applyMovements: (inputs) => {
+    const recorded: StockMovement[] = [];
+
+    set((state) => {
+      let products = state.products;
+
+      for (const input of inputs) {
+        const product = products.find((p) => p.id === input.productId);
+        if (!product) {
+          // Un movimiento sobre algo que no está en el catálogo no se inventa.
+          console.warn(`Movimiento ignorado: el producto ${input.productId} no existe.`);
+          continue;
+        }
+
+        const before = product.stock;
+        const after = Number((before + input.quantity).toFixed(4));
+
+        if (after < 0) {
+          /* Se registra igual: la operación ya ocurrió físicamente y negarla
+             haría desaparecer el hecho. Queda avisado para conciliar. */
+          console.warn(
+            `Stock negativo en «${product.name}»: ${before} → ${after}. Requiere conciliación.`,
+          );
+        }
+
+        products = products.map((p) => (p.id === product.id ? { ...p, stock: after } : p));
+
+        recorded.push({
+          id: `MOV-${Date.now()}-${recorded.length}`,
+          productId: product.id,
+          productName: product.name,
+          type: input.type,
+          quantity: input.quantity,
+          stockBefore: before,
+          stockAfter: after,
+          reference: input.reference,
+          reason: input.reason,
+          at: new Date().toISOString(),
+        });
+      }
+
+      if (recorded.length === 0) return state;
+
+      const movements = [...recorded, ...state.movements].slice(0, MOVEMENT_LIMIT);
+      writePersisted(MOVEMENTS_KEY, movements);
+      return { products: persist(products), movements };
+    });
+
+    return recorded;
+  },
+
+  movementsFor: (productId) => get().movements.filter((m) => m.productId === productId),
 
   findByBarcode: (barcode) => get().products.find((p) => p.barcode === barcode.trim()),
 
