@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { Check, ShieldAlert } from 'lucide-react';
 import { Button, Modal, ScanField } from '../ui';
 import { imeiError } from '../utils/imei';
+import { useCatalogStore } from '../store/useCatalogStore';
 
 interface ImeiModalProps {
   isOpen: boolean;
   productName: string;
+  /** Producto del catálogo: la serie se comprueba contra su inventario. */
+  productId: number;
   onConfirm: (serial: string) => void;
   onClose: () => void;
 }
@@ -26,12 +29,20 @@ const asImei = (raw: string): string | null => {
 
 /** Se monta solo mientras el modal está abierto: cada apertura arranca con
  * el campo limpio sin necesidad de un efecto que resetee el estado. */
-const ImeiForm: React.FC<{ onConfirm: (serial: string) => void }> = ({ onConfirm }) => {
+const ImeiForm: React.FC<{ productId: number; onConfirm: (serial: string) => void }> = ({
+  productId,
+  onConfirm,
+}) => {
   const [serial, setSerial] = useState('');
   const [error, setError] = useState('');
+  const checkSerial = useCatalogStore((state) => state.checkSerial);
+  const available = useCatalogStore((state) => state.availableSerials(productId));
 
   const numeric = asImei(serial);
   const liveError = numeric !== null ? imeiError(numeric) : undefined;
+  /* Validar la forma no basta: había que comprobar que el aparato existe y está
+     disponible, o se podía vender dos veces el mismo, o uno que nunca entró. */
+  const stockError = numeric && !liveError ? checkSerial(productId, numeric) : undefined;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,8 +54,13 @@ const ImeiForm: React.FC<{ onConfirm: (serial: string) => void }> = ({ onConfirm
       setError(liveError);
       return;
     }
+    const problem = checkSerial(productId, numeric ?? serial.trim());
+    if (problem) {
+      setError(problem);
+      return;
+    }
     setError('');
-    onConfirm(serial.trim());
+    onConfirm(numeric ?? serial.trim());
   };
 
   return (
@@ -61,14 +77,37 @@ const ImeiForm: React.FC<{ onConfirm: (serial: string) => void }> = ({ onConfirm
           setError('');
         }}
         placeholder="354892019482910"
-        error={error || liveError}
+        error={error || liveError || stockError}
         hint={
-          numeric !== null && !liveError
-            ? 'IMEI válido: dígito de control correcto.'
-            : 'Los IMEI de 15 dígitos se verifican solos; otras series se aceptan tal cual.'
+          numeric !== null && !liveError && !stockError
+            ? 'Serie válida y disponible en el almacén.'
+            : `${available.length} ${available.length === 1 ? 'unidad disponible' : 'unidades disponibles'} de este producto.`
         }
         inputSize="display"
       />
+
+      {/* Las series disponibles a la vista: teclear quince dígitos cuando quedan
+          tres unidades es trabajo que nadie tiene por qué hacer. */}
+      {available.length > 0 && available.length <= 8 && (
+        <div className="space-y-1.5">
+          <p className="text-micro uppercase text-ink-3">En almacén</p>
+          <div className="flex flex-wrap gap-1.5">
+            {available.map((s) => (
+              <button
+                key={s.serialNumber}
+                type="button"
+                onClick={() => {
+                  setSerial(s.serialNumber);
+                  setError('');
+                }}
+                className="px-2 h-7 rounded-sm border border-line bg-raised font-mono text-body text-ink-2 hover:border-accent hover:text-accent transition-colors duration-[--t-fast]"
+              >
+                {s.serialNumber}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </form>
   );
 };
@@ -76,6 +115,7 @@ const ImeiForm: React.FC<{ onConfirm: (serial: string) => void }> = ({ onConfirm
 export const ImeiModal: React.FC<ImeiModalProps> = ({
   isOpen,
   productName,
+  productId,
   onConfirm,
   onClose,
 }) => (
@@ -97,6 +137,6 @@ export const ImeiModal: React.FC<ImeiModalProps> = ({
       </>
     }
   >
-    {isOpen && <ImeiForm onConfirm={onConfirm} />}
+    {isOpen && <ImeiForm productId={productId} onConfirm={onConfirm} />}
   </Modal>
 );

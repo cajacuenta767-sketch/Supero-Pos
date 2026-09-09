@@ -13,6 +13,8 @@ const SAMPLE_CUSTOMERS: Customer[] = [
   {
     id: 'c-1',
     businessName: 'Comercial Bolivia S.R.L.',
+    creditLimit: 15000,
+    currentDebt: 3200,
     taxId: '1029384029',
     group: 'MAYORISTA',
     discountPercentage: 0,
@@ -20,6 +22,8 @@ const SAMPLE_CUSTOMERS: Customer[] = [
   {
     id: 'c-2',
     businessName: 'Tech Solutions Corp',
+    creditLimit: 25000,
+    currentDebt: 0,
     taxId: '4920194821',
     group: 'VIP',
     discountPercentage: 5,
@@ -27,6 +31,8 @@ const SAMPLE_CUSTOMERS: Customer[] = [
   {
     id: 'c-3',
     businessName: 'Distribuidora Oriental',
+    creditLimit: 8000,
+    currentDebt: 7600,
     taxId: '7748192019',
     group: 'MAYORISTA',
     discountPercentage: 0,

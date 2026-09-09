@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Package,
   Plus,
@@ -70,6 +70,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { hasPermission } from '../utils/permissions';
 import { isPrintingAvailable, printProductLabels } from '../services/printing';
 import { useCatalogStore, type Product } from '../store/useCatalogStore';
+import { formatDateTime } from '../utils/dates';
 
 export const ProductsView: React.FC = () => {
   const { user } = useAuthStore();
@@ -125,32 +126,21 @@ export const ProductsView: React.FC = () => {
   const updateProduct = useCatalogStore((state) => state.updateProduct);
   const toggleActive = useCatalogStore((state) => state.toggleActive);
 
-  // Mock Serials List
-  const [serials] = useState<ProductSerial[]>([
-    {
-      id: 1,
-      product_name: 'Smartphone Samsung Galaxy A54 128GB',
-      serial_number: 'IMEI-358492019482710',
-      status: 'IN_STOCK',
-      updated_at: '14/08/2026 08:30',
-    },
-    {
-      id: 2,
-      product_name: 'Smartphone Samsung Galaxy A54 128GB',
-      serial_number: 'IMEI-358492019482711',
-      status: 'IN_STOCK',
-      updated_at: '14/08/2026 08:30',
-    },
-    {
-      id: 3,
-      product_name: 'Smartphone Samsung Galaxy A54 128GB',
-      serial_number: 'IMEI-358492019482712',
-      status: 'SOLD',
-      ticket_id: 'TK-10012',
-      customer_name: 'Comercial Bolivia S.R.L.',
-      updated_at: '12/08/2026 14:15',
-    },
-  ]);
+  /* Las series salen del catálogo compartido: eran estado local de esta vista,
+     así que el punto de venta no podía comprobarlas al cobrar. */
+  const serialInventory = useCatalogStore((state) => state.serials);
+  const serials: ProductSerial[] = useMemo(
+    () =>
+      serialInventory.map((s, index) => ({
+        id: index + 1,
+        product_name: products.find((p) => p.id === s.productId)?.name ?? 'Producto retirado',
+        serial_number: s.serialNumber,
+        status: s.status === 'DAMAGED' ? 'RETURNED' : s.status,
+        ticket_id: s.ticketId,
+        updated_at: s.updatedAt ? formatDateTime(s.updatedAt) : '—',
+      })),
+    [serialInventory, products],
+  );
 
   // Serial Forensic Search State
   const [serialSearch, setSerialSearch] = useState('');

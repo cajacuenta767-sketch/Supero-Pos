@@ -1,26 +1,60 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { LoginView } from './components/LoginView';
 import { PosView } from './components/PosView';
-import { DashboardView } from './components/DashboardView';
-import { UsersView } from './components/UsersView';
-import { ContactsView } from './components/ContactsView';
-import { ProductsView } from './components/ProductsView';
-import { PurchasesView } from './components/PurchasesView';
-import { TransfersView } from './components/TransfersView';
-import { StockAdjustmentsView } from './components/StockAdjustmentsView';
-import { ExpensesView } from './components/ExpensesView';
-import { SalesHistoryView } from './components/SalesHistoryView';
-import { FinanceView } from './components/FinanceView';
-import { NotificationsView } from './components/NotificationsView';
-import { SettingsView } from './components/SettingsView';
-import { HrAttendanceView } from './components/HrAttendanceView';
+
+/* Carga diferida de los apartados de administración.
+ *
+ * Todo iba en un solo paquete de 478 KB: la pantalla de acceso descargaba las
+ * quince vistas antes de que nadie hubiera entrado. El punto de venta se queda
+ * en el paquete inicial porque es la primera pantalla de trabajo y no debe
+ * esperar a nada. */
+const DashboardView = lazy(() =>
+  import('./components/DashboardView').then((m) => ({ default: m.DashboardView })),
+);
+const UsersView = lazy(() =>
+  import('./components/UsersView').then((m) => ({ default: m.UsersView })),
+);
+const ContactsView = lazy(() =>
+  import('./components/ContactsView').then((m) => ({ default: m.ContactsView })),
+);
+const ProductsView = lazy(() =>
+  import('./components/ProductsView').then((m) => ({ default: m.ProductsView })),
+);
+const PurchasesView = lazy(() =>
+  import('./components/PurchasesView').then((m) => ({ default: m.PurchasesView })),
+);
+const TransfersView = lazy(() =>
+  import('./components/TransfersView').then((m) => ({ default: m.TransfersView })),
+);
+const StockAdjustmentsView = lazy(() =>
+  import('./components/StockAdjustmentsView').then((m) => ({ default: m.StockAdjustmentsView })),
+);
+const ExpensesView = lazy(() =>
+  import('./components/ExpensesView').then((m) => ({ default: m.ExpensesView })),
+);
+const SalesHistoryView = lazy(() =>
+  import('./components/SalesHistoryView').then((m) => ({ default: m.SalesHistoryView })),
+);
+const FinanceView = lazy(() =>
+  import('./components/FinanceView').then((m) => ({ default: m.FinanceView })),
+);
+const NotificationsView = lazy(() =>
+  import('./components/NotificationsView').then((m) => ({ default: m.NotificationsView })),
+);
+const SettingsView = lazy(() =>
+  import('./components/SettingsView').then((m) => ({ default: m.SettingsView })),
+);
+const HrAttendanceView = lazy(() =>
+  import('./components/HrAttendanceView').then((m) => ({ default: m.HrAttendanceView })),
+);
+
 import { useOfflineSync } from './hooks/useOfflineSync';
 import { useAuthStore } from './store/useAuthStore';
 import { canAccessView, VIEW_PERMISSIONS } from './utils/permissions';
-import { EmptyState, ErrorBoundary, ToastProvider } from './ui';
+import { EmptyState, ErrorBoundary, Skeleton, ToastProvider } from './ui';
 
 const VIEWS: Record<string, React.ComponentType> = {
   home: DashboardView,
@@ -38,6 +72,23 @@ const VIEWS: Record<string, React.ComponentType> = {
   settings: SettingsView,
   hr: HrAttendanceView,
 };
+
+/** Silueta del apartado mientras se descarga su código. */
+const ViewSkeleton: React.FC = () => (
+  <div className="h-full p-6 space-y-5">
+    <div className="space-y-2">
+      <Skeleton className="h-8 w-64" />
+      <Skeleton className="h-4 w-96" />
+    </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      {[0, 1, 2, 3].map((i) => (
+        <Skeleton key={i} className="h-24" />
+      ))}
+    </div>
+    <Skeleton className="h-9 w-full max-w-md" />
+    <Skeleton className="h-64 w-full" />
+  </div>
+);
 
 export const App: React.FC = () => {
   const { isAuthenticated, user } = useAuthStore();
@@ -86,7 +137,11 @@ export const App: React.FC = () => {
                 label={effectiveTab ?? 'apartado'}
                 onReset={() => setActiveTab('pos')}
               >
-                <ActiveView />
+                {/* Mientras llega el trozo del apartado se muestra su forma, no
+                    un vacío: un salto en blanco parece un fallo. */}
+                <Suspense fallback={<ViewSkeleton />}>
+                  <ActiveView />
+                </Suspense>
               </ErrorBoundary>
             ) : (
               <EmptyState

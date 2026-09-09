@@ -24,12 +24,11 @@ import { useViewShortcuts } from '../hooks/useViewShortcuts';
 import { useDebounced } from '../hooks/useDebounced';
 import type { Column, TabItem } from '../ui';
 
-type SubTab = 'catalog' | 'reception' | 'discrepancies';
+type SubTab = 'catalog' | 'reception';
 
 const TABS: TabItem[] = [
   { id: 'catalog', label: 'Guías', icon: <ArrowLeftRight className="w-4 h-4" /> },
-  { id: 'reception', label: 'Recepción', icon: <Truck className="w-4 h-4" /> },
-  { id: 'discrepancies', label: 'Diferencias', icon: <Eye className="w-4 h-4" /> },
+  { id: 'reception', label: 'Por recibir', icon: <Truck className="w-4 h-4" /> },
 ];
 
 const STATUS_LABEL: Record<TransferGuide['status'], string> = {
@@ -72,9 +71,10 @@ interface TransferGuide {
 }
 
 export const TransfersView: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'reception' | 'discrepancies'>(
-    'catalog',
-  );
+  /* Antes eran tres pestañas decorativas: se pulsaban, se iluminaban y mostraban
+     la misma tabla. «Discrepancias» no tenía datos detrás. Quedan las dos que
+     corresponden a un estado real de la guía. */
+  const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'reception'>('catalog');
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -167,7 +167,9 @@ export const TransfersView: React.FC = () => {
       t.destination_branch.toLowerCase().includes(q);
     const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
     const matchesSource = sourceFilter === 'ALL' || t.source_branch === sourceFilter;
-    return matchesSearch && matchesStatus && matchesSource;
+    // «Por recibir» son las que viajan: es lo que hay que atender hoy.
+    const matchesTab = activeSubTab === 'reception' ? t.status === 'IN_TRANSIT' : true;
+    return matchesSearch && matchesStatus && matchesSource && matchesTab;
   });
 
   const confirmReception = (t: TransferGuide) => {

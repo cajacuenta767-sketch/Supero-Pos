@@ -35,6 +35,7 @@ export interface Product {
 
 const STORAGE_KEY = 'catalogo';
 const MOVEMENTS_KEY = 'movimientos_stock';
+const SERIALS_KEY = 'series';
 
 const SEED: Product[] = [
   {
@@ -210,9 +211,38 @@ export interface MovementInput {
 /** Cuántos asientos se conservan en la terminal. Lo viejo vive en el servidor. */
 const MOVEMENT_LIMIT = 500;
 
+export type SerialStatus = 'IN_STOCK' | 'SOLD' | 'RETURNED' | 'DAMAGED';
+
+/**
+ * Unidad serializada concreta: este teléfono, no «un teléfono».
+ *
+ * Vivía como estado local de la vista de productos, así que al vender se
+ * aceptaba cualquier IMEI: se podía vender dos veces el mismo aparato, o uno que
+ * nunca entró al almacén. Validar la forma del número no basta; hay que
+ * comprobar que existe y está disponible.
+ */
+export interface ProductSerial {
+  serialNumber: string;
+  productId: number;
+  status: SerialStatus;
+  ticketId?: string;
+  updatedAt: string;
+}
+
+/* Series de ejemplo, con dígito de control válido: los IMEI del catálogo tienen
+   que poder comprobarse igual que los que llegan escaneados. */
+const SERIAL_SEED: ProductSerial[] = [
+  { serialNumber: '358492019482717', productId: 101, status: 'IN_STOCK', updatedAt: '' },
+  { serialNumber: '358492019482725', productId: 101, status: 'IN_STOCK', updatedAt: '' },
+  { serialNumber: '358492019482733', productId: 101, status: 'IN_STOCK', updatedAt: '' },
+  { serialNumber: '356938035643809', productId: 105, status: 'IN_STOCK', updatedAt: '' },
+  { serialNumber: '490154203237518', productId: 105, status: 'IN_STOCK', updatedAt: '' },
+];
+
 interface CatalogState {
   products: Product[];
   movements: StockMovement[];
+  serials: ProductSerial[];
   addProduct: (product: Omit<Product, 'id'>) => Product;
   updateProduct: (id: number, patch: Partial<Product>) => void;
   removeProduct: (id: number) => void;
@@ -229,6 +259,20 @@ interface CatalogState {
   /** Varios movimientos como una sola operación: una recepción de N líneas. */
   applyMovements: (inputs: MovementInput[]) => StockMovement[];
   movementsFor: (productId: number) => StockMovement[];
+
+  /** Series disponibles de un producto. */
+  availableSerials: (productId: number) => ProductSerial[];
+  /**
+   * Comprueba que la serie puede venderse.
+   *
+   * Devuelve el motivo del rechazo, o `undefined` si está disponible. Una serie
+   * desconocida no se acepta: si el aparato existe, tiene que haber entrado.
+   */
+  checkSerial: (productId: number, serialNumber: string) => string | undefined;
+  /** Marca una serie como vendida y la ata a su ticket. */
+  markSerialsSold: (serialNumbers: string[], ticketId: string) => void;
+  /** Alta de series al recibir mercadería. */
+  registerSerials: (productId: number, serialNumbers: string[]) => void;
   findByBarcode: (barcode: string) => Product | undefined;
   /** Solo lo vendible: activo y con existencias registradas. */
   sellableProducts: () => Product[];
@@ -243,6 +287,7 @@ const persist = (products: Product[]) => {
 export const useCatalogStore = create<CatalogState>((set, get) => ({
   products: readPersisted<Product[]>(STORAGE_KEY) ?? SEED,
   movements: readPersisted<StockMovement[]>(MOVEMENTS_KEY) ?? [],
+  serials: readPersisted<ProductSerial[]>(SERIALS_KEY) ?? SERIAL_SEED,
 
   addProduct: (product) => {
     const id = Math.max(0, ...get().products.map((p) => p.id)) + 1;
@@ -323,6 +368,52 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   movementsFor: (productId) => get().movements.filter((m) => m.productId === productId),
+
+  availableSerials: (productId) =>
+    get().serials.filter((s) => s.productId === productId && s.status === 'IN_STOCK'),
+
+  checkSerial: (productId, serialNumber) => {
+    const clean = serialNumber.trim();
+    const found = get().serials.find((s) => s.serialNumber === clean);
+
+    if (!found) return 'Esta serie no consta en el inventario.';
+    if (found.productId !== productId) return 'La serie pertenece a otro producto.';
+    if (found.status === 'SOLD')
+      return `Ya vendida${found.ticketId ? ` en ${found.ticketId}` : ''}.`;
+    if (found.status === 'DAMAGED') return 'Marcada como dañada: no se puede vender.';
+    return undefined;
+  },
+
+  markSerialsSold: (serialNumbers, ticketId) =>
+    set((state) => {
+      const target = new Set(serialNumbers.map((s) => s.trim()));
+      const serials = state.serials.map((s) =>
+        target.has(s.serialNumber)
+          ? { ...s, status: 'SOLD' as const, ticketId, updatedAt: new Date().toISOString() }
+          : s,
+      );
+      writePersisted(SERIALS_KEY, serials);
+      return { serials };
+    }),
+
+  registerSerials: (productId, serialNumbers) =>
+    set((state) => {
+      const known = new Set(state.serials.map((s) => s.serialNumber));
+      const nuevos = serialNumbers
+        .map((n) => n.trim())
+        .filter((n) => n && !known.has(n))
+        .map((serialNumber) => ({
+          serialNumber,
+          productId,
+          status: 'IN_STOCK' as const,
+          updatedAt: new Date().toISOString(),
+        }));
+
+      if (nuevos.length === 0) return state;
+      const serials = [...nuevos, ...state.serials];
+      writePersisted(SERIALS_KEY, serials);
+      return { serials };
+    }),
 
   findByBarcode: (barcode) => get().products.find((p) => p.barcode === barcode.trim()),
 

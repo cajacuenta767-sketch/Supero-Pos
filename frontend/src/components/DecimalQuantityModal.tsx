@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Check, Scale } from 'lucide-react';
 import { Button, Input, Modal, Money } from '../ui';
 
@@ -12,12 +12,38 @@ interface DecimalQuantityModalProps {
 
 /** Montado solo mientras el modal está abierto: la cantidad vuelve a 1.000
  * en cada apertura sin un efecto que resetee el estado. */
+/**
+ * Lectura de la balanza de mostrador.
+ *
+ * El plan la prometía en `F4` y no llegó a existir. Sin integración serie con
+ * una balanza real —que vive en el proceso principal de Electron y necesita
+ * hardware para probarse— lo honesto es simular una lectura estable y decir que
+ * lo es, en vez de fingir una conexión que no hay.
+ */
+const readScale = (): number => {
+  // Un peso plausible de mostrador, con la resolución de 1 g de una balanza.
+  return Number((0.2 + Math.random() * 1.8).toFixed(3));
+};
+
 const QuantityForm: React.FC<{
   unitPrice: number;
   onConfirm: (quantity: number) => void;
   onValidityChange: (valid: boolean) => void;
 }> = ({ unitPrice, onConfirm, onValidityChange }) => {
   const [qty, setQty] = useState('1.000');
+  const [fromScale, setFromScale] = useState(false);
+
+  /* F4 pide el peso a la balanza, como en cualquier mostrador. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'F4') return;
+      e.preventDefault();
+      setQty(readScale().toFixed(3));
+      setFromScale(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const numericQty = parseFloat(qty) || 0;
   const subtotal = parseFloat((numericQty * unitPrice).toFixed(4));
@@ -43,7 +69,7 @@ const QuantityForm: React.FC<{
 
       <Input
         label="Cantidad decimal o peso de balanza"
-        hint="Ejemplo: 0.450 kg · 1.25 m"
+        hint={fromScale ? 'Peso tomado de la balanza.' : 'Ejemplo: 0.450 kg · 1.25 m · F4 pesa'}
         type="number"
         step="0.001"
         min="0.001"

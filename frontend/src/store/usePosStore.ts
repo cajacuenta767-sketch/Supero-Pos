@@ -11,6 +11,10 @@ export interface Customer {
   taxId: string;
   group: 'GENERAL' | 'MAYORISTA' | 'VIP';
   discountPercentage: number; // e.g. VIP 5%
+  /** Techo de crédito autorizado. Cero deja al cliente solo al contado. */
+  creditLimit?: number;
+  /** Deuda pendiente. Con el límite, decide si se le puede fiar. */
+  currentDebt?: number;
 }
 
 export interface CashShift {

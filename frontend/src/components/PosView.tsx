@@ -633,6 +633,7 @@ export const PosView: React.FC = () => {
       <ImeiModal
         isOpen={!!pendingSerializedProduct}
         productName={pendingSerializedProduct?.name || ''}
+        productId={pendingSerializedProduct?.id ?? 0}
         onConfirm={(serial) => {
           if (!pendingSerializedProduct) return;
           addItem({ ...pendingSerializedProduct }, 1, serial);

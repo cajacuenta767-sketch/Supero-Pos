@@ -67,6 +67,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   const { selectedCustomer, manualDiscount, resetPosCycle, setPendingSyncCount } = usePosStore();
   const toast = useToast();
   const applyMovements = useCatalogStore((state) => state.applyMovements);
+  const markSerialsSold = useCatalogStore((state) => state.markSerialsSold);
   const settings = useSettingsStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
@@ -95,6 +96,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   // puede reclamar después. Al público general no se le pide firma por 20 Bs.
   const isNamedCustomer = Boolean(selectedCustomer?.id && selectedCustomer.id !== 'default-public');
   const needsSignature = isNamedCustomer && total >= SIGNATURE_THRESHOLD;
+
+  /* Crédito del cliente. Los contactos tenían límite y deuda desde el principio
+     y el cobro no los consultaba nunca: se podía fiar por encima del techo
+     autorizado sin que nada avisara. */
+  const creditLimit = selectedCustomer?.creditLimit ?? 0;
+  const currentDebt = selectedCustomer?.currentDebt ?? 0;
+  const creditAvailable = Math.max(0, creditLimit - currentDebt);
+  const exceedsCredit = isNamedCustomer && creditLimit > 0 && total > creditAvailable;
   const canFinish = isCovered && (!needsSignature || Boolean(signature));
 
   const handleProcessPayment = () => {
@@ -230,6 +239,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
 
       // Execute Atomic ACID transaction in local SQLite database
       const result = localDb.processLocalSaleAtomic(salePayload);
+
+      /* Las series vendidas quedan atadas a su ticket: es lo que permite saber
+         después a quién se le entregó este aparato concreto. */
+      const soldSerials = items.flatMap((item) => item.selected_serials ?? []);
+      if (soldSerials.length > 0) {
+        markSerialsSold(soldSerials, transaction_id.slice(0, 8).toUpperCase());
+      }
 
       /* Las existencias bajan al vender, con su asiento en el kardex local. */
       applyMovements(
@@ -487,6 +503,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                 )}
               </span>
             </div>
+          </div>
+        )}
+
+        {exceedsCredit && (
+          <div className="flex items-start gap-2 p-3 rounded-md bg-warn-soft border border-warn/30 text-body text-warn-ink">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              Esta venta supera el crédito disponible de {selectedCustomer.businessName}: quedan{' '}
+              <Money value={creditAvailable} size="body" className="text-warn-ink" /> de{' '}
+              <Money value={creditLimit} size="body" className="text-warn-ink" />. Cóbrese al
+              contado o pida autorización.
+            </span>
           </div>
         )}
 

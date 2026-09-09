@@ -1,6 +1,6 @@
 import { usePersistentState } from '../store/persist';
 import React, { useState } from 'react';
-import { ShoppingCart, Plus, Truck, ArrowDownRight, Eye, X } from 'lucide-react';
+import { ShoppingCart, Plus, Truck, Eye, X } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -25,12 +25,14 @@ import type { Column, TabItem } from '../ui';
 import { imeiError, isValidImei } from '../utils/imei';
 import { useCatalogStore } from '../store/useCatalogStore';
 
-type SubTab = 'orders' | 'receivings' | 'returns';
+/* Antes había tres pestañas y ninguna cambiaba nada: «Devoluciones» prometía un
+   módulo que no existe, y prometer es peor que no ofrecer. Quedan las dos que
+   corresponden a un estado real de la orden. */
+type SubTab = 'orders' | 'receivings';
 
 const TABS: TabItem[] = [
   { id: 'orders', label: 'Órdenes', icon: <ShoppingCart className="w-4 h-4" /> },
   { id: 'receivings', label: 'Recepciones', icon: <Truck className="w-4 h-4" /> },
-  { id: 'returns', label: 'Devoluciones', icon: <ArrowDownRight className="w-4 h-4" /> },
 ];
 
 /* Vocabulario de producto: el estado no se muestra como enum. */
@@ -76,7 +78,7 @@ interface POItem {
 }
 
 export const PurchasesView: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'receivings' | 'returns'>('orders');
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>('orders');
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -199,7 +201,12 @@ export const PurchasesView: React.FC = () => {
       po.supplier_name.toLowerCase().includes(q) ||
       po.supplier_tax_id.includes(searchQueryDebounced);
     const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    /* La pestaña acota por estado: pendientes de recibir frente a ya recibidas. */
+    const matchesTab =
+      activeSubTab === 'receivings'
+        ? po.status === 'COMPLETED'
+        : po.status !== 'COMPLETED' && po.status !== 'CANCELLED';
+    return matchesSearch && matchesStatus && matchesTab;
   });
 
   const serializedQty = selectedPO
@@ -223,6 +230,7 @@ export const PurchasesView: React.FC = () => {
    *  abría el detalle de la orden, como si se hubiera pulsado otra cosa. */
   const catalog = useCatalogStore((state) => state.products);
   const applyMovements = useCatalogStore((state) => state.applyMovements);
+  const registerSerials = useCatalogStore((state) => state.registerSerials);
   const selectedPoProduct = catalog.find((p) => p.id === poForm.productId);
 
   const closePOModal = () => {
@@ -318,6 +326,13 @@ export const PurchasesView: React.FC = () => {
     setPurchaseOrders((prev) =>
       prev.map((p) => (p.id === po.id ? { ...p, status: 'COMPLETED' as const } : p)),
     );
+
+    /* Los IMEI escaneados entran al inventario de series: sin esto, el aparato
+       recibido no se podría vender, porque la venta ya los valida. */
+    const serialized = po.items.find((item) => item.unit_type === 'SERIALIZED');
+    if (serialized && scannedImeis.length > 0) {
+      registerSerials(serialized.product_id, scannedImeis);
+    }
 
     /* Recibir mercadería suma existencias. Antes solo se marcaba la orden como
        completada: el stock no cambiaba, así que el inventario únicamente bajaba
@@ -427,7 +442,7 @@ export const PurchasesView: React.FC = () => {
       <div className="max-w-[1600px] mx-auto p-6 space-y-5">
         <PageHeader
           title="Compras"
-          subtitle="Órdenes a proveedores, recepción de mercadería y devoluciones."
+          subtitle="Órdenes a proveedores y recepción de mercadería."
           actions={
             <Button icon={<Plus className="w-4 h-4" />} onClick={() => setIsPOModalOpen(true)}>
               Nueva orden
