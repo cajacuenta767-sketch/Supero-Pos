@@ -25,7 +25,10 @@ import type { Column, TabItem } from '../ui';
 
 interface AttendanceLog {
   id: string;
-  timestamp: string;
+  /** Instante en ISO. Como texto «14/08/2026», ordenar pone el 14 de agosto
+   *  antes que el 2 de septiembre, y comparar dos fichajes daba lo contrario
+   *  de lo que se buscaba. */
+  at: string;
   employee_name: string;
   role: string;
   event_type: 'CLOCK_IN' | 'BREAK_START' | 'BREAK_END' | 'CLOCK_OUT';
@@ -111,7 +114,7 @@ export const HrAttendanceView: React.FC = () => {
   const [logs, setLogs] = usePersistentState<AttendanceLog[]>('fichajes', [
     {
       id: 'LOG-7001',
-      timestamp: '14/08/2026 07:55',
+      at: '2026-08-14T07:55:00.000Z',
       employee_name: 'Juan Pérez',
       role: 'CAJERO',
       event_type: 'CLOCK_IN',
@@ -122,7 +125,7 @@ export const HrAttendanceView: React.FC = () => {
     },
     {
       id: 'LOG-7002',
-      timestamp: '14/08/2026 08:14',
+      at: '2026-08-14T08:14:00.000Z',
       employee_name: 'María Gómez',
       role: 'ALMACENERO',
       event_type: 'CLOCK_IN',
@@ -180,7 +183,7 @@ export const HrAttendanceView: React.FC = () => {
 
     const newLog: AttendanceLog = {
       id: `LOG-${7000 + logs.length + 1}`,
-      timestamp: formatDateTime(new Date()),
+      at: new Date().toISOString(),
       employee_name: 'Juan Pérez',
       role: 'CAJERO',
       event_type: clockEventType,
@@ -204,16 +207,47 @@ export const HrAttendanceView: React.FC = () => {
     );
   }, [logs, searchQueryDebounced, statusFilter]);
 
-  const presentNow = logs.filter((l) => l.event_type === 'CLOCK_IN').length;
-  const totalHours = logs.reduce((s, l) => s + (l.hours_worked ?? 0), 0);
+  /* Presente es quien tiene una entrada sin su salida. Se contaban todas las
+     entradas registradas, así que alguien que había fichado la salida seguía
+     apareciendo como presente, y una persona con entrada, pausa y regreso
+     contaba por tres. */
+  /** Último fichaje de cada empleado: es lo único que dice dónde está. */
+  const lastPerEmployee = useMemo(() => {
+    const ultimo = new Map<string, AttendanceLog>();
+    for (const log of logs) {
+      const previo = ultimo.get(log.employee_name);
+      if (!previo || log.at > previo.at) ultimo.set(log.employee_name, log);
+    }
+    return [...ultimo.values()];
+  }, [logs]);
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const presentNow = lastPerEmployee.filter(
+    (l) =>
+      (l.event_type === 'CLOCK_IN' || l.event_type === 'BREAK_END') && l.at.slice(0, 10) === today,
+  ).length;
+
+  /* Las horas y los fichajes son los del periodo que se está mirando: antes se
+     sumaba el histórico entero mientras la tabla mostraba lo filtrado. */
+  const totalHours = filteredLogs.reduce((s, l) => s + (l.hours_worked ?? 0), 0);
   const openIncidents = exceptions.filter((e) => e.status === 'PENDING').length;
+
+  /* Una entrada sin salida al cerrar el día es una incidencia por sí misma:
+     nadie la declara y sin ella las horas del turno no cuadran. */
+  const unclosedShifts = lastPerEmployee.filter(
+    (l) => l.event_type !== 'CLOCK_OUT' && l.at.slice(0, 10) < today,
+  ).length;
 
   const logColumns: Array<Column<AttendanceLog>> = [
     {
       key: 'when',
       header: 'Fecha y hora',
       width: '170px',
-      render: (l) => <span className="font-mono tnum text-body text-ink-2">{l.timestamp}</span>,
+      sortValue: (l) => l.at,
+      render: (l) => (
+        <span className="font-mono tnum text-body text-ink-2">{formatDateTime(l.at)}</span>
+      ),
     },
     {
       key: 'employee',
@@ -407,16 +441,20 @@ export const HrAttendanceView: React.FC = () => {
           <StatTile
             label="Horas del periodo"
             value={totalHours.toFixed(1)}
-            hint={`${logs.length} fichajes`}
+            hint={`${filteredLogs.length} ${filteredLogs.length === 1 ? 'fichaje' : 'fichajes'}`}
             icon={<Clock className="w-4 h-4" />}
             tone="accent"
           />
           <StatTile
             label="Incidencias abiertas"
-            value={openIncidents}
-            hint="pendientes de aprobar"
+            value={openIncidents + unclosedShifts}
+            hint={
+              unclosedShifts > 0
+                ? `${openIncidents} por aprobar · ${unclosedShifts} ${unclosedShifts === 1 ? 'jornada sin cerrar' : 'jornadas sin cerrar'}`
+                : 'pendientes de aprobar'
+            }
             icon={<FileText className="w-4 h-4" />}
-            tone={openIncidents > 0 ? 'warning' : 'neutral'}
+            tone={openIncidents + unclosedShifts > 0 ? 'warning' : 'neutral'}
           />
         </div>
 
