@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { verifySupervisorPin } from '../utils/supervisorPin';
 import { useCartStore } from './useCartStore';
 import { readPersisted, writePersisted } from './persist';
+import { localId } from '../utils/ids';
 import { useAuthStore } from './useAuthStore';
 
 const SHIFT_KEY = 'turno_caja';
@@ -78,7 +79,7 @@ const initialShift = (): CashShift | null => {
   }
 
   const seeded: CashShift = {
-    id: `shift-${Date.now()}`,
+    id: localId('shift'),
     registerId: 'caja-1',
     registerName: 'Caja 1 Principal',
     userId: 'usr-1',
@@ -106,7 +107,7 @@ export const usePosStore = create<PosState>((set) => ({
        cierre de caja nombraba a un empleado que podía no haber trabajado. */
     const operator = useAuthStore.getState().user;
     const newShift: CashShift = {
-      id: `shift-${Date.now()}`,
+      id: localId('shift'),
       registerId,
       registerName,
       userId: String(operator?.id ?? 'sin-identificar'),

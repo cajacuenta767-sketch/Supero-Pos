@@ -276,13 +276,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.removeItem('supero_pos_is_locked');
     localStorage.removeItem('supero_pos_lock_until');
 
-    // 2. Reset Zustand Stores (POS cart/state & UI modals/toasts)
+    /* Se limpia el ciclo del punto de venta: cliente, descuento y carrito no
+       pueden sobrevivir a un cambio de operador.
+
+       Aquí también se reiniciaba `useUiStore`, un segundo sistema de avisos y
+       modales que no leía ninguna pantalla —los avisos salen de `ui/Toast` y
+       cada vista lleva sus propios modales—. Se ha eliminado: dejarlo invitaba
+       a conectarle avisos que no habrían aparecido nunca. */
     try {
-      // Dynamic import to avoid circular dependency
+      // Importación diferida para no crear una dependencia circular.
       import('./usePosStore').then(({ usePosStore }) => usePosStore.getState().resetPosCycle());
-      import('./useUiStore').then(({ useUiStore }) => useUiStore.getState().resetUiState());
     } catch {
-      // Fallback safe reset
+      /* Si el reinicio falla, la sesión se cierra igual. */
     }
 
     // 3. Clear Auth State & immediately force redirect to LoginView

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { readPersisted, writePersisted } from './persist';
+import { localId } from '../utils/ids';
 
 /**
  * Catálogo de productos, único para toda la terminal.
@@ -359,7 +360,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         products = products.map((p) => (p.id === product.id ? { ...p, stock: after } : p));
 
         recorded.push({
-          id: `MOV-${Date.now()}-${recorded.length}`,
+          id: localId('MOV'),
           productId: product.id,
           productName: product.name,
           type: input.type,

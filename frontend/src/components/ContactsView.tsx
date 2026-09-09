@@ -22,15 +22,23 @@ import {
 import { useViewShortcuts } from '../hooks/useViewShortcuts';
 import type { Column, TabItem } from '../ui';
 import { usePersistentState } from '../store/persist';
+import {
+  useCustomersStore,
+  PUBLIC_CUSTOMER_ID,
+  GROUP_LABEL,
+  GROUP_PRICE_RULE,
+  GROUP_DISCOUNT,
+  type CustomerGroup as CustomerGroupCode,
+} from '../store/useCustomersStore';
 
 interface Customer {
-  id: number;
+  id: string;
   name: string;
   tax_id: string;
   email: string;
   phone: string;
   address: string;
-  group: 'Minoristas' | 'Mayoristas' | 'Corporativos' | 'Frecuentes';
+  group: CustomerGroupCode;
   credit_limit: number;
   current_balance: number;
   is_active: boolean;
@@ -54,6 +62,7 @@ interface Supplier {
 
 interface CustomerGroup {
   id: number;
+  code: CustomerGroupCode;
   name: string;
   price_rule: 'RETAIL' | 'WHOLESALE' | 'DISCOUNT_FIXED';
   discount_percentage: number;
@@ -75,12 +84,16 @@ const PRICE_RULE: Record<CustomerGroup['price_rule'], string> = {
   DISCOUNT_FIXED: 'Descuento fijo',
 };
 
-const GROUP_TONE: Record<Customer['group'], 'neutral' | 'accent' | 'success' | 'warning'> = {
-  Minoristas: 'neutral',
-  Mayoristas: 'accent',
-  Corporativos: 'success',
-  Frecuentes: 'warning',
+const GROUP_TONE: Record<CustomerGroupCode, 'neutral' | 'accent' | 'success' | 'warning'> = {
+  GENERAL: 'neutral',
+  MINORISTA: 'neutral',
+  MAYORISTA: 'accent',
+  CORPORATIVO: 'success',
+  VIP: 'warning',
 };
+
+/* Los grupos que existen, en el orden en que se leen. */
+const GROUP_ORDER: CustomerGroupCode[] = ['MINORISTA', 'MAYORISTA', 'CORPORATIVO', 'VIP'];
 
 export const ContactsView: React.FC = () => {
   const toast = useToast();
@@ -102,55 +115,42 @@ export const ContactsView: React.FC = () => {
     email: '',
     phone: '',
     address: '',
-    group: 'Minoristas' as Customer['group'],
+    group: 'MINORISTA' as CustomerGroupCode,
     credit_limit: 0,
   });
   const [contactError, setContactError] = useState<string | undefined>();
   const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
   const [detailSupplier, setDetailSupplier] = useState<Supplier | null>(null);
 
-  // Mock Customers Data
-  const [customers, setCustomers] = usePersistentState<Customer[]>('clientes', [
-    {
-      id: 1,
-      name: 'Comercial Bolivia S.R.L.',
-      tax_id: '1029384756',
-      email: 'ventas@comercialbo.com',
-      phone: '+591 71234567',
-      address: 'Av. Heroínas #452, Cochabamba',
-      group: 'Corporativos',
-      credit_limit: 10000,
-      current_balance: 3450,
-      is_active: true,
-      credit_enabled: true,
-    },
-    {
-      id: 2,
-      name: 'Tienda El Sol (Pedro Mamani)',
-      tax_id: '493827101',
-      email: 'pmamani@gmail.com',
-      phone: '+591 72345678',
-      address: 'Calle Junín #120, Quillacollo',
-      group: 'Mayoristas',
-      credit_limit: 5000,
-      current_balance: 4800,
-      is_active: true,
-      credit_enabled: true,
-    },
-    {
-      id: 3,
-      name: 'Lucía Fernández',
-      tax_id: '5849302',
-      email: 'lucia.f@hotmail.com',
-      phone: '+591 73456789',
-      address: 'Av. América #890, Cochabamba',
-      group: 'Minoristas',
-      credit_limit: 500,
-      current_balance: 0,
-      is_active: true,
-      credit_enabled: false,
-    },
-  ]);
+  /* Los clientes salen del listado compartido con el punto de venta. Esta
+     vista tenía su propia lista y el selector de cliente del cobro tenía otra:
+     «Comercial Bolivia S.R.L.» figuraba en las dos con NIT distinto, otro
+     límite de crédito y otra deuda. */
+  const storeCustomers = useCustomersStore((state) => state.customers);
+  const addStoreCustomer = useCustomersStore((state) => state.addCustomer);
+  const taxIdOwner = useCustomersStore((state) => state.taxIdOwner);
+
+  const customers: Customer[] = useMemo(
+    () =>
+      storeCustomers
+        /* El cliente de mostrador no es una ficha: es la opción por defecto del
+           cobro y no se administra desde aquí. */
+        .filter((c) => c.id !== PUBLIC_CUSTOMER_ID)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          tax_id: c.taxId,
+          email: c.email ?? '',
+          phone: c.phone ?? '',
+          address: c.address ?? '',
+          group: c.group,
+          credit_limit: c.creditLimit,
+          current_balance: c.currentDebt,
+          is_active: c.isActive,
+          credit_enabled: c.creditEnabled,
+        })),
+    [storeCustomers],
+  );
 
   // Mock Suppliers Data
   const [suppliers, setSuppliers] = usePersistentState<Supplier[]>('proveedores', [
@@ -184,30 +184,21 @@ export const ContactsView: React.FC = () => {
     },
   ]);
 
-  // Mock Groups Data
-  const [customerGroups] = useState<CustomerGroup[]>([
-    {
-      id: 1,
-      name: 'Precio Público (Minorista)',
-      price_rule: 'RETAIL',
-      discount_percentage: 0,
-      customer_count: 142,
-    },
-    {
-      id: 2,
-      name: 'Distribuidor Mayorista',
-      price_rule: 'WHOLESALE',
-      discount_percentage: 0,
-      customer_count: 28,
-    },
-    {
-      id: 3,
-      name: 'Clientes Frecuentes Vip',
-      price_rule: 'DISCOUNT_FIXED',
-      discount_percentage: 5.0,
-      customer_count: 15,
-    },
-  ]);
+  /* Los grupos se cuentan sobre los clientes que hay. La tabla decía 142, 28 y
+     15 clientes escritos a mano mientras el listado tenía cinco: una cuenta
+     desnormalizada que nadie actualizaba nunca. */
+  const customerGroups: CustomerGroup[] = useMemo(
+    () =>
+      GROUP_ORDER.map((code, index) => ({
+        id: index + 1,
+        code,
+        name: GROUP_LABEL[code],
+        price_rule: GROUP_PRICE_RULE[code],
+        discount_percentage: GROUP_DISCOUNT[code],
+        customer_count: customers.filter((c) => c.group === code).length,
+      })),
+    [customers],
+  );
 
   /* Un solo filtrado para una sola tabla: antes eran cuatro tablas casi
      idénticas, una por grupo de clientes. */
@@ -220,7 +211,7 @@ export const ContactsView: React.FC = () => {
       email: '',
       phone: '',
       address: '',
-      group: 'Minoristas',
+      group: 'MINORISTA',
       credit_limit: 0,
     });
   };
@@ -247,7 +238,7 @@ export const ContactsView: React.FC = () => {
     const duplicated =
       activeTab === 'suppliers'
         ? suppliers.some((sup) => sup.tax_id === contactForm.tax_id.trim())
-        : customers.some((c) => c.tax_id === contactForm.tax_id.trim());
+        : taxIdOwner(contactForm.tax_id) !== undefined;
     if (duplicated) {
       setContactError('Ya existe un contacto con ese NIT.');
       return;
@@ -272,22 +263,18 @@ export const ContactsView: React.FC = () => {
         ...prev,
       ]);
     } else {
-      setCustomers((prev) => [
-        {
-          id: Math.max(0, ...prev.map((x) => x.id)) + 1,
-          name,
-          tax_id: contactForm.tax_id.trim(),
-          email: contactForm.email.trim(),
-          phone: contactForm.phone.trim(),
-          address: contactForm.address.trim(),
-          group: contactForm.group,
-          credit_limit: contactForm.credit_limit,
-          current_balance: 0,
-          is_active: true,
-          credit_enabled: contactForm.credit_limit > 0,
-        },
-        ...prev,
-      ]);
+      addStoreCustomer({
+        name,
+        taxId: contactForm.tax_id.trim(),
+        email: contactForm.email.trim() || undefined,
+        phone: contactForm.phone.trim() || undefined,
+        address: contactForm.address.trim() || undefined,
+        group: contactForm.group,
+        creditLimit: contactForm.credit_limit,
+        currentDebt: 0,
+        isActive: true,
+        creditEnabled: contactForm.credit_limit > 0,
+      });
     }
 
     toast(activeTab === 'suppliers' ? 'Proveedor registrado' : 'Cliente registrado', 'success');
@@ -336,7 +323,7 @@ export const ContactsView: React.FC = () => {
       header: 'Grupo',
       card: 'meta',
       width: '140px',
-      render: (c) => <Badge tone={GROUP_TONE[c.group]}>{c.group}</Badge>,
+      render: (c) => <Badge tone={GROUP_TONE[c.group]}>{GROUP_LABEL[c.group]}</Badge>,
     },
     {
       key: 'contact',
@@ -525,7 +512,11 @@ export const ContactsView: React.FC = () => {
                     onChange={(e) => setGroupFilter(e.target.value)}
                   >
                     <option value="ALL">Todos los grupos</option>
-                    <option value="Minoristas">Minoristas</option>
+                    {GROUP_ORDER.map((g) => (
+                      <option key={g} value={g}>
+                        {GROUP_LABEL[g]}
+                      </option>
+                    ))}
                     <option value="Mayoristas">Mayoristas</option>
                     <option value="Corporativos">Corporativos</option>
                     <option value="Frecuentes">Frecuentes</option>
@@ -770,7 +761,7 @@ export const ContactsView: React.FC = () => {
                   setContactForm({ ...contactForm, group: e.target.value as Customer['group'] })
                 }
               >
-                {(['Minoristas', 'Mayoristas', 'Corporativos', 'Frecuentes'] as const).map((g) => (
+                {GROUP_ORDER.map((g) => (
                   <option key={g} value={g}>
                     {g}
                   </option>

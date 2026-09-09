@@ -1,53 +1,23 @@
 import React, { useState } from 'react';
 import { Check, Plus, Search, UserCheck } from 'lucide-react';
 import { Badge, Button, Input, Modal, Select, cn } from '../ui';
-import { usePosStore, Customer, DEFAULT_CUSTOMER } from '../store/usePosStore';
+import { usePosStore, Customer } from '../store/usePosStore';
+import { useCustomersStore, GROUP_DISCOUNT, type CustomerGroup } from '../store/useCustomersStore';
 
 interface CustomerModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const SAMPLE_CUSTOMERS: Customer[] = [
-  DEFAULT_CUSTOMER,
-  {
-    id: 'c-1',
-    businessName: 'Comercial Bolivia S.R.L.',
-    creditLimit: 15000,
-    currentDebt: 3200,
-    taxId: '1029384029',
-    group: 'MAYORISTA',
-    discountPercentage: 0,
-  },
-  {
-    id: 'c-2',
-    businessName: 'Tech Solutions Corp',
-    creditLimit: 25000,
-    currentDebt: 0,
-    taxId: '4920194821',
-    group: 'VIP',
-    discountPercentage: 5,
-  },
-  {
-    id: 'c-3',
-    businessName: 'Distribuidora Oriental',
-    creditLimit: 8000,
-    currentDebt: 7600,
-    taxId: '7748192019',
-    group: 'MAYORISTA',
-    discountPercentage: 0,
-  },
-  {
-    id: 'c-4',
-    businessName: 'María Rodríguez (VIP)',
-    taxId: '4829102',
-    group: 'VIP',
-    discountPercentage: 5,
-  },
-];
-
 export const CustomerModal: React.FC<CustomerModalProps> = ({ isOpen, onClose }) => {
   const { setCustomer, selectedCustomer } = usePosStore();
+  /* Los clientes salen del listado compartido. Esta pantalla tenía su propia
+     lista de cuatro, con NIT y crédito distintos de los de Contactos para el
+     mismo cliente. */
+  const sellable = useCustomersStore((state) => state.sellable);
+  const addCustomer = useCustomersStore((state) => state.addCustomer);
+  const taxIdOwner = useCustomersStore((state) => state.taxIdOwner);
+  const [taxIdError, setTaxIdError] = useState('');
   const [search, setSearch] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
@@ -56,7 +26,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ isOpen, onClose })
     group: 'GENERAL' as 'GENERAL' | 'MAYORISTA' | 'VIP',
   });
 
-  const filtered = SAMPLE_CUSTOMERS.filter(
+  const filtered = sellable().filter(
     (c) =>
       c.businessName.toLowerCase().includes(search.toLowerCase()) ||
       c.taxId.toLowerCase().includes(search.toLowerCase()),
@@ -70,15 +40,40 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ isOpen, onClose })
 
   const create = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCustomer.businessName.trim()) return;
+    const name = newCustomer.businessName.trim();
+    if (!name) return;
+
+    const taxId = newCustomer.taxId.trim() || '0';
+    /* Dos clientes con el mismo NIT hacen imposible cruzar sus compras y sus
+       saldos: se avisa aquí, antes de crearlo. */
+    const owner = taxIdOwner(taxId);
+    if (owner) {
+      setTaxIdError(`Ese NIT ya es de «${owner.name}».`);
+      return;
+    }
+
+    /* El alta va al listado compartido: antes vivía y moría en este modal, así
+       que el cliente que se creaba al cobrar no aparecía en Contactos. */
+    const group = newCustomer.group as CustomerGroup;
+    const created = addCustomer({
+      name,
+      taxId,
+      group,
+      creditLimit: 0,
+      currentDebt: 0,
+      isActive: true,
+      creditEnabled: false,
+    });
+
     select({
-      id: `c-${Date.now()}`,
-      businessName: newCustomer.businessName.trim(),
-      taxId: newCustomer.taxId.trim() || '0',
+      id: created.id,
+      businessName: created.name,
+      taxId: created.taxId,
       group: newCustomer.group,
-      discountPercentage: newCustomer.group === 'VIP' ? 5 : 0,
+      discountPercentage: GROUP_DISCOUNT[group],
     });
     setNewCustomer({ businessName: '', taxId: '', group: 'GENERAL' });
+    setTaxIdError('');
     setIsCreating(false);
   };
 
@@ -124,7 +119,11 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ isOpen, onClose })
           <Input
             label="NIT o documento"
             value={newCustomer.taxId}
-            onChange={(e) => setNewCustomer({ ...newCustomer, taxId: e.target.value })}
+            error={taxIdError || undefined}
+            onChange={(e) => {
+              setNewCustomer({ ...newCustomer, taxId: e.target.value });
+              setTaxIdError('');
+            }}
             placeholder="0 para consumidor final"
             className="[&_input]:font-mono"
           />
