@@ -1,11 +1,19 @@
-import React, { useCallback, useId, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ImagePlus, Trash2, Upload } from 'lucide-react';
 import { cn } from './cn';
+import { deleteImage, getImage, putImage } from '../store/imageStore';
 
 export interface ImageUploadProps {
-  /** data: URI de la imagen actual, o null si no hay. */
+  /**
+   * Referencia de la imagen actual (`img_…`), o null si no hay.
+   *
+   * Admite también un data URI: los registros guardados antes de que las
+   * imágenes se movieran a IndexedDB llevan la foto incrustada y tienen que
+   * seguir viéndose.
+   */
   value: string | null;
-  onChange: (dataUrl: string | null) => void;
+  /** Recibe la referencia con la que guardar, no los bytes de la imagen. */
+  onChange: (ref: string | null) => void;
   label: string;
   hint?: string;
   /** Lado mayor al que se reduce antes de guardar. */
@@ -25,6 +33,11 @@ const MAX_BYTES = 5 * 1024 * 1024;
  * Reduce en el navegador antes de guardar: una foto de móvil son 4 MB, y la
  * terminal guarda esto en SQLite local y lo sincroniza por una red que puede
  * caerse. Lo que se almacena nunca supera `maxSize` en su lado mayor.
+ *
+ * La imagen va a IndexedDB y al registro solo llega una referencia corta. Antes
+ * el data URI viajaba dentro del propio registro, y los registros van a
+ * `localStorage`: con unos cincuenta comprobantes se agotaba la cuota de 5 MB y
+ * dejaba de guardarse todo lo de esa clave, no solo la foto.
  */
 export const ImageUpload: React.FC<ImageUploadProps> = ({
   value,
@@ -36,6 +49,20 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   className,
 }) => {
   const inputId = useId();
+  /* La vista previa necesita los bytes; el componente solo tiene la
+     referencia. Se resuelven al montar y cada vez que cambia. */
+  const [preview_, setPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    let vigente = true;
+    void getImage(value).then((src) => {
+      if (vigente) setPreview(src);
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [value]);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,11 +89,12 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
           canvas.height = Math.round(img.height * scale);
           const ctx = canvas.getContext('2d');
           if (!ctx) {
-            onChange(String(reader.result));
+            void putImage(String(reader.result)).then(onChange);
             return;
           }
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          onChange(canvas.toDataURL('image/webp', 0.82));
+          /* La imagen se guarda aparte; al registro va la referencia. */
+          void putImage(canvas.toDataURL('image/webp', 0.82)).then(onChange);
         };
         img.onerror = () => setError('No se pudo leer la imagen.');
         img.src = String(reader.result);
@@ -111,7 +139,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
           )}
         >
           {value ? (
-            <img src={value} alt={label} className="w-full h-full object-cover" />
+            <img src={preview_ ?? undefined} alt={label} className="w-full h-full object-cover" />
           ) : (
             <ImagePlus className="w-6 h-6" />
           )}
@@ -150,6 +178,9 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  /* Se libera de IndexedDB: si no, la foto queda ocupando
+                     sitio sin ningún registro que la nombre. */
+                  void deleteImage(value);
                   onChange(null);
                   setError(null);
                 }}

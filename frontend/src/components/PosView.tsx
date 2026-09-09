@@ -18,6 +18,7 @@ import {
   User,
 } from 'lucide-react';
 import { useCartStore, lineKey } from '../store/useCartStore';
+import { useStoredImage } from '../store/imageStore';
 import { useCatalogStore, type Product } from '../store/useCatalogStore';
 import { usePosStore } from '../store/usePosStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -35,6 +36,13 @@ import { Badge, Button, EmptyState, IconButton, Kbd, Money, cn, useToast } from 
 /* Las categorías se derivan del propio catálogo: la lista fija que había antes
    incluía «Bebidas» y «Lácteos», que ningún producto del POS usaba, y omitía las
    que sí existían en la vista de productos. */
+
+/* La imagen vive en IndexedDB y resolverla es asíncrono: hace falta un
+   componente propio para poder usar el hook dentro de la rejilla. */
+const ProductThumb: React.FC<{ src: string }> = ({ src }) => {
+  const resolved = useStoredImage(src);
+  return <img src={resolved ?? undefined} alt="" className="w-full h-full object-cover" />;
+};
 
 export const PosView: React.FC = () => {
   const { user } = useAuthStore();
@@ -591,11 +599,7 @@ export const PosView: React.FC = () => {
                       <div className="flex-1 flex items-start gap-2.5 min-w-0">
                         {product.image_url && (
                           <span className="w-10 h-10 shrink-0 rounded-md bg-sunken border border-line overflow-hidden">
-                            <img
-                              src={product.image_url}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
+                            <ProductThumb src={product.image_url} />
                           </span>
                         )}
                         <p className="flex-1 text-base font-semibold text-ink leading-snug group-hover:text-accent transition-colors duration-fast">

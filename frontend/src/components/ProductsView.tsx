@@ -70,7 +70,16 @@ import { useAuthStore } from '../store/useAuthStore';
 import { hasPermission } from '../utils/permissions';
 import { isPrintingAvailable, printProductLabels } from '../services/printing';
 import { useCatalogStore, MOVEMENT_LABEL, type Product } from '../store/useCatalogStore';
+import { useStoredImage } from '../store/imageStore';
 import { formatDateTime } from '../utils/dates';
+
+/* La imagen vive en IndexedDB y resolverla es asíncrono: hace falta un
+   componente propio porque un hook no puede llamarse dentro del `render` de una
+   columna de la tabla. */
+const ProductThumb: React.FC<{ src: string }> = ({ src }) => {
+  const resolved = useStoredImage(src);
+  return <img src={resolved ?? undefined} alt="" className="w-full h-full object-cover" />;
+};
 
 export const ProductsView: React.FC = () => {
   const { user } = useAuthStore();
@@ -387,7 +396,7 @@ export const ProductsView: React.FC = () => {
         <div className="flex items-center gap-3 min-w-0">
           <span className="w-9 h-9 shrink-0 rounded-md bg-sunken border border-line overflow-hidden flex items-center justify-center text-ink-3">
             {p.image_url ? (
-              <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+              <ProductThumb src={p.image_url} />
             ) : p.unit_type === 'UNIT' ? (
               <Package className="w-4 h-4" />
             ) : p.unit_type === 'FRACTION' ? (

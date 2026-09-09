@@ -14,6 +14,7 @@ import {
 } from '../ui';
 import type { TabItem } from '../ui';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { useStoredImage } from '../store/imageStore';
 
 interface TicketTemplateConfig {
   paper_width: '58mm' | '80mm';
@@ -62,6 +63,14 @@ const PAPER_PX: Record<TicketTemplateConfig['paper_width'], number> = {
   '58mm': 219,
 };
 
+/* El logotipo vive en IndexedDB: se resuelve al pintarlo. */
+const TicketLogo: React.FC<{ src: string }> = ({ src }) => {
+  const resolved = useStoredImage(src);
+  return (
+    <img src={resolved ?? undefined} alt="" className="mx-auto mb-1 max-h-10 object-contain" />
+  );
+};
+
 /** Ticket tal como saldrá de la impresora térmica, al ancho real. */
 const TicketPreview: React.FC<{ config: TicketTemplateConfig; logo: string | null }> = ({
   config,
@@ -75,7 +84,7 @@ const TicketPreview: React.FC<{ config: TicketTemplateConfig; logo: string | nul
     >
       {config.header_logo_enabled &&
         (logo ? (
-          <img src={logo} alt="" className="mx-auto mb-1 max-h-10 object-contain" />
+          <TicketLogo src={logo} />
         ) : (
           <div className="text-center font-bold tracking-wider mb-1">[ LOGO ]</div>
         ))}

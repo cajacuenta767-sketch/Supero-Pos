@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { ImageOff, ZoomIn } from 'lucide-react';
 import { cn } from './cn';
 import { Modal } from './Modal';
+import { useStoredImage } from '../store/imageStore';
 
 export interface PhotoThumbProps {
-  /** data: URI de la foto, o null si no se adjuntó ninguna. */
+  /** Referencia de la foto (`img_…`), o null si no se adjuntó ninguna. Admite
+   *  también un data URI, por los registros anteriores a IndexedDB. */
   src: string | null | undefined;
   /** Qué se está viendo. Se usa como texto alternativo y título de la ampliación. */
   alt: string;
@@ -31,6 +33,8 @@ export const PhotoThumb: React.FC<PhotoThumbProps> = ({
   className,
 }) => {
   const [open, setOpen] = useState(false);
+  /* La foto vive en IndexedDB: aquí solo llega su referencia. */
+  const resolved = useStoredImage(src);
 
   if (!src) {
     return (
@@ -68,14 +72,14 @@ export const PhotoThumb: React.FC<PhotoThumbProps> = ({
           className,
         )}
       >
-        <img src={src} alt="" className="w-full h-full object-cover" />
+        <img src={resolved ?? undefined} alt="" className="w-full h-full object-cover" />
         <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-[--t-fast]">
           <ZoomIn className="w-4 h-4 text-white" aria-hidden />
         </span>
       </button>
       <Modal isOpen={open} onClose={() => setOpen(false)} title={alt} size="lg">
         <img
-          src={src}
+          src={resolved ?? undefined}
           alt={alt}
           className="w-full max-h-[70vh] object-contain rounded-md bg-sunken"
         />
