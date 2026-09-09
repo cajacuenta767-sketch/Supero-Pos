@@ -354,3 +354,133 @@ solo detectable ejecutando y midiendo.
 `tsc --noEmit`, `lint`, `format:check` y `build` limpios · 112 comprobaciones (14 apartados × 4
 anchos × 2 temas) sin desbordamiento ni errores de consola · flujos nuevos recorridos uno a uno en
 1440px y 390px · los dígitos de control de EAN-13 e IMEI contrastados con códigos publicados.
+
+---
+
+## 12. Auditoría de seguridad y corrección integral
+
+Tras cerrar el rediseño se leyó el código completo —frontend, backend, Electron y
+esquema de Prisma— buscando qué más había. Apareció bastante más de lo previsto, y
+lo grave no estaba en la capa de presentación.
+
+### Lo que no debía llegar a producción
+
+**La API no estaba autenticada.** `RolesGuard` leía el rol de la cabecera
+`x-user-role` cuando no había usuario en la petición, y **ningún** controlador
+aplicaba `JwtAuthGuard`, así que `request.user` nunca existía. En la práctica:
+
+```
+curl -H "X-User-Role: ADMIN" https://api/api/v1/users
+```
+
+devolvía la lista de usuarios sin token. Lo mismo para ventas, caja, inventario y
+sincronización. Toda la infraestructura JWT existía y no protegía nada. El
+decorador `CurrentUser` repetía el patrón: aceptaba `x-user-id` y `x-branch-id`, y
+sin ellos devolvía `role: 'ADMIN'`.
+
+*Corrección:* el rol sale solo del token verificado; los guardias pasan a globales
+(`APP_GUARD`) y abrir una ruta exige el decorador `@Public()`, visible en la
+revisión. Antes, proteger un controlador dependía de acordarse.
+
+**Se podían perder ventas sin dejar rastro.** El servidor devolvía
+`success: true` incondicional aunque fallaran transacciones, y el cliente borra de
+su cola local lo que el servidor confirma. Una venta que no se guardó desaparecía
+de los dos lados. En paralelo, los tickets que agotaban sus cinco reintentos
+pasaban a `FAILED` y dejaban de contarse: el indicador bajaba a cero y nadie se
+enteraba.
+
+*Corrección:* la respuesta lleva `processed_ids` y solo se borra lo confirmado;
+hay contador propio de fallidas y aviso rojo en la cabecera.
+
+**Credenciales en el binario.** Cuatro cuentas estaban compiladas en el bundle, y
+el camino que las activaba era «el backend no responde»: bastaba dejar la terminal
+sin red para entrar como administrador. El formulario llegaba además con la
+contraseña escrita en el campo. El PIN de supervisor era la cadena `'1234'` en el
+store y el modal **lo anunciaba en pantalla**.
+
+*Corrección:* todo depende de `VITE_DEMO_MODE`, que Vite resuelve al compilar, de
+modo que en un build real las cadenas no existen — y la CI lo comprueba.
+
+**Electron abierto de par en par.** `nodeIntegration: true` con
+`contextIsolation: false`: cualquier inyección en la interfaz ejecutaba código con
+acceso al sistema de archivos. Sin guardas de navegación y sin CSP.
+
+*Corrección:* precargador con `contextBridge`, `sandbox: true`, guardas de
+navegación y CSP por cabecera.
+
+### La impresión nunca imprimió
+
+El módulo componía un `Buffer`, el manejador IPC respondía `{ success: true }` y
+**ninguna línea escribía esos bytes en un dispositivo**. Además, ninguna parte de
+la interfaz llegaba a invocar ese IPC: el camino estaba desconectado de punta a
+punta y el cajero creía que su ticket había salido. El botón «Imprimir etiquetas»
+tampoco tenía acción.
+
+*Corrección:* envío real por red (RAW 9100) o nodo de dispositivo, ancho de papel
+respetado, página de códigos declarada —sin ella «Audífonos» sale roto—, método de
+pago traducido y códigos de barras dibujados por la impresora con `GS k`, que es
+la única forma de que se puedan escanear.
+
+### Dinero
+
+| Dónde | Qué pasaba |
+|---|---|
+| `setPaymentMethod` | Llamaba a `getTotal()` **sin descuentos**: con cliente VIP, «Efectivo» precargaba de más y el vuelto salía mal |
+| `getTotalPaid` | Igual con tarjeta y QR |
+| Todo el carrito | Flotantes rematados con `toFixed(4)`; `isPaymentCovered` necesitaba una tolerancia de 0,001 para tapar el error |
+| `sales` local | Un solo método de pago por venta: una venta mixta se contaba entera como efectivo y descuadraba el arqueo |
+| Sincronización | `tax: 0` fijo en todas las ventas |
+
+*Corrección:* nuevo `utils/money` con aritmética en céntimos enteros y redondeo al
+par; los descuentos vigentes viven en el propio carrito; tabla `sale_payments` con
+el desglose real; IVA calculado desde el total.
+
+### Integridad en el servidor
+
+- El número de ticket usaba **8 caracteres** del UUID: hacia los 77.000 tickets,
+  dos ventas distintas colisionaban con más del 50 % de probabilidad y una se
+  descartaba como duplicada.
+- `resolveForeignKeys` **creaba** lo que no encontraba: una sucursal errónea
+  mandaba la venta a la caja de otra tienda, y un cajero desconocido creaba un
+  usuario con rol Admin y `passwordHash: 'hash_placeholder'`.
+- El cuerpo del lote se tipaba con una **interfaz**; las interfaces desaparecen al
+  compilar, así que el `ValidationPipe` global no validaba nada en el endpoint por
+  el que entra el dinero.
+
+### Trazabilidad
+
+De tres teléfonos vendidos en una línea se guardaba **un solo IMEI**; los otros dos
+vivían únicamente en `sync_queue`, que se borra al sincronizar. Se perdía justo lo
+que justifica serializar un producto.
+
+### Pruebas
+
+No había ninguna en el frontend y la CI no ejecutaba una línea de código: tipos,
+formato, lint y empaquetado dicen que compila, no que calcula bien. Las cuatro
+suites del backend existían desde el principio y **ningún workflow las corría**;
+una llevaba tiempo rota sin que nadie lo notara.
+
+Ahora hay **55 pruebas** sobre lo que más duele: aritmética de dinero, identidad de
+líneas serializadas, descuentos acumulativos, cobertura del pago, matriz de
+permisos, dígitos de control de EAN-13 e IMEI y composición del ticket térmico.
+La CI corre ambos lados y falla si vuelve un secreto por defecto, la autorización
+por cabecera o una credencial de demostración en el build.
+
+### Lo que queda anotado, no resuelto
+
+Conviene decirlo con claridad en lugar de darlo por cerrado:
+
+- **El PIN de supervisor sigue comprobándose en el cliente.** Cuatro dígitos
+  comparados en el equipo son diez mil combinaciones: es un control operativo, no
+  una barrera criptográfica. Ya no hay secreto en el bundle y la comprobación pasa
+  por un único punto, para que el día que exista un endpoint de autorización solo
+  haya que cambiar ahí.
+- **La impresión no se ha probado contra hardware.** El compositor tiene pruebas y
+  el transporte está escrito, pero nadie ha visto salir un ticket de una impresora
+  física en esta sesión.
+- **Falta aplicar la migración.** El esquema cambió (`sale_payments`,
+  `Sale.customerSignature`, índices); hay una migración baseline generada en
+  `backend/prisma/migrations/`, pero requiere una base de datos para ejecutarse.
+- **`JWT_SECRET` debe definirse antes de desplegar**: sin él la API ya no arranca
+  en producción, que es el comportamiento correcto pero rompe un despliegue que
+  hoy dependiera del valor por defecto.

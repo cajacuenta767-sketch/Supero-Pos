@@ -48,6 +48,15 @@ interface AuthState {
   }>;
   logout: () => void;
   setSelectedBranchId: (branchId: string) => void;
+  /**
+   * Contador local de intentos fallidos.
+   *
+   * Vive en localStorage, así que se borra desde la consola del navegador en
+   * dos segundos: no es una barrera de seguridad y no debe confundirse con una.
+   * Quien impide la fuerza bruta es el servidor, que ahora bloquea por usuario
+   * y limita las peticiones por IP. Esto solo evita que un error de tecleo
+   * repetido pase desapercibido y da la cuenta atrás en pantalla.
+   */
   recordFailedAttempt: () => { attempts: number; locked: boolean };
   resetLockout: () => void;
   checkLockStatus: () => boolean;
