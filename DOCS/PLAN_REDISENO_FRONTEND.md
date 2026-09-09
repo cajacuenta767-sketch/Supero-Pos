@@ -484,3 +484,42 @@ Conviene decirlo con claridad en lugar de darlo por cerrado:
 - **`JWT_SECRET` debe definirse antes de desplegar**: sin él la API ya no arranca
   en producción, que es el comportamiento correcto pero rompe un despliegue que
   hoy dependiera del valor por defecto.
+
+---
+
+## 13. Plan de coherencia del sistema
+
+Tras la auditoría de seguridad y la de apartados, queda una tercera clase de
+problema: el sistema **no es coherente consigo mismo**. Cada módulo hace su
+trabajo y ninguno habla con el de al lado.
+
+La prueba más clara: se vende y el stock baja; se recibe una compra completa y
+**el stock no cambia**. Verificado ejecutando la aplicación.
+
+### Olas
+
+| Ola | Qué | Por qué primero |
+|---|---|---|
+| **A** | Movimientos de inventario unificados | Es la incoherencia que hace inservible la cifra de stock |
+| **B** | Turno de caja persistente | El turno es la unidad contable del día; sin él el arqueo no vale |
+| **C** | `ErrorBoundary` por vista | Hoy un fallo de render deja la pantalla en blanco en mitad de una cola |
+| **D** | Series validadas contra inventario | La otra mitad de la trazabilidad: hoy se acepta cualquier IMEI |
+| **E** | Pestañas decorativas | Seis pestañas prometen módulos que no existen |
+| **F** | Carga diferida, estados de carga, balanza, crédito | Lo que queda, por orden de peso |
+
+### Principio que ordena la ola A
+
+Un único punto por el que pasa **todo** cambio de existencias, con su asiento en
+el kardex. Hoy solo la venta toca el stock, así que el inventario deriva: baja
+con cada venta y nada lo repone.
+
+Operaciones que deben pasar por ahí: venta, devolución, recepción de compra,
+merma, traslado (salida y entrada) y ajuste por auditoría.
+
+### Qué NO se promete
+
+- Que el sistema quede «perfecto». Un punto de venta con backend, terminal
+  Electron y operación sin red tiene superficie de sobra para más hallazgos; lo
+  que sí se promete es que cada ola cierre lo que abre y quede verificada.
+- Sustituir al backend. La persistencia local es una red de seguridad para la
+  jornada, no la fuente de verdad.
