@@ -66,7 +66,9 @@ const LOSS_REASONS = [
 
 interface AdjustmentRecord {
   id: string; // ADJ-4001
-  date: string;
+  /** Instante en ISO. Como texto «14/08/2026», ordenar pone el 14 de agosto
+   *  antes que el 2 de septiembre. */
+  at: string;
   type: 'LOSS_DAMAGE' | 'PHYSICAL_AUDIT' | 'MANUAL_CORRECTION';
   reason?: string;
   branch: string;
@@ -158,7 +160,7 @@ export const StockAdjustmentsView: React.FC = () => {
   const [adjustments, setAdjustments] = usePersistentState<AdjustmentRecord[]>('ajustes', [
     {
       id: 'ADJ-4001',
-      date: '14/08/2026 11:45',
+      at: '2026-08-14T11:45:00.000Z',
       type: 'LOSS_DAMAGE',
       reason: 'Producto Vencido / Caducado',
       branch: 'Almacén Central',
@@ -179,7 +181,7 @@ export const StockAdjustmentsView: React.FC = () => {
     },
     {
       id: 'ADJ-4002',
-      date: '12/08/2026 18:20',
+      at: '2026-08-12T18:20:00.000Z',
       type: 'PHYSICAL_AUDIT',
       reason: 'Auditoría Mensual Ciega de Tienda',
       branch: 'Sucursal Centro',
@@ -236,7 +238,7 @@ export const StockAdjustmentsView: React.FC = () => {
     setAdjustments((prev) => [
       {
         id: `ADJ-${4000 + prev.length + 1}`,
-        date: formatDateTime(new Date()),
+        at: new Date().toISOString(),
         type: 'PHYSICAL_AUDIT',
         reason: `Auditoría ciega en ${auditBranch}`,
         branch: auditBranch,
@@ -269,7 +271,7 @@ export const StockAdjustmentsView: React.FC = () => {
 
     const record: AdjustmentRecord = {
       id: `ADJ-${4000 + adjustments.length + 1}`,
-      date: formatDateTime(new Date()),
+      at: new Date().toISOString(),
       type: 'LOSS_DAMAGE',
       reason: lossReason,
       branch: 'Almacén Central',
@@ -308,10 +310,12 @@ export const StockAdjustmentsView: React.FC = () => {
     },
     {
       key: 'date',
-      sortValue: (a) => a.date,
+      sortValue: (a) => a.at,
       header: 'Fecha y hora',
       width: '170px',
-      render: (a) => <span className="font-mono tnum text-body text-ink-2">{a.date}</span>,
+      render: (a) => (
+        <span className="font-mono tnum text-body text-ink-2">{formatDateTime(a.at)}</span>
+      ),
     },
     {
       key: 'type',
@@ -565,7 +569,7 @@ export const StockAdjustmentsView: React.FC = () => {
               items={[
                 {
                   label: 'Fecha y hora',
-                  value: <span className="font-mono">{selectedRecord.date}</span>,
+                  value: <span className="font-mono">{formatDateTime(selectedRecord.at)}</span>,
                 },
                 { label: 'Responsable', value: selectedRecord.user_name },
                 { label: 'Almacén', value: selectedRecord.branch },

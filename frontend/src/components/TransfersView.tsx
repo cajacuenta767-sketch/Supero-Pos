@@ -61,7 +61,9 @@ interface TransferItem {
 
 interface TransferGuide {
   id: string; // TR-3001
-  date: string;
+  /** Instante en ISO. Como texto «14/08/2026», ordenar pone el 14 de agosto
+   *  antes que el 2 de septiembre. */
+  at: string;
   source_branch: string;
   destination_branch: string;
   items_count: number;
@@ -109,7 +111,7 @@ export const TransfersView: React.FC = () => {
   const [transfers, setTransfers] = usePersistentState<TransferGuide[]>('traslados', [
     {
       id: 'TR-3001',
-      date: '14/08/2026 10:15',
+      at: '2026-08-14T10:15:00.000Z',
       source_branch: 'Almacén Central',
       destination_branch: 'Sucursal Centro',
       items_count: 2,
@@ -139,7 +141,7 @@ export const TransfersView: React.FC = () => {
     },
     {
       id: 'TR-3002',
-      date: '11/08/2026 16:30',
+      at: '2026-08-11T16:30:00.000Z',
       source_branch: 'Sucursal Norte',
       destination_branch: 'Almacén Central',
       items_count: 1,
@@ -215,7 +217,7 @@ export const TransfersView: React.FC = () => {
     setTransfers((prev) => [
       {
         id,
-        date: formatDateTime(new Date()),
+        at: new Date().toISOString(),
         source_branch: sourceBranch,
         destination_branch: destBranch,
         items_count: guideQty,
@@ -274,9 +276,12 @@ export const TransfersView: React.FC = () => {
     },
     {
       key: 'date',
+      sortValue: (t) => t.at,
       header: 'Fecha de emisión',
       width: '160px',
-      render: (t) => <span className="font-mono tnum text-body text-ink-2">{t.date}</span>,
+      render: (t) => (
+        <span className="font-mono tnum text-body text-ink-2">{formatDateTime(t.at)}</span>
+      ),
     },
     {
       key: 'items',
@@ -434,7 +439,7 @@ export const TransfersView: React.FC = () => {
               items={[
                 {
                   label: 'Fecha de emisión',
-                  value: <span className="font-mono">{selectedTransfer.date}</span>,
+                  value: <span className="font-mono">{formatDateTime(selectedTransfer.at)}</span>,
                 },
                 {
                   label: 'Estado',

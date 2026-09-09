@@ -23,6 +23,7 @@ import { useViewShortcuts } from '../hooks/useViewShortcuts';
 import { useDebounced } from '../hooks/useDebounced';
 import type { Column, TabItem } from '../ui';
 import { imeiError, isValidImei } from '../utils/imei';
+import { formatDateTime } from '../utils/dates';
 import { useCatalogStore } from '../store/useCatalogStore';
 
 /* Antes había tres pestañas y ninguna cambiaba nada: «Devoluciones» prometía un
@@ -52,7 +53,9 @@ const STATUS_TONE: Record<PurchaseOrder['status'], 'warning' | 'accent' | 'succe
 
 interface PurchaseOrder {
   id: string; // PO-2001
-  date: string;
+  /** Instante en ISO. Como texto «14/08/2026», ordenar pone el 14 de agosto
+   *  antes que el 2 de septiembre. */
+  at: string;
   supplier_name: string;
   supplier_tax_id: string;
   branch: string;
@@ -109,7 +112,7 @@ export const PurchasesView: React.FC = () => {
   const [purchaseOrders, setPurchaseOrders] = usePersistentState<PurchaseOrder[]>('compras', [
     {
       id: 'PO-2001',
-      date: '12/08/2026',
+      at: '2026-08-12T00:00:00.000Z',
       supplier_name: 'Distribuidora Lácteos del Valle',
       supplier_tax_id: '904837201',
       branch: 'Almacén Central',
@@ -142,7 +145,7 @@ export const PurchasesView: React.FC = () => {
     },
     {
       id: 'PO-2002',
-      date: '10/08/2026',
+      at: '2026-08-10T00:00:00.000Z',
       supplier_name: 'Importadora Electrónica TechBol',
       supplier_tax_id: '803928102',
       branch: 'Sucursal Central',
@@ -166,7 +169,7 @@ export const PurchasesView: React.FC = () => {
     },
     {
       id: 'PO-2003',
-      date: '14/08/2026',
+      at: '2026-08-14T00:00:00.000Z',
       supplier_name: 'Importadora Electrónica TechBol',
       supplier_tax_id: '803928102',
       branch: 'Almacén Central',
@@ -271,7 +274,7 @@ export const PurchasesView: React.FC = () => {
     setPurchaseOrders((prev) => [
       {
         id: `PO-${nextNumber}`,
-        date: new Date().toLocaleDateString('es-BO'),
+        at: new Date().toISOString(),
         supplier_name: supplier,
         supplier_tax_id: poForm.supplier_tax_id.trim() || '—',
         branch: poForm.branch,
@@ -377,9 +380,12 @@ export const PurchasesView: React.FC = () => {
     },
     {
       key: 'date',
+      sortValue: (po) => po.at,
       header: 'Fecha',
       width: '120px',
-      render: (po) => <span className="font-mono tnum text-body text-ink-2">{po.date}</span>,
+      render: (po) => (
+        <span className="font-mono tnum text-body text-ink-2">{formatDateTime(po.at)}</span>
+      ),
     },
     {
       key: 'branch',
@@ -521,7 +527,10 @@ export const PurchasesView: React.FC = () => {
           <div className="space-y-5">
             <DescriptionList
               items={[
-                { label: 'Fecha', value: <span className="font-mono">{selectedPO.date}</span> },
+                {
+                  label: 'Fecha',
+                  value: <span className="font-mono">{formatDateTime(selectedPO.at)}</span>,
+                },
                 { label: 'Destino', value: selectedPO.branch },
                 { label: 'Condición de pago', value: selectedPO.payment_terms },
                 {

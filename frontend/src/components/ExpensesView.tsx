@@ -51,7 +51,9 @@ const ACCOUNTS: Array<OperationalExpense['account']> = [
 
 interface OperationalExpense {
   id: string; // EXP-5001
-  date: string;
+  /** Instante en ISO. Como texto «14/08/2026», ordenar pone el 14 de agosto
+   *  antes que el 2 de septiembre. */
+  at: string;
   category: 'Servicios Básicos' | 'Alquileres' | 'Mantenimiento' | 'Suministros' | 'Publicidad';
   description: string;
   account: 'Caja Chica' | 'Banco Central' | 'Transferencia QR';
@@ -104,7 +106,7 @@ export const ExpensesView: React.FC = () => {
   const [expenses, setExpenses] = usePersistentState<OperationalExpense[]>('gastos', [
     {
       id: 'EXP-5001',
-      date: '14/08/2026 10:30',
+      at: '2026-08-14T10:30:00.000Z',
       category: 'Servicios Básicos',
       description: 'Pago mensual de servicio de internet de alta velocidad',
       account: 'Caja Chica',
@@ -115,7 +117,7 @@ export const ExpensesView: React.FC = () => {
     },
     {
       id: 'EXP-5002',
-      date: '12/08/2026 15:10',
+      at: '2026-08-12T15:10:00.000Z',
       category: 'Suministros',
       description: 'Compra de bolsas biodegradables y papel para tickets térmicos',
       account: 'Caja Chica',
@@ -126,7 +128,7 @@ export const ExpensesView: React.FC = () => {
     },
     {
       id: 'EXP-5003',
-      date: '08/08/2026 09:00',
+      at: '2026-08-08T09:00:00.000Z',
       category: 'Alquileres',
       description: 'Alquiler mensual del local comercial sucursal central',
       account: 'Banco Central',
@@ -173,7 +175,7 @@ export const ExpensesView: React.FC = () => {
     setExpenses((prev) => [
       {
         id: `EXP-${5000 + prev.length + 1}`,
-        date: formatDateTime(new Date()),
+        at: new Date().toISOString(),
         category,
         description: description.trim(),
         account,
@@ -197,10 +199,12 @@ export const ExpensesView: React.FC = () => {
   const columns: Array<Column<OperationalExpense>> = [
     {
       key: 'date',
-      sortValue: (e) => e.date,
+      sortValue: (e) => e.at,
       header: 'Fecha',
       width: '170px',
-      render: (e) => <span className="font-mono tnum text-body text-ink-2">{e.date}</span>,
+      render: (e) => (
+        <span className="font-mono tnum text-body text-ink-2">{formatDateTime(e.at)}</span>
+      ),
     },
     {
       key: 'concept',
