@@ -1,12 +1,23 @@
 <!DOCTYPE html>
-<html lang="es" class="light">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Supero POS - Terminal de Punto de Venta</title>
+    <script>
+      // Anti-parpadeo: aplica el tema antes del primer pintado.
+      (function () {
+        try {
+          var s = localStorage.getItem('supero_pos_theme');
+          var dark = s ? s === 'dark'
+                       : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.classList.toggle('dark', dark);
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="bg-white dark:bg-black text-gray-900 dark:text-gray-100 antialiased selection:bg-blue-500 selection:text-white transition-colors duration-200">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

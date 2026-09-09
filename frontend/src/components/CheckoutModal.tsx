@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { DollarSign, CreditCard, QrCode, Layers, CheckCircle2, X, AlertCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, CreditCard, DollarSign, Layers, QrCode } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { usePosStore } from '../store/usePosStore';
 import { useSyncStore } from '../store/useSyncStore';
 import { localDb, FourBlockSalePayload, BlockA, BlockB, BlockC, BlockD, BlockCPaymentItem, BlockDItem } from '../db/sqlite';
 import { syncWorker } from '../services/syncWorker';
+import { Button, Input, Modal, Money, cn } from '../ui';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -208,190 +209,167 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
     }
   };
 
+  const METHODS = [
+    { id: 'CASH',  label: 'Efectivo',  icon: <DollarSign className="w-4 h-4" /> },
+    { id: 'CARD',  label: 'Tarjeta',   icon: <CreditCard className="w-4 h-4" /> },
+    { id: 'QR',    label: 'QR',        icon: <QrCode className="w-4 h-4" /> },
+    { id: 'MIXED', label: 'Mixto',     icon: <Layers className="w-4 h-4" /> },
+  ] as const;
+
+  const quickCash = Array.from(
+    new Set([total, Math.ceil(total / 10) * 10, Math.ceil(total / 50) * 50, Math.ceil(total / 100) * 100]),
+  );
+
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 dark:border-[#1F2833] pb-3">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">[F12 / F8] Procesar Cobro y Emisión de Ticket</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Cliente: <strong className="text-blue-500 font-semibold">{selectedCustomer.businessName}</strong> (NIT: {selectedCustomer.taxId})
-            </p>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      icon={<CreditCard className="w-4 h-4" />}
+      title="Procesar cobro"
+      subtitle={`${selectedCustomer.businessName} · NIT ${selectedCustomer.taxId}`}
+      size="lg"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button
+            variant="success"
+            size="lg"
+            loading={isProcessing}
+            disabled={!isCovered}
+            onClick={handleProcessPayment}
+            icon={!isProcessing ? <CheckCircle2 className="w-4 h-4" /> : undefined}
+          >
+            {isProcessing ? 'Procesando…' : 'Finalizar venta'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {/* Total dominante: es la cifra que decide la acción */}
+        <div className="p-4 rounded-lg bg-sunken border border-line space-y-1.5">
+          <div className="flex justify-between text-body text-ink-2">
+            <span>Subtotal bruto</span>
+            <Money value={subtotal} size="body" className="text-ink-2" />
           </div>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-white">
-            <X className="w-6 h-6" />
-          </button>
+          {discountAmount > 0 && (
+            <div className="flex justify-between text-body text-danger">
+              <span>Descuento ({customerDiscountRate}% cliente + {manualDiscount}% manual)</span>
+              <Money value={-discountAmount} size="body" />
+            </div>
+          )}
+          <div className="flex items-end justify-between gap-3 pt-2 border-t border-line-strong">
+            <span className="text-micro uppercase text-ink-2 pb-1.5">Total a cobrar</span>
+            <Money value={total} size="display" className="text-ink" />
+          </div>
         </div>
 
-        {/* Method Selector Tabs */}
-        <div>
-          <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Método de Pago Principal:</label>
+        {/* Método de pago */}
+        <div className="space-y-2">
+          <p className="text-micro uppercase text-ink-2">Método de pago</p>
           <div className="grid grid-cols-4 gap-2">
-            {[
-              { id: 'CASH', label: 'Efectivo', icon: <DollarSign className="w-4 h-4" /> },
-              { id: 'CARD', label: 'Tarjeta', icon: <CreditCard className="w-4 h-4" /> },
-              { id: 'QR', label: 'Transfer QR', icon: <QrCode className="w-4 h-4" /> },
-              { id: 'MIXED', label: 'Pago Mixto', icon: <Layers className="w-4 h-4" /> },
-            ].map((method) => (
+            {METHODS.map((m) => (
               <button
-                key={method.id}
+                key={m.id}
                 type="button"
-                onClick={() => setPaymentMethod(method.id as any)}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-xs font-semibold transition-all ${
-                  paymentMethod === method.id
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                    : 'bg-gray-50 dark:bg-[#0B0C10] border-gray-200 dark:border-[#1F2833] text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
+                onClick={() => setPaymentMethod(m.id as any)}
+                className={cn(
+                  'h-16 flex flex-col items-center justify-center gap-1 rounded-md border',
+                  'text-body font-semibold transition-colors duration-fast ease-ease',
+                  paymentMethod === m.id
+                    ? 'bg-accent-soft border-accent/40 text-accent-ink'
+                    : 'bg-raised border-line text-ink-2 hover:border-line-strong hover:text-ink',
+                )}
               >
-                {method.icon}
-                <span className="mt-1">{method.label}</span>
+                {m.icon}
+                {m.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Single Payment Mode vs Mixed Payment Mode */}
         {paymentMethod === 'CASH' && (
-          <div className="space-y-3 bg-gray-50 dark:bg-[#0B0C10] p-4 rounded-xl border border-gray-200 dark:border-[#1F2833]">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Efectivo Recibido ($):</label>
-              <input
-                type="number"
-                step="1"
-                autoFocus
-                value={cashGiven || ''}
-                onChange={(e) => setCashGiven(parseFloat(e.target.value) || 0)}
-                placeholder="0.00"
-                className="w-full text-center py-2 bg-white dark:bg-[#121212] border border-gray-300 dark:border-gray-700 rounded-lg text-2xl font-bold font-mono text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
+          <div className="space-y-3 p-4 rounded-lg bg-sunken border border-line">
+            <Input
+              label="Efectivo recibido"
+              type="number"
+              step="1"
+              autoFocus
+              value={cashGiven || ''}
+              onChange={(e) => setCashGiven(parseFloat(e.target.value) || 0)}
+              placeholder="0.00"
+              inputSize="display"
+              className="[&_input]:text-center"
+            />
 
-            {/* Quick Cash Suggestions */}
-            <div className="flex space-x-2 pt-1">
-              {[total, Math.ceil(total / 10) * 10, Math.ceil(total / 50) * 50, Math.ceil(total / 100) * 100].map((amt, idx) => (
+            <div className="grid grid-cols-4 gap-2">
+              {quickCash.map((amt) => (
                 <button
-                  key={idx}
+                  key={amt}
                   type="button"
                   onClick={() => setCashGiven(amt)}
-                  className="flex-1 py-1 bg-gray-200 dark:bg-gray-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-xs font-mono font-bold text-gray-800 dark:text-gray-200 rounded"
+                  className="h-touch rounded-md bg-raised border border-line-strong font-mono tnum text-base font-bold text-ink-2 hover:border-accent hover:text-accent transition-colors duration-fast ease-ease"
                 >
                   ${amt}
                 </button>
               ))}
             </div>
 
-            <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-800 pt-3">
-              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Vuelto / Cambio:</span>
-              <span className="text-3xl font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
-                ${change.toFixed(2)}
-              </span>
+            <div className="flex items-end justify-between gap-3 pt-3 border-t border-line-strong">
+              <span className="text-micro uppercase text-ink-2 pb-1.5">Vuelto</span>
+              <Money value={change} size="display" className={change > 0 ? 'text-ok' : 'text-ink'} />
             </div>
           </div>
         )}
 
         {paymentMethod === 'MIXED' && (
-          <div className="space-y-3 bg-gray-50 dark:bg-[#0B0C10] p-4 rounded-xl border border-gray-200 dark:border-[#1F2833]">
-            <h4 className="text-xs font-bold text-gray-900 dark:text-white mb-1">Desglose de Pago Mixto:</h4>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div>
-                <label className="block text-gray-600 dark:text-gray-400 mb-1 font-medium">💵 Efectivo ($):</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={cashAmount || ''}
-                  onChange={(e) => setMixedAmounts(parseFloat(e.target.value) || 0, cardAmount, qrAmount)}
-                  placeholder="0.00"
-                  className="w-full p-2 bg-white dark:bg-[#121212] border border-gray-300 dark:border-gray-700 rounded-lg font-mono font-bold text-gray-900 dark:text-white text-center focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-600 dark:text-gray-400 mb-1 font-medium">💳 Tarjeta ($):</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={cardAmount || ''}
-                  onChange={(e) => setMixedAmounts(cashAmount, parseFloat(e.target.value) || 0, qrAmount)}
-                  placeholder="0.00"
-                  className="w-full p-2 bg-white dark:bg-[#121212] border border-gray-300 dark:border-gray-700 rounded-lg font-mono font-bold text-gray-900 dark:text-white text-center focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-600 dark:text-gray-400 mb-1 font-medium">📲 Transfer QR ($):</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={qrAmount || ''}
-                  onChange={(e) => setMixedAmounts(cashAmount, cardAmount, parseFloat(e.target.value) || 0)}
-                  placeholder="0.00"
-                  className="w-full p-2 bg-white dark:bg-[#121212] border border-gray-300 dark:border-gray-700 rounded-lg font-mono font-bold text-gray-900 dark:text-white text-center focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+          <div className="space-y-3 p-4 rounded-lg bg-sunken border border-line">
+            <div className="grid grid-cols-3 gap-2">
+              <Input
+                label="Efectivo"
+                type="number"
+                step="0.01"
+                value={cashAmount || ''}
+                onChange={(e) => setMixedAmounts(parseFloat(e.target.value) || 0, cardAmount, qrAmount)}
+                placeholder="0.00"
+                className="[&_input]:text-center [&_input]:font-mono"
+              />
+              <Input
+                label="Tarjeta"
+                type="number"
+                step="0.01"
+                value={cardAmount || ''}
+                onChange={(e) => setMixedAmounts(cashAmount, parseFloat(e.target.value) || 0, qrAmount)}
+                placeholder="0.00"
+                className="[&_input]:text-center [&_input]:font-mono"
+              />
+              <Input
+                label="QR"
+                type="number"
+                step="0.01"
+                value={qrAmount || ''}
+                onChange={(e) => setMixedAmounts(cashAmount, cardAmount, parseFloat(e.target.value) || 0)}
+                placeholder="0.00"
+                className="[&_input]:text-center [&_input]:font-mono"
+              />
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-800 text-xs">
-              <span className="text-gray-600 dark:text-gray-400">Cubierto / Deuda Restante:</span>
-              <span className={`font-mono font-bold ${isCovered ? 'text-emerald-500' : 'text-rose-500'}`}>
-                ${totalPaid.toFixed(2)} / ${total.toFixed(2)}
-                {!isCovered && ` (Falta $${(total - totalPaid).toFixed(2)})`}
+            <div className="flex items-center justify-between pt-3 border-t border-line-strong text-body">
+              <span className="text-ink-2">Cubierto</span>
+              <span className={cn('font-semibold', isCovered ? 'text-ok' : 'text-danger')}>
+                <Money value={totalPaid} size="body" /> / <Money value={total} size="body" />
+                {!isCovered && <> · falta <Money value={total - totalPaid} size="body" /></>}
               </span>
             </div>
           </div>
         )}
-
-        {/* Total Summary */}
-        <div className="space-y-1 text-sm border-t border-gray-200 dark:border-[#1F2833] pt-3">
-          <div className="flex justify-between text-gray-600 dark:text-gray-400">
-            <span>Subtotal Bruto:</span>
-            <span className="font-mono">${subtotal.toFixed(2)}</span>
-          </div>
-          {discountAmount > 0 && (
-            <div className="flex justify-between text-red-500 font-medium">
-              <span>
-                Descuento Total ({customerDiscountRate}% Cliente + {manualDiscount}% Manual):
-              </span>
-              <span className="font-mono">-${discountAmount.toFixed(2)}</span>
-            </div>
-          )}
-          <div className="flex justify-between text-lg font-bold text-gray-900 dark:text-white pt-2 border-t border-gray-200 dark:border-[#1F2833]">
-            <span>TOTAL A COBRAR:</span>
-            <span className="font-mono text-2xl text-emerald-500 dark:text-emerald-400">${total.toFixed(2)}</span>
-          </div>
-        </div>
 
         {!isCovered && (
-          <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 flex items-center text-xs text-amber-700 dark:text-amber-300">
-            <AlertCircle className="w-4 h-4 mr-2 shrink-0" />
-            <span>Monto recibido insuficiente. El botón 'Finalizar Venta' se habilitará al cubrir la deuda total.</span>
+          <div className="flex items-start gap-2 p-3 rounded-md bg-warn-soft border border-warn/30 text-body text-warn-ink">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            Monto insuficiente. Finalizar venta se habilita al cubrir el total.
           </div>
         )}
-
-        {/* Submit Actions */}
-        <div className="flex space-x-3 pt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-1/3 py-3 rounded-xl border border-gray-300 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={isProcessing || !isCovered}
-            onClick={handleProcessPayment}
-            className="w-2/3 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-base flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/25 transition-transform active:scale-[0.99]"
-          >
-            {isProcessing ? (
-              <span>Procesando Venta...</span>
-            ) : (
-              <>
-                <CheckCircle2 className="w-5 h-5" />
-                <span>FINALIZAR VENTA (ENTER)</span>
-              </>
-            )}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };

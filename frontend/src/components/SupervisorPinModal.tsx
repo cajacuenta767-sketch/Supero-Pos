@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { ShieldCheck, Lock, Check } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Check, Lock, ShieldCheck } from 'lucide-react';
 import { usePosStore } from '../store/usePosStore';
+import { Button, Input, Modal } from '../ui';
 
 interface SupervisorPinModalProps {
   isOpen: boolean;
@@ -10,83 +11,67 @@ interface SupervisorPinModalProps {
 }
 
 export const SupervisorPinModal: React.FC<SupervisorPinModalProps> = ({
-  isOpen,
-  targetDiscountPercentage,
-  onClose,
-  onSuccess,
+  isOpen, targetDiscountPercentage, onClose, onSuccess,
 }) => {
   const { setManualDiscount } = usePosStore();
-  const [pinInput, setPinInput] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (isOpen) {
+      setPin('');
+      setError('');
+    }
+  }, [isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const result = setManualDiscount(targetDiscountPercentage, pinInput);
+    const result = setManualDiscount(targetDiscountPercentage, pin);
     if (!result.success) {
-      setErrorMsg(result.message);
+      setError(result.message);
       return;
     }
-    setErrorMsg('');
-    setPinInput('');
+    setError('');
     onSuccess();
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
-        <div className="flex items-center space-x-2 text-rose-600 dark:text-rose-400 border-b border-gray-200 dark:border-[#1F2833] pb-3">
-          <ShieldCheck className="w-6 h-6" />
-          <h3 className="font-bold text-lg text-gray-900 dark:text-white">Autorización de Supervisor</h3>
-        </div>
-
-        <p className="text-xs text-gray-600 dark:text-gray-300">
-          El descuento manual solicitado (
-          <strong className="text-rose-500 font-mono text-sm">{targetDiscountPercentage}%</strong>) supera el límite
-          permitido para cajeros (10%).
-          <br />
-          Ingrese el PIN de Supervisor para autorizar.
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      icon={<ShieldCheck className="w-4 h-4" />}
+      title="Autorización de supervisor"
+      size="sm"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button form="pin-form" type="submit" variant="danger" icon={<Check className="w-4 h-4" />}>
+            Autorizar
+          </Button>
+        </>
+      }
+    >
+      <form id="pin-form" onSubmit={submit} className="space-y-4">
+        <p className="text-base text-ink-2 leading-relaxed">
+          El descuento solicitado (<strong className="font-mono tnum text-danger">{targetDiscountPercentage}%</strong>)
+          supera el límite del 10% permitido a cajeros.
         </p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-              PIN de Supervisor (Por defecto: 1234):
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="password"
-                maxLength={6}
-                autoFocus
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                placeholder="••••"
-                className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-[#0B0C10] border border-gray-300 dark:border-gray-700 rounded-xl text-center text-lg font-bold font-mono tracking-widest text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 focus:outline-none"
-              />
-            </div>
-            {errorMsg && <p className="text-xs text-rose-500 mt-1 font-semibold">{errorMsg}</p>}
-          </div>
-
-          <div className="flex space-x-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-1/2 py-2 rounded-xl border border-gray-300 dark:border-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="w-1/2 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center space-x-1"
-            >
-              <Check className="w-4 h-4 mr-1" /> Autorizar PIN
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <Input
+          label="PIN de supervisor"
+          hint="PIN por defecto en modo demo: 1234"
+          type="password"
+          maxLength={6}
+          autoFocus
+          value={pin}
+          onChange={(e) => setPin(e.target.value)}
+          leading={<Lock className="w-4 h-4" />}
+          placeholder="••••"
+          error={error || undefined}
+          inputSize="lg"
+          className="[&_input]:text-center [&_input]:font-mono [&_input]:tracking-[0.4em]"
+        />
+      </form>
+    </Modal>
   );
 };

@@ -1,31 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Lock,
-  User,
-  Building2,
-  AlertTriangle,
-  ShieldAlert,
-  Eye,
-  EyeOff,
-  CheckCircle2,
-  Loader2,
-  Sun,
-  Moon,
-  KeyRound,
+  AlertTriangle, CheckCircle2, Eye, EyeOff, KeyRound, Lock, Moon, ShieldAlert, Sun, User,
 } from 'lucide-react';
 import { useAuthStore, DEMO_BRANCHES } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
+import { Badge, Button, IconButton, Input, Select, cn } from '../ui';
+
+type DemoUser = 'admin' | 'supervisor' | 'cajero' | 'almacenero';
+
+const DEMO_CREDENTIALS: Record<DemoUser, { user: string; pass: string; label: string }> = {
+  admin:      { user: 'admin',      pass: 'SuperoPOS2026', label: 'Admin' },
+  supervisor: { user: 'supervisor', pass: 'supervisor123', label: 'Supervisor' },
+  cajero:     { user: 'cajero',     pass: 'cajero123',     label: 'Cajero' },
+  almacenero: { user: 'almacenero', pass: 'almacen123',    label: 'Almacén' },
+};
 
 export const LoginView: React.FC = () => {
   const {
-    login,
-    isLocked,
-    failedAttempts,
-    lockoutUntil,
-    selectedBranchId,
-    setSelectedBranchId,
-    resetLockout,
-    checkLockStatus,
+    login, isLocked, failedAttempts, lockoutUntil,
+    selectedBranchId, setSelectedBranchId, resetLockout, checkLockStatus,
   } = useAuthStore();
   const { isDarkMode, toggleTheme } = useThemeStore();
 
@@ -35,21 +28,17 @@ export const LoginView: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [remainingTime, setRemainingTime] = useState<number>(0);
+  const [remainingTime, setRemainingTime] = useState(0);
 
-  // Check lockout expiration timer
   useEffect(() => {
     checkLockStatus();
-    if (isLocked && lockoutUntil) {
-      const interval = setInterval(() => {
-        const diff = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
-        setRemainingTime(diff);
-        if (diff <= 0) {
-          checkLockStatus();
-        }
-      }, 1000);
-      return () => clearInterval(interval);
-    }
+    if (!isLocked || !lockoutUntil) return;
+    const t = setInterval(() => {
+      const diff = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
+      setRemainingTime(diff);
+      if (diff <= 0) checkLockStatus();
+    }, 1000);
+    return () => clearInterval(t);
   }, [isLocked, lockoutUntil, checkLockStatus]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,30 +47,17 @@ export const LoginView: React.FC = () => {
     setSuccessMessage(null);
 
     if (checkLockStatus()) {
-      setErrorMessage('Cuenta bloqueada por superar el límite de 5 intentos fallidos. Intente más tarde.');
+      setErrorMessage('Cuenta bloqueada tras 5 intentos fallidos. Intente más tarde.');
       return;
     }
-
-    if (!username.trim()) {
-      setErrorMessage('Por favor ingrese su usuario.');
-      return;
-    }
-
-    if (!password) {
-      setErrorMessage('Por favor ingrese su contraseña.');
-      return;
-    }
+    if (!username.trim()) return setErrorMessage('Ingrese su usuario.');
+    if (!password) return setErrorMessage('Ingrese su contraseña.');
 
     setIsSubmitting(true);
-
     try {
       const result = await login(username.trim(), password, selectedBranchId);
-
-      if (result.success) {
-        setSuccessMessage('¡Autenticación exitosa! Redirigiendo...');
-      } else {
-        setErrorMessage(result.error || 'Error al iniciar sesión. Verifique sus credenciales.');
-      }
+      if (result.success) setSuccessMessage('Autenticación correcta. Abriendo terminal…');
+      else setErrorMessage(result.error || 'Credenciales incorrectas.');
     } catch {
       setErrorMessage('Ocurrió un error inesperado. Intente nuevamente.');
     } finally {
@@ -89,262 +65,189 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  const fillDemoUser = (userType: 'admin' | 'supervisor' | 'cajero' | 'almacenero') => {
+  const fillDemo = (kind: DemoUser) => {
     if (isLocked) return;
     setErrorMessage(null);
-    if (userType === 'admin') {
-      setUsername('admin');
-      setPassword('SuperoPOS2026');
-    } else if (userType === 'supervisor') {
-      setUsername('supervisor');
-      setPassword('supervisor123');
-    } else if (userType === 'cajero') {
-      setUsername('cajero');
-      setPassword('cajero123');
-    } else if (userType === 'almacenero') {
-      setUsername('almacenero');
-      setPassword('almacen123');
-    }
+    setUsername(DEMO_CREDENTIALS[kind].user);
+    setPassword(DEMO_CREDENTIALS[kind].pass);
   };
 
-  const selectedBranchObj =
-    DEMO_BRANCHES.find((b) => b.id === selectedBranchId) || DEMO_BRANCHES[0];
-
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 p-4 transition-colors duration-200 font-sans select-none">
-      {/* Background Decorator */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-indigo-500/10 pointer-events-none" />
-
-      {/* Main Login Card */}
-      <div className="w-full max-w-md bg-white dark:bg-[#0B0C10] rounded-2xl shadow-2xl border border-gray-200 dark:border-[#1F2833] p-8 relative z-10">
-        {/* Header Header & Theme Switcher */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold text-2xl shadow-lg shadow-blue-500/30">
-              S
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">
-                SUPERO POS
-              </h1>
-              <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold tracking-wide uppercase">
-                Enterprise Terminal v2.0
-              </span>
-            </div>
+    <div className="min-h-screen w-full flex bg-canvas text-ink select-none">
+      {/* Panel de marca: el producto se presenta antes de pedir credenciales */}
+      <div className="hidden lg:flex flex-1 flex-col justify-between p-12 bg-surface border-r border-line relative overflow-hidden">
+        <div
+          aria-hidden
+          className="absolute -top-32 -left-32 w-[520px] h-[520px] rounded-full bg-accent/[0.07] blur-3xl pointer-events-none"
+        />
+        <div className="flex items-center gap-3 relative">
+          <div className="w-11 h-11 rounded-md bg-accent text-white flex items-center justify-center font-bold text-display">
+            S
           </div>
-
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="p-2 rounded-lg bg-gray-100 dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#1F2833] transition-colors"
-            title="Cambiar tema"
-          >
-            {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-blue-600" />}
-          </button>
+          <div>
+            <p className="text-title text-ink leading-tight">SUPERO POS</p>
+            <p className="text-micro uppercase text-ink-3">Enterprise Terminal v2.0</p>
+          </div>
         </div>
 
-        {/* 5-Failed Attempts Locked Banner */}
+        <div className="relative max-w-md space-y-4">
+          <h2 className="text-hero text-ink leading-[1.05]">
+            Vender<br />sin mirar<br />la pantalla.
+          </h2>
+          <p className="text-base text-ink-2 leading-relaxed">
+            Terminal de punto de venta con operación offline, lectura láser, control de IMEI
+            y venta a granel. Diseñada para la hora número nueve del turno.
+          </p>
+        </div>
+
+        <div className="relative flex flex-wrap gap-2">
+          <Badge tone="success" size="md">Offline-first</Badge>
+          <Badge tone="accent" size="md">Escaneo &lt; 10 ms</Badge>
+          <Badge tone="neutral" size="md">Kardex ACID</Badge>
+        </div>
+      </div>
+
+      {/* Panel de acceso */}
+      <div className="w-full lg:w-[480px] shrink-0 flex flex-col justify-center p-8 sm:p-12">
+        <div className="flex items-center justify-between mb-8">
+          <div className="lg:hidden flex items-center gap-3">
+            <div className="w-10 h-10 rounded-md bg-accent text-white flex items-center justify-center font-bold text-title">S</div>
+            <p className="text-title text-ink">SUPERO POS</p>
+          </div>
+          <div className="hidden lg:block">
+            <h1 className="text-display text-ink">Iniciar sesión</h1>
+            <p className="text-base text-ink-2 mt-1">Identifíquese para abrir la terminal.</p>
+          </div>
+          <IconButton
+            label={isDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            onClick={toggleTheme}
+          >
+            {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </IconButton>
+        </div>
+
         {isLocked && (
-          <div className="mb-6 p-4 rounded-xl bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 animate-pulse">
-            <div className="flex items-start space-x-3">
-              <ShieldAlert className="w-6 h-6 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="font-bold text-sm text-rose-900 dark:text-rose-100">
-                  ¡Cuenta Bloqueada por Seguridad!
-                </h3>
-                <p className="text-xs mt-1 text-rose-700 dark:text-rose-300 leading-relaxed">
-                  Se ha superado el límite máximo de 5 intentos fallidos. El acceso ha sido restringido temporalmente.
+          <div className="mb-6 p-4 rounded-md bg-danger-soft border border-danger/30 space-y-2">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="w-5 h-5 text-danger shrink-0 mt-0.5" />
+              <div className="space-y-1.5">
+                <p className="text-base font-bold text-danger-ink">Cuenta bloqueada</p>
+                <p className="text-body text-danger-ink/90">
+                  Se superó el límite de 5 intentos fallidos. El acceso está restringido temporalmente.
                 </p>
                 {remainingTime > 0 && (
-                  <p className="text-xs font-mono font-bold mt-2 text-rose-800 dark:text-rose-200 bg-rose-100 dark:bg-rose-900/80 px-2 py-1 rounded inline-block">
+                  <p className="font-mono tnum text-body font-bold text-danger-ink">
                     Tiempo restante: {Math.floor(remainingTime / 60)}m {remainingTime % 60}s
                   </p>
                 )}
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={resetLockout}
-                    className="text-xs font-semibold underline text-rose-700 dark:text-rose-300 hover:text-rose-900 dark:hover:text-white transition-colors"
-                  >
-                    Desbloquear cuenta (Modo Demo QA)
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={resetLockout}
+                  className="text-body font-semibold underline text-danger-ink hover:opacity-80"
+                >
+                  Desbloquear (modo demo QA)
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Credentials Error Alert Banner */}
-        {!isLocked && errorMessage && (
-          <div className="mb-6 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-200 flex items-start space-x-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-            <div className="flex-1 text-xs">
-              <span className="font-semibold block mb-0.5">Error de Autenticación</span>
-              <span>{errorMessage}</span>
-              {failedAttempts > 0 && (
-                <div className="mt-2 flex items-center space-x-1">
-                  <span className="text-[11px] text-amber-700 dark:text-amber-300 font-medium">
-                    Intentos fallidos registrados:
-                  </span>
-                  <div className="flex space-x-1">
-                    {[1, 2, 3, 4, 5].map((num) => (
-                      <span
-                        key={num}
-                        className={`w-2.5 h-2.5 rounded-full ${
-                          num <= failedAttempts
-                            ? 'bg-rose-500 dark:bg-rose-400'
-                            : 'bg-gray-200 dark:bg-gray-700'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-[11px] font-bold font-mono ml-1 text-rose-600 dark:text-rose-400">
-                    {failedAttempts}/5
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Success Alert Banner */}
-        {successMessage && (
-          <div className="mb-6 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 flex items-center space-x-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <span className="text-xs font-semibold">{successMessage}</span>
-          </div>
-        )}
-
-        {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Branch Selector */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center space-x-1.5">
-              <Building2 className="w-3.5 h-3.5 text-blue-500" />
-              <span>Sucursal de Operación</span>
-            </label>
-            <select
-              value={selectedBranchId}
-              onChange={(e) => setSelectedBranchId(e.target.value)}
-              disabled={isSubmitting || isLocked}
-              className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
-            >
-              {DEMO_BRANCHES.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 pl-1 truncate">
-              {selectedBranchObj.address}
-            </p>
-          </div>
+          <Select
+            label="Sucursal"
+            value={selectedBranchId}
+            onChange={(e) => setSelectedBranchId(e.target.value)}
+            disabled={isLocked}
+          >
+            {DEMO_BRANCHES.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </Select>
 
-          {/* Username Input */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center space-x-1.5">
-              <User className="w-3.5 h-3.5 text-blue-500" />
-              <span>Nombre de Usuario</span>
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Ej. admin o cajero"
-              disabled={isSubmitting || isLocked}
-              className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-xl text-xs font-semibold text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
-            />
-          </div>
+          <Input
+            id="username"
+            label="Usuario"
+            leading={<User className="w-4 h-4" />}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            disabled={isLocked}
+            autoComplete="username"
+            inputSize="lg"
+          />
 
-          {/* Password Input */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center space-x-1.5">
-              <KeyRound className="w-3.5 h-3.5 text-blue-500" />
-              <span>Contraseña</span>
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                disabled={isSubmitting || isLocked}
-                className="w-full pl-3.5 pr-10 py-2.5 bg-gray-50 dark:bg-[#121212] border border-gray-200 dark:border-[#1F2833] rounded-xl text-xs font-semibold text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
-              />
+          <Input
+            id="password"
+            label="Contraseña"
+            type={showPassword ? 'text' : 'password'}
+            leading={<Lock className="w-4 h-4" />}
+            trailing={
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                disabled={isSubmitting || isLocked}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                className="text-ink-3 hover:text-ink transition-colors duration-fast"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
-            </div>
-          </div>
+            }
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={isLocked}
+            autoComplete="current-password"
+            inputSize="lg"
+          />
 
-          {/* Processing / Submit Button */}
-          <button
+          {failedAttempts > 0 && !isLocked && (
+            <p className="text-body text-warn-ink flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Intento {failedAttempts} de 5.
+            </p>
+          )}
+
+          {errorMessage && (
+            <div className="flex items-start gap-2 p-3 rounded-md bg-danger-soft border border-danger/25 text-body text-danger-ink">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              {errorMessage}
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="flex items-start gap-2 p-3 rounded-md bg-ok-soft border border-ok/25 text-body text-ok-ink">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+              {successMessage}
+            </div>
+          )}
+
+          <Button
             type="submit"
-            disabled={isSubmitting || isLocked}
-            className="w-full mt-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-300 dark:disabled:bg-gray-800 text-white font-bold rounded-xl text-xs shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center space-x-2"
+            size="lg"
+            block
+            loading={isSubmitting}
+            disabled={isLocked}
+            icon={!isSubmitting ? <KeyRound className="w-4 h-4" /> : undefined}
           >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
-                <span>Verificando...</span>
-              </>
-            ) : isLocked ? (
-              <>
-                <Lock className="w-4 h-4 text-gray-400" />
-                <span>Cuenta Bloqueada (5/5)</span>
-              </>
-            ) : (
-              <>
-                <Lock className="w-4 h-4" />
-                <span>Iniciar Sesión en POS</span>
-              </>
-            )}
-          </button>
+            {isSubmitting ? 'Verificando…' : 'Entrar a la terminal'}
+          </Button>
         </form>
 
-        {/* Demo Roles Quick Fill Helpers */}
-        <div className="mt-6 pt-5 border-t border-gray-100 dark:border-[#1F2833]">
-          <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 mb-2 text-center uppercase tracking-wider">
-            Accesos de Prueba Rápida (Demo)
-          </p>
+        <div className="mt-8 pt-6 border-t border-line">
+          <p className="text-micro uppercase text-ink-3 mb-2.5">Acceso rápido de demostración</p>
           <div className="grid grid-cols-4 gap-2">
-            <button
-              type="button"
-              onClick={() => fillDemoUser('admin')}
-              disabled={isLocked}
-              className="px-2 py-1.5 rounded-lg bg-gray-100 dark:bg-[#121212] hover:bg-blue-50 dark:hover:bg-blue-950/50 border border-gray-200 dark:border-[#1F2833] text-[11px] font-semibold text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
-            >
-              Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => fillDemoUser('supervisor')}
-              disabled={isLocked}
-              className="px-2 py-1.5 rounded-lg bg-gray-100 dark:bg-[#121212] hover:bg-blue-50 dark:hover:bg-blue-950/50 border border-gray-200 dark:border-[#1F2833] text-[11px] font-semibold text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
-            >
-              Supervis.
-            </button>
-            <button
-              type="button"
-              onClick={() => fillDemoUser('cajero')}
-              disabled={isLocked}
-              className="px-2 py-1.5 rounded-lg bg-gray-100 dark:bg-[#121212] hover:bg-blue-50 dark:hover:bg-blue-950/50 border border-gray-200 dark:border-[#1F2833] text-[11px] font-semibold text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
-            >
-              Cajero
-            </button>
-            <button
-              type="button"
-              onClick={() => fillDemoUser('almacenero')}
-              disabled={isLocked}
-              className="px-2 py-1.5 rounded-lg bg-gray-100 dark:bg-[#121212] hover:bg-blue-50 dark:hover:bg-blue-950/50 border border-gray-200 dark:border-[#1F2833] text-[11px] font-semibold text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
-            >
-              Almacén
-            </button>
+            {(Object.keys(DEMO_CREDENTIALS) as DemoUser[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => fillDemo(k)}
+                disabled={isLocked}
+                className={cn(
+                  'h-9 rounded-md border border-line bg-raised text-body font-semibold text-ink-2',
+                  'hover:border-accent hover:text-accent transition-colors duration-fast ease-ease',
+                  'disabled:opacity-40 disabled:cursor-not-allowed',
+                )}
+              >
+                {DEMO_CREDENTIALS[k].label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
