@@ -30,6 +30,7 @@ import {
   Select,
   Toolbar,
   cn,
+  useToast,
 } from '../ui';
 
 type LabelSize = '50x25' | '40x20';
@@ -83,10 +84,13 @@ interface ProductSerial {
 
 import { useAuthStore } from '../store/useAuthStore';
 import { hasPermission } from '../utils/permissions';
+import { isPrintingAvailable, printProductLabels } from '../services/printing';
 
 export const ProductsView: React.FC = () => {
   const { user } = useAuthStore();
-  const userRole = user?.role || 'ADMIN';
+  const toast = useToast();
+  // Sin respaldo a ADMIN: un perfil sin rol no debe habilitar altas ni ediciones.
+  const userRole = user?.role;
   const canCreateProduct = hasPermission(userRole, 'can_create_product');
   const canEditProduct = hasPermission(userRole, 'can_edit_product');
 
@@ -233,6 +237,36 @@ export const ProductsView: React.FC = () => {
   const generateEAN13 = () => {
     const base = '777' + Math.floor(100000000 + Math.random() * 900000000).toString();
     setFormData((prev) => ({ ...prev, barcode: base + ean13CheckDigit(base) }));
+  };
+
+  const handlePrintLabels = async () => {
+    if (!selectedLabelProduct) return;
+
+    if (!isPrintingAvailable()) {
+      toast(
+        'La impresión de etiquetas solo está disponible en la terminal de escritorio.',
+        'warning',
+      );
+      return;
+    }
+
+    const outcome = await printProductLabels({
+      productName: selectedLabelProduct.name,
+      sku: selectedLabelProduct.sku,
+      barcode: selectedLabelProduct.barcode,
+      price: selectedLabelProduct.sale_price,
+      copies: labelCopies,
+      labelSize,
+    });
+
+    if (outcome.printed) {
+      toast(
+        `${labelCopies} ${labelCopies === 1 ? 'etiqueta enviada' : 'etiquetas enviadas'} a la impresora`,
+        'success',
+      );
+    } else {
+      toast(`No se pudo imprimir: ${outcome.reason}`, 'danger');
+    }
   };
 
   const barcodeError = (() => {
@@ -763,7 +797,15 @@ export const ProductsView: React.FC = () => {
                     className="[&_input]:font-mono"
                   />
                 </div>
-                <Button icon={<Printer className="w-4 h-4" />}>Imprimir {labelCopies}</Button>
+                {/* Antes este botón no tenía acción: se pulsaba y no ocurría
+                    nada, ni un aviso. */}
+                <Button
+                  icon={<Printer className="w-4 h-4" />}
+                  disabled={!selectedLabelProduct || !isValidEan13(selectedLabelProduct.barcode)}
+                  onClick={handlePrintLabels}
+                >
+                  Imprimir {labelCopies}
+                </Button>
               </div>
             </Card>
 

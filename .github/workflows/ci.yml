@@ -1,4 +1,4 @@
-name: Frontend
+name: CI
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 # Una sola ejecución por rama: un push nuevo cancela el anterior.
 concurrency:
-  group: frontend-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -39,8 +39,66 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # La cadena no ejecutaba una sola línea del código: tipos, formato, lint y
+      # empaquetado dicen que compila, no que calcula bien.
+      - name: Pruebas
+        run: npm test
+
       - name: Compilar
         run: npm run build
+
+      - name: Comprobar que el build no lleva credenciales de demostración
+        # Sin VITE_DEMO_MODE, Vite elimina el bloque entero. Si alguna cadena
+        # sobrevive, es que el modo demostración se coló en un build real.
+        run: |
+          if grep -rqE 'SuperoPOS2026|supervisor123|cajero123|almacen123' dist/; then
+            echo "::error::El build contiene credenciales de demostración."
+            grep -rlE 'SuperoPOS2026|supervisor123|cajero123|almacen123' dist/
+            exit 1
+          fi
+          echo "Build limpio de credenciales."
+
+  backend:
+    name: Verificar backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Generar cliente Prisma
+        run: npx prisma generate
+
+      - name: Comprobar tipos
+        run: npx tsc --noEmit
+
+      # Las cuatro suites existían desde el principio y ningún workflow las
+      # ejecutaba: una llevaba tiempo rota sin que nadie lo notara.
+      - name: Pruebas
+        run: npx jest --ci
+
+      - name: Comprobar que no hay secretos por defecto en el código
+        run: |
+          if grep -rq 'super_secret_jwt_key' src/; then
+            echo "::error::Hay un secreto JWT por defecto en el código."
+            exit 1
+          fi
+          if grep -rq "headers\['x-user-role'\]" src/; then
+            echo "::error::El rol se está leyendo de una cabecera HTTP."
+            exit 1
+          fi
+          echo "Sin secretos por defecto ni autorización por cabecera." 
 
   hygiene:
     name: Higiene del repositorio

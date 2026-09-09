@@ -77,25 +77,29 @@ export interface FourBlockSalePayload {
   block_d: BlockD;
 }
 
-/** Superficie de better-sqlite3 que este motor realmente usa. El paquete se
- *  carga en tiempo de ejecución vía `window.require` de Electron, así que no
- *  hay tipos publicados que importar. */
-interface SqliteStatement {
-  run: (...params: unknown[]) => { lastInsertRowid: number | bigint; changes: number };
-  get: (...params: unknown[]) => unknown;
-  all: (...params: unknown[]) => unknown[];
+/**
+ * Puente a la base local, expuesto por el precargador de Electron.
+ *
+ * Antes el renderer cargaba `better-sqlite3` con `window.require`, que solo
+ * existe con `nodeIntegration: true`. El módulo nativo vive ahora en el proceso
+ * principal y aquí solo llegan sentencias por IPC, de modo que la ventana puede
+ * correr aislada y en zona de pruebas.
+ */
+interface DbBridge {
+  exec: (sql: string) => boolean;
+  run: (sql: string, params?: unknown[]) => { changes: number; lastInsertRowid: number };
+  get: (sql: string, params?: unknown[]) => unknown;
+  all: (sql: string, params?: unknown[]) => unknown[];
+  transaction: (statements: Array<{ sql: string; params?: unknown[] }>) => boolean;
+  isAvailable: () => boolean;
 }
-interface SqliteHandle {
-  prepare: (sql: string) => SqliteStatement;
-  exec: (sql: string) => void;
-  transaction: <T extends (...args: never[]) => unknown>(fn: T) => T;
-}
-interface ElectronWindow extends Window {
-  require?: (moduleName: string) => new (filename: string) => SqliteHandle;
+
+interface SuperoWindow extends Window {
+  superoPos?: { db?: DbBridge };
 }
 
 class LocalDatabaseEngine {
-  private db: SqliteHandle | null = null;
+  private db: DbBridge | null = null;
   private mockSyncQueue: LocalSyncQueueItem[] = [];
   private storageWarningIssued = false;
 
@@ -106,17 +110,17 @@ class LocalDatabaseEngine {
 
   private initDatabase() {
     try {
-      const electronWindow = typeof window !== 'undefined' ? (window as ElectronWindow) : undefined;
-      /* La condición estaba invertida —`!electronWindow || ...`—: fuera de
-         Electron entraba igual y funcionaba solo porque la excepción caía en el
-         catch de abajo. */
-      if (electronWindow?.require) {
-        const Database = electronWindow.require('better-sqlite3');
-        this.db = new Database('supero_pos_local.db');
+      const bridge = (typeof window !== 'undefined' ? (window as SuperoWindow) : undefined)
+        ?.superoPos?.db;
+      /* La condición anterior estaba invertida —`!electronWindow || ...`—: fuera
+         de Electron entraba igual y funcionaba solo porque la excepción caía en
+         el catch. */
+      if (bridge?.isAvailable()) {
+        this.db = bridge;
         this.createTables();
       }
-    } catch {
-      console.warn('Running in browser preview mode - using Web Storage / Memory mock for SQLite');
+    } catch (err) {
+      console.warn('Sin base local: se usa el respaldo en memoria del navegador.', err);
     }
   }
 
@@ -246,72 +250,75 @@ class LocalDatabaseEngine {
     }
 
     const db = this.db;
-    const transaction = db.transaction((data: FourBlockSalePayload) => {
-      const methods = new Set(data.payment_breakdown.map((p) => p.payment_method));
-      /* Antes se guardaba `payment_breakdown[0]` a secas, así que una venta
-         mixta quedaba registrada como efectivo y el arqueo no cuadraba. */
-      const headerMethod =
-        methods.size > 1 ? 'MIXED' : (data.payment_breakdown[0]?.payment_method ?? 'CASH');
+    const methods = new Set(saleData.payment_breakdown.map((p) => p.payment_method));
+    /* Antes se guardaba `payment_breakdown[0]` a secas, así que una venta mixta
+       quedaba registrada como efectivo y el arqueo no cuadraba. */
+    const headerMethod =
+      methods.size > 1 ? 'MIXED' : (saleData.payment_breakdown[0]?.payment_method ?? 'CASH');
 
-      db.prepare(
-        `INSERT INTO sales (transaction_id, shift_id, cash_register_id, user_id, customer_id,
-                            subtotal, total_discount, grand_total, payment_method, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        data.transaction_id,
-        data.shift_id,
-        data.register_id,
-        data.cashier_id,
-        data.customer_id || null,
-        data.subtotal,
-        data.total_discount,
-        data.grand_total,
-        headerMethod,
-        data.timestamp,
-      );
+    /* Todas las sentencias viajan juntas y el proceso principal las envuelve en
+       una transacción: cabecera, desglose de cobro, líneas y encolado entran o
+       no entra nada. */
+    const statements: Array<{ sql: string; params: unknown[] }> = [
+      {
+        sql: `INSERT INTO sales (transaction_id, shift_id, cash_register_id, user_id, customer_id,
+                                 subtotal, total_discount, grand_total, payment_method, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [
+          saleData.transaction_id,
+          saleData.shift_id,
+          saleData.register_id,
+          saleData.cashier_id,
+          saleData.customer_id || null,
+          saleData.subtotal,
+          saleData.total_discount,
+          saleData.grand_total,
+          headerMethod,
+          saleData.timestamp,
+        ],
+      },
+    ];
 
-      const paymentStmt = db.prepare(
-        `INSERT INTO sale_payments (sale_id, payment_method, amount_received, change_given)
-         VALUES (?, ?, ?, ?)`,
-      );
-      for (const payment of data.payment_breakdown) {
-        paymentStmt.run(
-          data.transaction_id,
+    for (const payment of saleData.payment_breakdown) {
+      statements.push({
+        sql: `INSERT INTO sale_payments (sale_id, payment_method, amount_received, change_given)
+              VALUES (?, ?, ?, ?)`,
+        params: [
+          saleData.transaction_id,
           payment.payment_method,
           payment.amount_received,
           payment.change_given,
-        );
-      }
+        ],
+      });
+    }
 
-      // La sentencia se prepara una vez, no una por línea del ticket.
-      const detailStmt = db.prepare(
-        `INSERT INTO sale_details (sale_id, product_id, quantity, unit_price, subtotal, serials_used)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      );
-      for (const item of data.items) {
-        /* Antes se guardaba `serials_used[0]`: de tres teléfonos vendidos en una
-           línea quedaba uno. Los otros dos solo vivían en `sync_queue`, que se
-           borra al sincronizar, así que se perdía justo la trazabilidad que
-           justifica serializar. */
-        detailStmt.run(
-          data.transaction_id,
+    for (const item of saleData.items) {
+      /* Antes se guardaba `serials_used[0]`: de tres teléfonos vendidos en una
+         línea quedaba uno. Los otros dos solo vivían en `sync_queue`, que se
+         borra al sincronizar, así que se perdía justo la trazabilidad que
+         justifica serializar. */
+      statements.push({
+        sql: `INSERT INTO sale_details (sale_id, product_id, quantity, unit_price, subtotal, serials_used)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        params: [
+          saleData.transaction_id,
           item.product_id,
           item.quantity,
           item.unit_price,
           item.line_subtotal,
           item.serials_used.length > 0 ? JSON.stringify(item.serials_used) : null,
-        );
-      }
+        ],
+      });
+    }
 
-      db.prepare(
-        `INSERT INTO sync_queue (payload_type, local_id, payload_data, status)
-         VALUES ('SALE_TRANSACTION', ?, ?, 'PENDING')`,
-      ).run(data.transaction_id, JSON.stringify(data));
-
-      return { success: true, saleId: data.transaction_id };
+    statements.push({
+      sql: `INSERT INTO sync_queue (payload_type, local_id, payload_data, status)
+            VALUES ('SALE_TRANSACTION', ?, ?, 'PENDING')`,
+      params: [saleData.transaction_id, JSON.stringify(saleData)],
     });
 
-    return transaction(saleData);
+    db.transaction(statements);
+    return { success: true, saleId: saleData.transaction_id };
   }
 
   /**
@@ -347,14 +354,13 @@ class LocalDatabaseEngine {
 
     /* Se suma del desglose por método, no de la cabecera de la venta: una venta
        mixta aporta solo su parte en efectivo. */
-    const row = this.db
-      .prepare(
-        `SELECT COALESCE(SUM(p.amount_received - p.change_given), 0) AS total
-         FROM sale_payments p
-         JOIN sales s ON s.transaction_id = p.sale_id
-         WHERE p.payment_method = 'CASH' AND s.created_at >= ?`,
-      )
-      .get(sinceIso) as { total: number } | undefined;
+    const row = this.db.get(
+      `SELECT COALESCE(SUM(p.amount_received - p.change_given), 0) AS total
+       FROM sale_payments p
+       JOIN sales s ON s.transaction_id = p.sale_id
+       WHERE p.payment_method = 'CASH' AND s.created_at >= ?`,
+      [sinceIso],
+    ) as { total: number } | undefined;
 
     return row?.total ?? 0;
   }
@@ -367,9 +373,10 @@ class LocalDatabaseEngine {
         .sort((a, b) => (a.id || 0) - (b.id || 0))
         .slice(0, limit);
     }
-    return this.db
-      .prepare("SELECT * FROM sync_queue WHERE status = 'PENDING' ORDER BY id ASC LIMIT ?")
-      .all(limit) as LocalSyncQueueItem[];
+    return this.db.all(
+      "SELECT * FROM sync_queue WHERE status = 'PENDING' ORDER BY id ASC LIMIT ?",
+      [limit],
+    ) as LocalSyncQueueItem[];
   }
 
   // Remove synced item from queue after 200 OK confirmation
@@ -379,7 +386,7 @@ class LocalDatabaseEngine {
       this.saveMockStorage();
       return;
     }
-    this.db.prepare('DELETE FROM sync_queue WHERE id = ?').run(id);
+    this.db.run('DELETE FROM sync_queue WHERE id = ?', [id]);
   }
 
   public markSynced(ids: number[]) {
@@ -389,7 +396,7 @@ class LocalDatabaseEngine {
       return;
     }
     const placeholders = ids.map(() => '?').join(',');
-    this.db.prepare(`DELETE FROM sync_queue WHERE id IN (${placeholders})`).run(...ids);
+    this.db.run(`DELETE FROM sync_queue WHERE id IN (${placeholders})`, ids);
   }
 
   public incrementAttempts(id: number) {
@@ -402,16 +409,13 @@ class LocalDatabaseEngine {
       this.saveMockStorage();
       return;
     }
-    this.db
-      .prepare(
-        `
-      UPDATE sync_queue 
-      SET attempts = attempts + 1, 
-          status = CASE WHEN attempts + 1 >= 5 THEN 'FAILED' ELSE 'PENDING' END 
-      WHERE id = ?
-    `,
-      )
-      .run(id);
+    this.db.run(
+      `UPDATE sync_queue
+       SET attempts = attempts + 1,
+           status = CASE WHEN attempts + 1 >= 5 THEN 'FAILED' ELSE 'PENDING' END
+       WHERE id = ?`,
+      [id],
+    );
   }
 
   /**
@@ -425,9 +429,8 @@ class LocalDatabaseEngine {
     if (!this.db) {
       return this.mockSyncQueue.filter((item) => item.status === 'FAILED').length;
     }
-    const res = this.db
-      .prepare("SELECT COUNT(*) as count FROM sync_queue WHERE status = 'FAILED'")
-      .get() as { count: number } | undefined;
+    const res = this.db.get("SELECT COUNT(*) as count FROM sync_queue WHERE status = 'FAILED'") as
+      { count: number } | undefined;
     return res?.count || 0;
   }
 
@@ -443,16 +446,15 @@ class LocalDatabaseEngine {
       this.saveMockStorage();
       return;
     }
-    this.db.prepare("UPDATE sync_queue SET attempts = 5, status = 'FAILED' WHERE id = ?").run(id);
+    this.db.run("UPDATE sync_queue SET attempts = 5, status = 'FAILED' WHERE id = ?", [id]);
   }
 
   public getPendingCount(): number {
     if (!this.db) {
       return this.mockSyncQueue.filter((item) => item.status === 'PENDING').length;
     }
-    const res = this.db
-      .prepare("SELECT COUNT(*) as count FROM sync_queue WHERE status = 'PENDING'")
-      .get() as { count: number } | undefined;
+    const res = this.db.get("SELECT COUNT(*) as count FROM sync_queue WHERE status = 'PENDING'") as
+      { count: number } | undefined;
     return res?.count || 0;
   }
 }
