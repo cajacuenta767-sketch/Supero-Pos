@@ -22,7 +22,8 @@ apiClient.interceptors.request.use(
     }
 
     // 2. Attach Operational Context Headers
-    const branchId = localStorage.getItem('supero_pos_branch_id') || useAuthStore.getState().selectedBranchId;
+    const branchId =
+      localStorage.getItem('supero_pos_branch_id') || useAuthStore.getState().selectedBranchId;
     const user = useAuthStore.getState().user;
 
     if (branchId) {
@@ -34,7 +35,7 @@ apiClient.interceptors.request.use(
 
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // Response Interceptor: Handle 401 Unauthorized / Token Expiration
@@ -46,7 +47,7 @@ apiClient.interceptors.response.use(
       useAuthStore.getState().logout();
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default apiClient;

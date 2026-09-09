@@ -27,7 +27,10 @@ export default [
       // TypeScript ya resuelve los tipos; la regla base da falsos positivos con JSX.
       'no-unused-vars': 'off',
       // El prefijo _ declara "deliberadamente sin usar", en argumentos y variables.
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       'no-undef': 'off',
     },
   },

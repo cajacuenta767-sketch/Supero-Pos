@@ -6,7 +6,10 @@ import { cn } from './cn';
 type Size = 'sm' | 'md' | 'lg' | 'xl';
 
 const SIZE: Record<Size, string> = {
-  sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl',
+  sm: 'max-w-sm',
+  md: 'max-w-lg',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
 };
 
 export interface ModalProps {
@@ -23,8 +26,15 @@ export interface ModalProps {
 }
 
 export const Modal: React.FC<ModalProps> = ({
-  isOpen, onClose, title, subtitle, icon, size = 'md',
-  footer, dismissable = true, children,
+  isOpen,
+  onClose,
+  title,
+  subtitle,
+  icon,
+  size = 'md',
+  footer,
+  dismissable = true,
+  children,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
 

@@ -1,6 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, Eye, EyeOff, KeyRound, Lock, Moon, ShieldAlert, Sun, User,
+  AlertTriangle,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
+  Moon,
+  ShieldAlert,
+  Sun,
+  User,
 } from 'lucide-react';
 import { useAuthStore, DEMO_BRANCHES } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
@@ -9,76 +18,82 @@ import { Badge, Button, IconButton, Input, Select, cn } from '../ui';
 type DemoUser = 'admin' | 'supervisor' | 'cajero' | 'almacenero';
 
 const DEMO_CREDENTIALS: Record<DemoUser, { user: string; pass: string; label: string }> = {
- admin:      { user: 'admin', pass: 'SuperoPOS2026', label: 'Admin' },
- supervisor: { user: 'supervisor', pass: 'supervisor123', label: 'Supervisor' },
- cajero:     { user: 'cajero', pass: 'cajero123', label: 'Cajero' },
- almacenero: { user: 'almacenero', pass: 'almacen123', label: 'Almacén' },
+  admin: { user: 'admin', pass: 'SuperoPOS2026', label: 'Admin' },
+  supervisor: { user: 'supervisor', pass: 'supervisor123', label: 'Supervisor' },
+  cajero: { user: 'cajero', pass: 'cajero123', label: 'Cajero' },
+  almacenero: { user: 'almacenero', pass: 'almacen123', label: 'Almacén' },
 };
 
 export const LoginView: React.FC = () => {
- const {
- login, isLocked, failedAttempts, lockoutUntil,
- selectedBranchId, setSelectedBranchId, resetLockout, checkLockStatus,
+  const {
+    login,
+    isLocked,
+    failedAttempts,
+    lockoutUntil,
+    selectedBranchId,
+    setSelectedBranchId,
+    resetLockout,
+    checkLockStatus,
   } = useAuthStore();
- const { isDarkMode, toggleTheme } = useThemeStore();
+  const { isDarkMode, toggleTheme } = useThemeStore();
 
- const [username, setUsername] = useState('admin');
- const [password, setPassword] = useState('SuperoPOS2026');
- const [showPassword, setShowPassword] = useState(false);
- const [isSubmitting, setIsSubmitting] = useState(false);
- const [errorMessage, setErrorMessage] = useState<string | null>(null);
- const [successMessage, setSuccessMessage] = useState<string | null>(null);
- const [remainingTime, setRemainingTime] = useState(0);
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('SuperoPOS2026');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [remainingTime, setRemainingTime] = useState(0);
 
- useEffect(() => {
- checkLockStatus();
- if (!isLocked || !lockoutUntil) return;
- const t = setInterval(() => {
- const diff = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
- setRemainingTime(diff);
- if (diff <= 0) checkLockStatus();
+  useEffect(() => {
+    checkLockStatus();
+    if (!isLocked || !lockoutUntil) return;
+    const t = setInterval(() => {
+      const diff = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
+      setRemainingTime(diff);
+      if (diff <= 0) checkLockStatus();
     }, 1000);
- return () => clearInterval(t);
+    return () => clearInterval(t);
   }, [isLocked, lockoutUntil, checkLockStatus]);
 
- const handleSubmit = async (e: React.FormEvent) => {
- e.preventDefault();
- setErrorMessage(null);
- setSuccessMessage(null);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
 
- if (checkLockStatus()) {
- setErrorMessage('Cuenta bloqueada tras 5 intentos fallidos. Intente más tarde.');
- return;
+    if (checkLockStatus()) {
+      setErrorMessage('Cuenta bloqueada tras 5 intentos fallidos. Intente más tarde.');
+      return;
     }
- if (!username.trim()) return setErrorMessage('Ingrese su usuario.');
- if (!password) return setErrorMessage('Ingrese su contraseña.');
+    if (!username.trim()) return setErrorMessage('Ingrese su usuario.');
+    if (!password) return setErrorMessage('Ingrese su contraseña.');
 
- setIsSubmitting(true);
- try {
- const result = await login(username.trim(), password, selectedBranchId);
- if (result.success) setSuccessMessage('Autenticación correcta. Abriendo terminal…');
- else setErrorMessage(result.error || 'Credenciales incorrectas.');
+    setIsSubmitting(true);
+    try {
+      const result = await login(username.trim(), password, selectedBranchId);
+      if (result.success) setSuccessMessage('Autenticación correcta. Abriendo terminal…');
+      else setErrorMessage(result.error || 'Credenciales incorrectas.');
     } catch {
- setErrorMessage('Ocurrió un error inesperado. Intente nuevamente.');
+      setErrorMessage('Ocurrió un error inesperado. Intente nuevamente.');
     } finally {
- setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
- const fillDemo = (kind: DemoUser) => {
- if (isLocked) return;
- setErrorMessage(null);
- setUsername(DEMO_CREDENTIALS[kind].user);
- setPassword(DEMO_CREDENTIALS[kind].pass);
+  const fillDemo = (kind: DemoUser) => {
+    if (isLocked) return;
+    setErrorMessage(null);
+    setUsername(DEMO_CREDENTIALS[kind].user);
+    setPassword(DEMO_CREDENTIALS[kind].pass);
   };
 
- return (
+  return (
     <div className="min-h-screen w-full flex bg-canvas text-ink select-none">
       {/* Panel de marca: el producto se presenta antes de pedir credenciales */}
       <div className="hidden lg:flex flex-1 flex-col justify-between p-12 bg-surface border-r border-line relative overflow-hidden">
         <div
- aria-hidden
- className="absolute -top-32 -left-32 w-[520px] h-[520px] rounded-full bg-accent/[0.07] blur-3xl pointer-events-none"
+          aria-hidden
+          className="absolute -top-32 -left-32 w-[520px] h-[520px] rounded-full bg-accent/[0.07] blur-3xl pointer-events-none"
         />
         <div className="flex items-center gap-3 relative">
           <div className="w-11 h-11 rounded-md bg-accent text-white flex items-center justify-center font-bold text-display">
@@ -92,18 +107,28 @@ export const LoginView: React.FC = () => {
 
         <div className="relative max-w-md space-y-4">
           <h2 className="text-hero text-ink leading-[1.05]">
-            Vender<br />sin mirar<br />la pantalla.
+            Vender
+            <br />
+            sin mirar
+            <br />
+            la pantalla.
           </h2>
           <p className="text-base text-ink-2 leading-relaxed">
-            Terminal de punto de venta con operación offline, lectura láser, control de IMEI
- y venta a granel. Diseñada para la hora número nueve del turno.
+            Terminal de punto de venta con operación offline, lectura láser, control de IMEI y venta
+            a granel. Diseñada para la hora número nueve del turno.
           </p>
         </div>
 
         <div className="relative flex flex-wrap gap-2">
-          <Badge tone="success" size="md">Offline-first</Badge>
-          <Badge tone="accent" size="md">Escaneo &lt; 10 ms</Badge>
-          <Badge tone="neutral" size="md">Kardex ACID</Badge>
+          <Badge tone="success" size="md">
+            Offline-first
+          </Badge>
+          <Badge tone="accent" size="md">
+            Escaneo &lt; 10 ms
+          </Badge>
+          <Badge tone="neutral" size="md">
+            Kardex ACID
+          </Badge>
         </div>
       </div>
 
@@ -111,7 +136,9 @@ export const LoginView: React.FC = () => {
       <div className="w-full lg:w-[480px] shrink-0 flex flex-col justify-center p-8 sm:p-12">
         <div className="flex items-center justify-between mb-8">
           <div className="lg:hidden flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-accent text-white flex items-center justify-center font-bold text-title">S</div>
+            <div className="w-10 h-10 rounded-md bg-accent text-white flex items-center justify-center font-bold text-title">
+              S
+            </div>
             <p className="text-title text-ink">SUPERO POS</p>
           </div>
           <div className="hidden lg:block">
@@ -119,8 +146,8 @@ export const LoginView: React.FC = () => {
             <p className="text-base text-ink-2 mt-1">Identifíquese para abrir la terminal.</p>
           </div>
           <IconButton
- label={isDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
- onClick={toggleTheme}
+            label={isDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            onClick={toggleTheme}
           >
             {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </IconButton>
@@ -133,7 +160,8 @@ export const LoginView: React.FC = () => {
               <div className="space-y-1.5">
                 <p className="text-base font-bold text-danger-ink">Cuenta bloqueada</p>
                 <p className="text-body text-danger-ink/90">
-                  Se superó el límite de 5 intentos fallidos. El acceso está restringido temporalmente.
+                  Se superó el límite de 5 intentos fallidos. El acceso está restringido
+                  temporalmente.
                 </p>
                 {remainingTime > 0 && (
                   <p className="font-mono tnum text-body font-bold text-danger-ink">
@@ -141,9 +169,9 @@ export const LoginView: React.FC = () => {
                   </p>
                 )}
                 <button
- type="button"
- onClick={resetLockout}
- className="text-body font-semibold underline text-danger-ink hover:opacity-80"
+                  type="button"
+                  onClick={resetLockout}
+                  className="text-body font-semibold underline text-danger-ink hover:opacity-80"
                 >
                   Desbloquear (modo demo QA)
                 </button>
@@ -154,47 +182,50 @@ export const LoginView: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Select
- label="Sucursal"
- value={selectedBranchId}
- onChange={(e) => setSelectedBranchId(e.target.value)}
- disabled={isLocked}
+            label="Sucursal"
+            value={selectedBranchId}
+            onChange={(e) => setSelectedBranchId(e.target.value)}
+            disabled={isLocked}
           >
             {DEMO_BRANCHES.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
             ))}
           </Select>
 
           <Input
- id="username"
- label="Usuario"
- leading={<User className="w-4 h-4" />}
- value={username}
- onChange={(e) => setUsername(e.target.value)}
- disabled={isLocked}
- autoComplete="username"
- inputSize="lg"
+            id="username"
+            label="Usuario"
+            leading={<User className="w-4 h-4" />}
+            autoFocus
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            disabled={isLocked}
+            autoComplete="username"
+            inputSize="lg"
           />
 
           <Input
- id="password"
- label="Contraseña"
- type={showPassword ? 'text' : 'password'}
- leading={<Lock className="w-4 h-4" />}
- trailing={
+            id="password"
+            label="Contraseña"
+            type={showPassword ? 'text' : 'password'}
+            leading={<Lock className="w-4 h-4" />}
+            trailing={
               <button
- type="button"
- onClick={() => setShowPassword((v) => !v)}
- aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
- className="text-ink-3 hover:text-ink transition-colors duration-fast"
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                className="text-ink-3 hover:text-ink transition-colors duration-fast"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             }
- value={password}
- onChange={(e) => setPassword(e.target.value)}
- disabled={isLocked}
- autoComplete="current-password"
- inputSize="lg"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={isLocked}
+            autoComplete="current-password"
+            inputSize="lg"
           />
 
           {failedAttempts > 0 && !isLocked && (
@@ -219,12 +250,12 @@ export const LoginView: React.FC = () => {
           )}
 
           <Button
- type="submit"
- size="lg"
- block
- loading={isSubmitting}
- disabled={isLocked}
- icon={!isSubmitting ? <KeyRound className="w-4 h-4" /> : undefined}
+            type="submit"
+            size="lg"
+            block
+            loading={isSubmitting}
+            disabled={isLocked}
+            icon={!isSubmitting ? <KeyRound className="w-4 h-4" /> : undefined}
           >
             {isSubmitting ? 'Verificando…' : 'Entrar a la terminal'}
           </Button>
@@ -235,11 +266,11 @@ export const LoginView: React.FC = () => {
           <div className="grid grid-cols-4 gap-2">
             {(Object.keys(DEMO_CREDENTIALS) as DemoUser[]).map((k) => (
               <button
- key={k}
- type="button"
- onClick={() => fillDemo(k)}
- disabled={isLocked}
- className={cn(
+                key={k}
+                type="button"
+                onClick={() => fillDemo(k)}
+                disabled={isLocked}
+                className={cn(
                   'h-9 rounded-md border border-line bg-raised text-body font-semibold text-ink-2',
                   'hover:border-accent hover:text-accent transition-colors duration-fast ease-ease',
                   'disabled:opacity-40 disabled:cursor-not-allowed',

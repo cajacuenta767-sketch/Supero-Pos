@@ -9,15 +9,20 @@ export interface PrintableTicket {
 }
 
 export const usePrinter = () => {
-  const printTicket = useCallback((ticket: PrintableTicket, paperWidth: '80mm' | '58mm' = '80mm') => {
-    console.log(`[ESC/POS Printer] Printing ticket #${ticket.ticketNumber} on ${paperWidth} paper...`);
-    // ESC/POS raw printer command builder trigger via Electron IPC
-    if (window.electronAPI) {
-      window.electronAPI.printThermalTicket({ ticket, paperWidth });
-    } else {
-      window.print();
-    }
-  }, []);
+  const printTicket = useCallback(
+    (ticket: PrintableTicket, paperWidth: '80mm' | '58mm' = '80mm') => {
+      console.log(
+        `[ESC/POS Printer] Printing ticket #${ticket.ticketNumber} on ${paperWidth} paper...`,
+      );
+      // ESC/POS raw printer command builder trigger via Electron IPC
+      if (window.electronAPI) {
+        window.electronAPI.printThermalTicket({ ticket, paperWidth });
+      } else {
+        window.print();
+      }
+    },
+    [],
+  );
 
   return { printTicket };
 };

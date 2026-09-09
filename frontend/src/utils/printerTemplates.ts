@@ -4,7 +4,7 @@ export const buildThermalReceiptText = (
   companyNit: string,
   items: Array<{ name: string; qty: number; price: number; subtotal: number }>,
   totalAmount: number,
-  paperWidth: '80mm' | '58mm' = '80mm'
+  paperWidth: '80mm' | '58mm' = '80mm',
 ): string => {
   const lineLength = paperWidth === '80mm' ? 32 : 24;
   const separator = '-'.repeat(lineLength);
@@ -15,7 +15,7 @@ export const buildThermalReceiptText = (
   receipt += `TICKET #: ${ticketNumber}\n`;
   receipt += `${separator}\n`;
 
-  items.forEach(item => {
+  items.forEach((item) => {
     const itemLine = `${item.qty}x ${item.name.substring(0, 16)}`;
     const priceLine = `Bs. ${item.subtotal.toFixed(2)}`;
     receipt += `${itemLine.padEnd(lineLength - priceLine.length)}${priceLine}\n`;

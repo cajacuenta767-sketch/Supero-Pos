@@ -13,9 +13,18 @@ export interface CardProps {
 }
 
 export const Card: React.FC<CardProps> = ({
-  title, subtitle, action, icon, padding = 'md', className, bodyClassName, children,
+  title,
+  subtitle,
+  action,
+  icon,
+  padding = 'md',
+  className,
+  bodyClassName,
+  children,
 }) => (
-  <section className={cn('bg-raised border border-line rounded-lg shadow-e1 overflow-hidden', className)}>
+  <section
+    className={cn('bg-raised border border-line rounded-lg shadow-e1 overflow-hidden', className)}
+  >
     {(title || action) && (
       <header className="flex items-center justify-between gap-3 px-4 h-12 border-b border-line">
         <div className="flex items-center gap-2.5 min-w-0">

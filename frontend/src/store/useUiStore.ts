@@ -25,16 +25,16 @@ export const useUiStore = create<UiState>((set) => ({
   activeModal: null,
   toasts: [],
 
-  toggleSidebar: () => set(state => ({ isSidebarOpen: !state.isSidebarOpen })),
+  toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
   openModal: (modalId) => set({ activeModal: modalId }),
   closeModal: () => set({ activeModal: null }),
   addToast: (message, type = 'SUCCESS') => {
     const id = `toast-${Date.now()}`;
-    set(state => ({ toasts: [...state.toasts, { id, type, message }] }));
+    set((state) => ({ toasts: [...state.toasts, { id, type, message }] }));
     setTimeout(() => {
-      set(state => ({ toasts: state.toasts.filter(t => t.id !== id) }));
+      set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
     }, 4000);
   },
-  removeToast: (id) => set(state => ({ toasts: state.toasts.filter(t => t.id !== id) })),
-  resetUiState: () => set({ isSidebarOpen: true, activeModal: null, toasts: [] })
+  removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+  resetUiState: () => set({ isSidebarOpen: true, activeModal: null, toasts: [] }),
 }));

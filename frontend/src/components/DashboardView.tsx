@@ -1,7 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowUpRight, Banknote, BarChart3, Calendar, CreditCard,
-  LineChart as LineChartIcon, Package, QrCode, RefreshCw, ShoppingCart, Wallet,
+  AlertTriangle,
+  ArrowUpRight,
+  Banknote,
+  BarChart3,
+  Calendar,
+  CreditCard,
+  LineChart as LineChartIcon,
+  Package,
+  QrCode,
+  RefreshCw,
+  ShoppingCart,
+  Wallet,
 } from 'lucide-react';
 import { Badge, Button, Card, DataTable, EmptyState, Money, Select, StatTile, cn } from '../ui';
 import type { Column } from '../ui';
@@ -10,15 +20,15 @@ import type { Column } from '../ui';
  fija. Con Math.random la serie se regeneraba en cada render y el gráfico
  cambiaba solo al pasar el ratón. */
 const seeded = (seed: number) => () => {
- seed = (seed * 1103515245 + 12345) % 2147483648;
- return seed / 2147483648;
+  seed = (seed * 1103515245 + 12345) % 2147483648;
+  return seed / 2147483648;
 };
 
 interface TrendPoint {
- day: number;
- date: string;
- amount: number;
- tickets: number;
+  day: number;
+  date: string;
+  amount: number;
+  tickets: number;
 }
 
 const CRITICAL_STOCK = [
@@ -51,52 +61,59 @@ const METHOD_ICON: Record<string, React.ReactNode> = {
  temas. --ok y --warn quedan fuera de la banda de luminosidad sobre fondo
  oscuro: sirven como estado, no como marca de gráfico.                  */
 const TrendChart: React.FC<{
- data: TrendPoint[];
- metric: 'amount' | 'tickets';
- kind: 'line' | 'bar';
+  data: TrendPoint[];
+  metric: 'amount' | 'tickets';
+  kind: 'line' | 'bar';
 }> = ({ data, metric, kind }) => {
- const [hover, setHover] = useState<number | null>(null);
+  const [hover, setHover] = useState<number | null>(null);
 
- const W = 1000;
- const H = 260;
- const PAD = { top: 16, right: 16, bottom: 28, left: 48 };
- const plotW = W - PAD.left - PAD.right;
- const plotH = H - PAD.top - PAD.bottom;
+  const W = 1000;
+  const H = 260;
+  const PAD = { top: 16, right: 16, bottom: 28, left: 48 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
 
- const values = data.map((d) => d[metric]);
- const max = Math.max(...values);
- const niceMax = Math.ceil(max / 100) * 100 || 1;
- const peakIndex = values.indexOf(max);
+  const values = data.map((d) => d[metric]);
+  const max = Math.max(...values);
+  const niceMax = Math.ceil(max / 100) * 100 || 1;
+  const peakIndex = values.indexOf(max);
 
- const x = (i: number) => PAD.left + (i / Math.max(1, data.length - 1)) * plotW;
- const y = (v: number) => PAD.top + plotH - (v / niceMax) * plotH;
+  const x = (i: number) => PAD.left + (i / Math.max(1, data.length - 1)) * plotW;
+  const y = (v: number) => PAD.top + plotH - (v / niceMax) * plotH;
 
- const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(niceMax * t));
- const linePath = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(d[metric])}`).join(' ');
- const areaPath = `${linePath} L${x(data.length - 1)},${PAD.top + plotH} L${x(0)},${PAD.top + plotH} Z`;
- const barW = Math.max(4, (plotW / data.length) * 0.55);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(niceMax * t));
+  const linePath = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(d[metric])}`).join(' ');
+  const areaPath = `${linePath} L${x(data.length - 1)},${PAD.top + plotH} L${x(0)},${PAD.top + plotH} Z`;
+  const barW = Math.max(4, (plotW / data.length) * 0.55);
 
- const active = hover !== null ? data[hover] : null;
+  const active = hover !== null ? data[hover] : null;
 
- return (
+  return (
     <figure className="m-0">
       <svg
- viewBox={`0 0 ${W} ${H}`}
- className="w-full h-[260px] overflow-visible"
- role="img"
- aria-label={`Tendencia de ${metric === 'amount' ? 'ventas' : 'tickets'} de los últimos 30 días`}
- onMouseLeave={() => setHover(null)}
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full h-[260px] overflow-visible"
+        role="img"
+        aria-label={`Tendencia de ${metric === 'amount' ? 'ventas' : 'tickets'} de los últimos 30 días`}
+        onMouseLeave={() => setHover(null)}
       >
         {/* Rejilla recesiva */}
         {ticks.map((t) => (
           <g key={t}>
             <line
- x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)}
- className="stroke-line" strokeWidth={1}
+              x1={PAD.left}
+              x2={W - PAD.right}
+              y1={y(t)}
+              y2={y(t)}
+              className="stroke-line"
+              strokeWidth={1}
             />
             <text
- x={PAD.left - 10} y={y(t)} dy="0.32em" textAnchor="end"
- className="fill-ink-3 text-[11px] font-mono"
+              x={PAD.left - 10}
+              y={y(t)}
+              dy="0.32em"
+              textAnchor="end"
+              className="fill-ink-3 text-[11px] font-mono"
             >
               {metric === 'amount' ? `${t / 1000 >= 1 ? `${t / 1000}k` : t}` : t}
             </text>
@@ -107,39 +124,50 @@ const TrendChart: React.FC<{
           <>
             <path d={areaPath} className="fill-accent/10" />
             <path
- d={linePath}
- className="stroke-accent" strokeWidth={2}
- fill="none" strokeLinejoin="round" strokeLinecap="round"
+              d={linePath}
+              className="stroke-accent"
+              strokeWidth={2}
+              fill="none"
+              strokeLinejoin="round"
+              strokeLinecap="round"
             />
           </>
         ) : (
- data.map((d, i) => (
+          data.map((d, i) => (
             <rect
- key={d.day}
- x={x(i) - barW / 2}
- y={y(d[metric])}
- width={barW}
- height={Math.max(2, PAD.top + plotH - y(d[metric]))}
- rx={4}
- className={cn('fill-accent transition-opacity duration-fast', hover !== null && hover !== i && 'opacity-40')}
+              key={d.day}
+              x={x(i) - barW / 2}
+              y={y(d[metric])}
+              width={barW}
+              height={Math.max(2, PAD.top + plotH - y(d[metric]))}
+              rx={4}
+              className={cn(
+                'fill-accent transition-opacity duration-fast',
+                hover !== null && hover !== i && 'opacity-40',
+              )}
             />
           ))
         )}
 
         {/* Etiqueta directa: solo el máximo, nunca un número por punto */}
         <text
- x={x(peakIndex)} y={y(max) - 12} textAnchor="middle"
- className="fill-ink text-[11px] font-mono font-semibold"
+          x={x(peakIndex)}
+          y={y(max) - 12}
+          textAnchor="middle"
+          className="fill-ink text-[11px] font-mono font-semibold"
         >
           {metric === 'amount' ? `$${max}` : max}
         </text>
 
         {/* Eje X: un rótulo cada cinco días */}
         {data.map((d, i) =>
- i % 5 === 0 || i === data.length - 1 ? (
+          i % 5 === 0 || i === data.length - 1 ? (
             <text
- key={d.day} x={x(i)} y={H - 8} textAnchor="middle"
- className="fill-ink-3 text-[11px] font-mono"
+              key={d.day}
+              x={x(i)}
+              y={H - 8}
+              textAnchor="middle"
+              className="fill-ink-3 text-[11px] font-mono"
             >
               {d.day}
             </text>
@@ -150,32 +178,40 @@ const TrendChart: React.FC<{
         {active && (
           <>
             <line
- x1={x(hover!)} x2={x(hover!)} y1={PAD.top} y2={PAD.top + plotH}
- className="stroke-line-strong" strokeWidth={1} strokeDasharray="3 3"
+              x1={x(hover!)}
+              x2={x(hover!)}
+              y1={PAD.top}
+              y2={PAD.top + plotH}
+              className="stroke-line-strong"
+              strokeWidth={1}
+              strokeDasharray="3 3"
             />
             <circle
- cx={x(hover!)} cy={y(active[metric])} r={5}
- className="fill-accent stroke-surface" strokeWidth={2}
+              cx={x(hover!)}
+              cy={y(active[metric])}
+              r={5}
+              className="fill-accent stroke-surface"
+              strokeWidth={2}
             />
           </>
         )}
         {data.map((d, i) => (
           <rect
- key={`hit-${d.day}`}
- x={x(i) - plotW / data.length / 2}
- y={PAD.top}
- width={plotW / data.length}
- height={plotH}
- fill="transparent"
- onMouseEnter={() => setHover(i)}
+            key={`hit-${d.day}`}
+            x={x(i) - plotW / data.length / 2}
+            y={PAD.top}
+            width={plotW / data.length}
+            height={plotH}
+            fill="transparent"
+            onMouseEnter={() => setHover(i)}
           />
         ))}
       </svg>
 
       <figcaption
- className={cn(
+        className={cn(
           'mt-2 h-9 flex items-center gap-3 px-3 rounded-md border text-body',
- active ? 'bg-sunken border-line' : 'border-transparent',
+          active ? 'bg-sunken border-line' : 'border-transparent',
         )}
       >
         {active ? (
@@ -189,7 +225,9 @@ const TrendChart: React.FC<{
             <span className="font-mono tnum text-ink font-semibold">{active.tickets}</span>
           </>
         ) : (
-          <span className="text-ink-3">Pase el cursor sobre el gráfico para ver el detalle diario.</span>
+          <span className="text-ink-3">
+            Pase el cursor sobre el gráfico para ver el detalle diario.
+          </span>
         )}
       </figcaption>
     </figure>
@@ -197,32 +235,32 @@ const TrendChart: React.FC<{
 };
 
 export const DashboardView: React.FC = () => {
- const [branch, setBranch] = useState('Consolidado Global');
- const [range, setRange] = useState('30d');
- const [metric, setMetric] = useState<'amount' | 'tickets'>('amount');
- const [kind, setKind] = useState<'line' | 'bar'>('line');
- const [isRefreshing, setIsRefreshing] = useState(false);
+  const [branch, setBranch] = useState('Consolidado Global');
+  const [range, setRange] = useState('30d');
+  const [metric, setMetric] = useState<'amount' | 'tickets'>('amount');
+  const [kind, setKind] = useState<'line' | 'bar'>('line');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
- const trend = useMemo<TrendPoint[]>(() => {
- const rnd = seeded(20260814);
- return Array.from({ length: 30 }, (_, i) => ({
- day: i + 1,
- date: `2026-08-${String(i + 1).padStart(2, '0')}`,
- amount: Math.floor(rnd() * 400) + 400,
- tickets: Math.floor(rnd() * 10) + 5,
+  const trend = useMemo<TrendPoint[]>(() => {
+    const rnd = seeded(20260814);
+    return Array.from({ length: 30 }, (_, i) => ({
+      day: i + 1,
+      date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+      amount: Math.floor(rnd() * 400) + 400,
+      tickets: Math.floor(rnd() * 10) + 5,
     }));
   }, []);
 
- const refresh = () => {
- setIsRefreshing(true);
- window.setTimeout(() => setIsRefreshing(false), 600);
+  const refresh = () => {
+    setIsRefreshing(true);
+    window.setTimeout(() => setIsRefreshing(false), 600);
   };
 
- const stockColumns: Array<Column<(typeof CRITICAL_STOCK)[number]>> = [
+  const stockColumns: Array<Column<(typeof CRITICAL_STOCK)[number]>> = [
     {
- key: 'product',
- header: 'Producto',
- render: (r) => (
+      key: 'product',
+      header: 'Producto',
+      render: (r) => (
         <div className="min-w-0">
           <p className="text-base font-semibold text-ink truncate">{r.name}</p>
           <p className="font-mono text-micro text-ink-3">{r.sku}</p>
@@ -230,50 +268,66 @@ export const DashboardView: React.FC = () => {
       ),
     },
     {
- key: 'stock',
- header: 'Existencia',
- align: 'right',
- width: '150px',
- render: (r) => (
-        <Badge tone={r.stock === 0 ? 'danger' : 'warning'} icon={<AlertTriangle className="w-3 h-3" />}>
+      key: 'stock',
+      header: 'Existencia',
+      align: 'right',
+      width: '150px',
+      render: (r) => (
+        <Badge
+          tone={r.stock === 0 ? 'danger' : 'warning'}
+          icon={<AlertTriangle className="w-3 h-3" />}
+        >
           {r.stock} {r.unit}
         </Badge>
       ),
     },
     {
- key: 'min',
- header: 'Mínimo',
- align: 'right',
- width: '90px',
- render: (r) => <span className="font-mono tnum text-ink-2">{r.min} {r.unit}</span>,
+      key: 'min',
+      header: 'Mínimo',
+      align: 'right',
+      width: '90px',
+      render: (r) => (
+        <span className="font-mono tnum text-ink-2">
+          {r.min} {r.unit}
+        </span>
+      ),
     },
   ];
 
- const salesColumns: Array<Column<(typeof RECENT_SALES)[number]>> = [
+  const salesColumns: Array<Column<(typeof RECENT_SALES)[number]>> = [
     {
- key: 'ticket',
- header: 'Ticket',
- width: '110px',
- render: (r) => <span className="font-mono text-body text-ink">{r.ticket}</span>,
-    },
-    { key: 'time', header: 'Hora', width: '70px', render: (r) => <span className="font-mono tnum text-ink-2">{r.time}</span> },
-    { key: 'cashier', header: 'Cajero', render: (r) => <span className="text-ink-2 truncate">{r.cashier}</span> },
-    {
- key: 'method',
- header: 'Método',
- width: '120px',
- render: (r) => <Badge icon={METHOD_ICON[r.method]}>{r.method}</Badge>,
+      key: 'ticket',
+      header: 'Ticket',
+      width: '110px',
+      render: (r) => <span className="font-mono text-body text-ink">{r.ticket}</span>,
     },
     {
- key: 'total',
- header: 'Total',
- align: 'right',
- width: '110px',
- render: (r) => <Money value={r.total} size="base" className="text-ink" />,
+      key: 'time',
+      header: 'Hora',
+      width: '70px',
+      render: (r) => <span className="font-mono tnum text-ink-2">{r.time}</span>,
+    },
+    {
+      key: 'cashier',
+      header: 'Cajero',
+      render: (r) => <span className="text-ink-2 truncate">{r.cashier}</span>,
+    },
+    {
+      key: 'method',
+      header: 'Método',
+      width: '120px',
+      render: (r) => <Badge icon={METHOD_ICON[r.method]}>{r.method}</Badge>,
+    },
+    {
+      key: 'total',
+      header: 'Total',
+      align: 'right',
+      width: '110px',
+      render: (r) => <Money value={r.total} size="base" className="text-ink" />,
     },
   ];
 
- return (
+  return (
     <div className="h-full overflow-y-auto bg-canvas">
       <div className="max-w-[1600px] mx-auto p-6 space-y-5">
         {/* Encabezado */}
@@ -281,29 +335,39 @@ export const DashboardView: React.FC = () => {
           <div>
             <h1 className="text-display text-ink">Resumen de operación</h1>
             <p className="text-base text-ink-2 mt-1">
- viernes, 14 de agosto de 2026 · Turno Mañana #1 · Sucursal Central
+              viernes, 14 de agosto de 2026 · Turno Mañana #1 · Sucursal Central
             </p>
           </div>
 
           {/* Los filtros van en una sola fila sobre los gráficos */}
           <div className="flex items-center gap-2">
-            <Select value={branch} onChange={(e) => setBranch(e.target.value)} aria-label="Sucursal">
+            <Select
+              value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+              aria-label="Sucursal"
+            >
               <option>Consolidado Global</option>
               <option>Sucursal Centro</option>
               <option>Sucursal Norte</option>
             </Select>
-            <Select value={range} onChange={(e) => setRange(e.target.value)} aria-label="Rango de fechas">
+            <Select
+              value={range}
+              onChange={(e) => setRange(e.target.value)}
+              aria-label="Rango de fechas"
+            >
               <option value="today">Hoy</option>
               <option value="7d">Últimos 7 días</option>
               <option value="30d">Últimos 30 días</option>
               <option value="month">Mes actual</option>
             </Select>
-            <Button variant="secondary" icon={<Calendar className="w-3.5 h-3.5" />}>Fechas</Button>
+            <Button variant="secondary" icon={<Calendar className="w-3.5 h-3.5" />}>
+              Fechas
+            </Button>
             <Button
- variant="ghost"
- icon={<RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />}
- onClick={refresh}
- aria-label="Actualizar"
+              variant="ghost"
+              icon={<RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />}
+              onClick={refresh}
+              aria-label="Actualizar"
             >
               Actualizar
             </Button>
@@ -313,51 +377,53 @@ export const DashboardView: React.FC = () => {
         {/* Indicadores */}
         <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
           <StatTile
- label="Ventas del periodo"
- value={<Money value={25_940.5} size="display" />}
- delta={14.2}
- hint="vs. periodo anterior"
- icon={<ShoppingCart className="w-4 h-4" />}
- tone="accent"
+            label="Ventas del periodo"
+            value={<Money value={25_940.5} size="display" />}
+            delta={14.2}
+            hint="vs. periodo anterior"
+            icon={<ShoppingCart className="w-4 h-4" />}
+            tone="accent"
           />
           <StatTile
- label="Margen neto"
- value={<Money value={8_378.4} size="display" />}
- delta={3.1}
- hint="32.3% de rentabilidad"
- icon={<Wallet className="w-4 h-4" />}
- tone="success"
+            label="Margen neto"
+            value={<Money value={8_378.4} size="display" />}
+            delta={3.1}
+            hint="32.3% de rentabilidad"
+            icon={<Wallet className="w-4 h-4" />}
+            tone="success"
           />
           <StatTile
- label="Ticket promedio"
- value={<Money value={86.4} size="display" />}
- delta={-1.8}
- hint="300 tickets emitidos"
- icon={<ArrowUpRight className="w-4 h-4" />}
+            label="Ticket promedio"
+            value={<Money value={86.4} size="display" />}
+            delta={-1.8}
+            hint="300 tickets emitidos"
+            icon={<ArrowUpRight className="w-4 h-4" />}
           />
           <StatTile
- label="Stock crítico"
- value={CRITICAL_STOCK.length}
- hint="productos bajo mínimo"
- icon={<Package className="w-4 h-4" />}
- tone="warning"
+            label="Stock crítico"
+            value={CRITICAL_STOCK.length}
+            hint="productos bajo mínimo"
+            icon={<Package className="w-4 h-4" />}
+            tone="warning"
           />
         </div>
 
         {/* Tendencia */}
         <Card
- title="Ventas de los últimos 30 días"
- icon={<LineChartIcon className="w-4 h-4" />}
- action={
+          title="Ventas de los últimos 30 días"
+          icon={<LineChartIcon className="w-4 h-4" />}
+          action={
             <div className="flex items-center gap-2">
               <div className="flex rounded-md border border-line overflow-hidden">
                 {(['amount', 'tickets'] as const).map((m) => (
                   <button
- key={m}
- onClick={() => setMetric(m)}
- className={cn(
+                    key={m}
+                    onClick={() => setMetric(m)}
+                    className={cn(
                       'h-8 px-3 text-body font-semibold transition-colors duration-fast ease-ease',
- metric === m ? 'bg-accent-soft text-accent-ink' : 'bg-raised text-ink-2 hover:text-ink',
+                      metric === m
+                        ? 'bg-accent-soft text-accent-ink'
+                        : 'bg-raised text-ink-2 hover:text-ink',
                     )}
                   >
                     {m === 'amount' ? 'Monto' : 'Tickets'}
@@ -367,15 +433,21 @@ export const DashboardView: React.FC = () => {
               <div className="flex rounded-md border border-line overflow-hidden">
                 {(['line', 'bar'] as const).map((k) => (
                   <button
- key={k}
- onClick={() => setKind(k)}
- aria-label={k === 'line' ? 'Ver como línea' : 'Ver como barras'}
- className={cn(
+                    key={k}
+                    onClick={() => setKind(k)}
+                    aria-label={k === 'line' ? 'Ver como línea' : 'Ver como barras'}
+                    className={cn(
                       'h-8 w-9 flex items-center justify-center transition-colors duration-fast ease-ease',
- kind === k ? 'bg-accent-soft text-accent-ink' : 'bg-raised text-ink-2 hover:text-ink',
+                      kind === k
+                        ? 'bg-accent-soft text-accent-ink'
+                        : 'bg-raised text-ink-2 hover:text-ink',
                     )}
                   >
-                    {k === 'line' ? <LineChartIcon className="w-4 h-4" /> : <BarChart3 className="w-4 h-4" />}
+                    {k === 'line' ? (
+                      <LineChartIcon className="w-4 h-4" />
+                    ) : (
+                      <BarChart3 className="w-4 h-4" />
+                    )}
                   </button>
                 ))}
               </div>
@@ -388,34 +460,36 @@ export const DashboardView: React.FC = () => {
         {/* Atención inmediata */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <Card
- title="Stock bajo mínimo"
- subtitle="Ordenado por urgencia"
- icon={<AlertTriangle className="w-4 h-4" />}
- padding="none"
+            title="Stock bajo mínimo"
+            subtitle="Ordenado por urgencia"
+            icon={<AlertTriangle className="w-4 h-4" />}
+            padding="none"
           >
             <DataTable
- columns={stockColumns}
- rows={CRITICAL_STOCK}
- rowKey={(r) => r.sku}
- dense
- className="border-0 rounded-none"
- empty={<EmptyState icon={<Package className="w-6 h-6" />} title="Sin faltantes" />}
+              columns={stockColumns}
+              rows={CRITICAL_STOCK}
+              rowKey={(r) => r.sku}
+              dense
+              className="border-0 rounded-none"
+              empty={<EmptyState icon={<Package className="w-6 h-6" />} title="Sin faltantes" />}
             />
           </Card>
 
           <Card
- title="Últimas ventas"
- subtitle="Turno en curso"
- icon={<ShoppingCart className="w-4 h-4" />}
- padding="none"
+            title="Últimas ventas"
+            subtitle="Turno en curso"
+            icon={<ShoppingCart className="w-4 h-4" />}
+            padding="none"
           >
             <DataTable
- columns={salesColumns}
- rows={RECENT_SALES}
- rowKey={(r) => r.ticket}
- dense
- className="border-0 rounded-none"
- empty={<EmptyState icon={<ShoppingCart className="w-6 h-6" />} title="Sin ventas aún" />}
+              columns={salesColumns}
+              rows={RECENT_SALES}
+              rowKey={(r) => r.ticket}
+              dense
+              className="border-0 rounded-none"
+              empty={
+                <EmptyState icon={<ShoppingCart className="w-6 h-6" />} title="Sin ventas aún" />
+              }
             />
           </Card>
         </div>

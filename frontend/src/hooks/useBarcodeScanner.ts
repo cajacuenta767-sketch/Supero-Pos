@@ -7,7 +7,7 @@ export const useBarcodeScanner = (onScan: (barcode: string) => void) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const currentTime = Date.now();
-      
+
       // Clear buffer if time between keystrokes exceeds 50ms
       if (currentTime - lastKeyTimeRef.current > 50) {
         bufferRef.current = '';

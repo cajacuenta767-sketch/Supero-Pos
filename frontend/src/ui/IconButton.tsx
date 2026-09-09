@@ -5,8 +5,8 @@ type Tone = 'neutral' | 'accent' | 'danger';
 
 const TONE: Record<Tone, string> = {
   neutral: 'text-ink-2 hover:text-ink hover:bg-sunken',
-  accent:  'text-accent hover:bg-accent-soft',
-  danger:  'text-danger hover:bg-danger-soft',
+  accent: 'text-accent hover:bg-accent-soft',
+  danger: 'text-danger hover:bg-danger-soft',
 };
 
 export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -17,7 +17,12 @@ export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
 }
 
 export const IconButton: React.FC<IconButtonProps> = ({
-  label, tone = 'neutral', size = 'md', className, children, ...rest
+  label,
+  tone = 'neutral',
+  size = 'md',
+  className,
+  children,
+  ...rest
 }) => (
   <button
     {...rest}
@@ -27,7 +32,8 @@ export const IconButton: React.FC<IconButtonProps> = ({
       'inline-flex items-center justify-center rounded-md shrink-0',
       'transition-colors duration-fast ease-ease disabled:opacity-40 disabled:cursor-not-allowed',
       size === 'sm' ? 'w-7 h-7' : size === 'touch' ? 'w-touch h-touch' : 'w-9 h-9',
-      TONE[tone], className,
+      TONE[tone],
+      className,
     )}
   >
     {children}

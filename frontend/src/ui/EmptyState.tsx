@@ -9,10 +9,13 @@ export interface EmptyStateProps {
   className?: string;
 }
 
-export const EmptyState: React.FC<EmptyStateProps> = ({
-  icon, title, hint, action, className,
-}) => (
-  <div className={cn('h-full flex flex-col items-center justify-center text-center gap-3 p-8', className)}>
+export const EmptyState: React.FC<EmptyStateProps> = ({ icon, title, hint, action, className }) => (
+  <div
+    className={cn(
+      'h-full flex flex-col items-center justify-center text-center gap-3 p-8',
+      className,
+    )}
+  >
     {icon && (
       <span className="w-14 h-14 rounded-lg bg-sunken text-ink-3 flex items-center justify-center">
         {icon}

@@ -6,10 +6,10 @@ type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
 
 const ICON_TONE: Record<Tone, string> = {
   neutral: 'bg-sunken text-ink-2',
-  accent:  'bg-accent-soft text-accent-ink',
+  accent: 'bg-accent-soft text-accent-ink',
   success: 'bg-ok-soft text-ok-ink',
   warning: 'bg-warn-soft text-warn-ink',
-  danger:  'bg-danger-soft text-danger-ink',
+  danger: 'bg-danger-soft text-danger-ink',
 };
 
 export interface StatTileProps {
@@ -23,13 +23,24 @@ export interface StatTileProps {
 }
 
 export const StatTile: React.FC<StatTileProps> = ({
-  label, value, delta, hint, icon, tone = 'neutral', className,
+  label,
+  value,
+  delta,
+  hint,
+  icon,
+  tone = 'neutral',
+  className,
 }) => (
   <div className={cn('bg-raised border border-line rounded-lg shadow-e1 p-4 space-y-3', className)}>
     <div className="flex items-start justify-between gap-2">
       <span className="text-micro uppercase text-ink-2">{label}</span>
       {icon && (
-        <span className={cn('w-8 h-8 rounded-md flex items-center justify-center shrink-0', ICON_TONE[tone])}>
+        <span
+          className={cn(
+            'w-8 h-8 rounded-md flex items-center justify-center shrink-0',
+            ICON_TONE[tone],
+          )}
+        >
           {icon}
         </span>
       )}
@@ -45,7 +56,11 @@ export const StatTile: React.FC<StatTileProps> = ({
             delta >= 0 ? 'text-ok' : 'text-danger',
           )}
         >
-          {delta >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+          {delta >= 0 ? (
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          ) : (
+            <ArrowDownRight className="w-3.5 h-3.5" />
+          )}
           {Math.abs(delta).toFixed(1)}%
         </span>
       )}

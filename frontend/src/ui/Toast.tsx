@@ -11,10 +11,22 @@ interface Toast {
 }
 
 const TONE: Record<Tone, { cls: string; icon: React.ReactNode }> = {
-  info:    { cls: 'border-accent/30 bg-accent-soft text-accent-ink', icon: <Info className="w-4 h-4" /> },
-  success: { cls: 'border-ok/30 bg-ok-soft text-ok-ink',             icon: <CheckCircle2 className="w-4 h-4" /> },
-  warning: { cls: 'border-warn/30 bg-warn-soft text-warn-ink',       icon: <AlertTriangle className="w-4 h-4" /> },
-  danger:  { cls: 'border-danger/30 bg-danger-soft text-danger-ink', icon: <XCircle className="w-4 h-4" /> },
+  info: {
+    cls: 'border-accent/30 bg-accent-soft text-accent-ink',
+    icon: <Info className="w-4 h-4" />,
+  },
+  success: {
+    cls: 'border-ok/30 bg-ok-soft text-ok-ink',
+    icon: <CheckCircle2 className="w-4 h-4" />,
+  },
+  warning: {
+    cls: 'border-warn/30 bg-warn-soft text-warn-ink',
+    icon: <AlertTriangle className="w-4 h-4" />,
+  },
+  danger: {
+    cls: 'border-danger/30 bg-danger-soft text-danger-ink',
+    icon: <XCircle className="w-4 h-4" />,
+  },
 };
 
 const ToastCtx = createContext<(message: string, tone?: Tone) => void>(() => {});

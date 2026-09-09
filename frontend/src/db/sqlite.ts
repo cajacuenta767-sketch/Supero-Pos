@@ -168,12 +168,16 @@ class LocalDatabaseEngine {
   }
 
   // Atomic ACID Transaction for Local Sales with 4-Block Contract
-  public processLocalSaleAtomic(saleData: FourBlockSalePayload): { success: boolean; saleId: string } {
+  public processLocalSaleAtomic(saleData: FourBlockSalePayload): {
+    success: boolean;
+    saleId: string;
+  } {
     if (!this.db) {
       // Browser preview mode fallback engine
-      const mockId = this.mockSyncQueue.length > 0
-        ? Math.max(...this.mockSyncQueue.map((q) => q.id || 0)) + 1
-        : 1;
+      const mockId =
+        this.mockSyncQueue.length > 0
+          ? Math.max(...this.mockSyncQueue.map((q) => q.id || 0)) + 1
+          : 1;
 
       const newItem: LocalSyncQueueItem = {
         id: mockId,
@@ -207,29 +211,33 @@ class LocalDatabaseEngine {
         data.total_discount,
         data.grand_total,
         data.payment_breakdown[0]?.payment_method || 'CASH',
-        data.timestamp
+        data.timestamp,
       );
 
       // 2. Iterate items & deduct stock decimal
       for (const item of data.items) {
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO sale_details (sale_id, product_id, quantity, unit_price, subtotal, serial_number)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run(
+        `,
+        ).run(
           data.transaction_id,
           item.product_id,
           item.quantity,
           item.unit_price,
           item.line_subtotal,
-          item.serials_used[0] || null
+          item.serials_used[0] || null,
         );
       }
 
       // 3. Queue into sync_queue in the SAME atomic transaction
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO sync_queue (payload_type, local_id, payload_data, status)
         VALUES ('SALE_TRANSACTION', ?, ?, 'PENDING')
-      `).run(data.transaction_id, JSON.stringify(data));
+      `,
+      ).run(data.transaction_id, JSON.stringify(data));
 
       return { success: true, saleId: data.transaction_id };
     });
@@ -280,12 +288,16 @@ class LocalDatabaseEngine {
       this.saveMockStorage();
       return;
     }
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       UPDATE sync_queue 
       SET attempts = attempts + 1, 
           status = CASE WHEN attempts + 1 >= 5 THEN 'FAILED' ELSE 'PENDING' END 
       WHERE id = ?
-    `).run(id);
+    `,
+      )
+      .run(id);
   }
 
   public getPendingCount(): number {
@@ -300,4 +312,3 @@ class LocalDatabaseEngine {
 }
 
 export const localDb = new LocalDatabaseEngine();
-

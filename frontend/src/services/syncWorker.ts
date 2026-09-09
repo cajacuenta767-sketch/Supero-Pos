@@ -50,7 +50,9 @@ export class SyncWorkerService {
           return;
         }
 
-        console.log(`Reconexión activa: Procesando cola FIFO de ${pendingItems.length} transacciones...`);
+        console.log(
+          `Reconexión activa: Procesando cola FIFO de ${pendingItems.length} transacciones...`,
+        );
 
         // 3. Procesamiento secuencial FIFO uno por uno
         for (const item of pendingItems) {
@@ -67,7 +69,7 @@ export class SyncWorkerService {
                 sync_batch_id: `batch-${item.id}-${Date.now()}`,
                 transactions: [transactionPayload],
               },
-              { timeout: 8000 }
+              { timeout: 8000 },
             );
 
             // Eliminar de sync_queue SOLO tras recibir confirmación 200 OK
@@ -78,15 +80,21 @@ export class SyncWorkerService {
               const currentPending = localDb.getPendingCount();
               useSyncStore.getState().setPendingCount(currentPending);
               useSyncStore.getState().setLastSyncTime(new Date().toLocaleTimeString());
-              console.log(`[200 OK] Ticket ${item.local_id} reconciliado y eliminado de sync_queue. Restantes: ${currentPending}`);
+              console.log(
+                `[200 OK] Ticket ${item.local_id} reconciliado y eliminado de sync_queue. Restantes: ${currentPending}`,
+              );
             } else {
               // Si la respuesta no es 200 OK, congelar la cola y reintentar en el siguiente tick
-              console.warn(`Respuesta no confirmada para ticket ${item.local_id}. Deteniendo flujo FIFO.`);
+              console.warn(
+                `Respuesta no confirmada para ticket ${item.local_id}. Deteniendo flujo FIFO.`,
+              );
               break;
             }
           } catch (err) {
             const reason = err instanceof Error ? err.message : String(err);
-            console.warn(`Error en envío FIFO para ticket ${item.local_id}: ${reason}. Congelando transmisión.`);
+            console.warn(
+              `Error en envío FIFO para ticket ${item.local_id}: ${reason}. Congelando transmisión.`,
+            );
             if (item.id !== undefined) {
               localDb.incrementAttempts(item.id);
             }
@@ -118,4 +126,3 @@ export class SyncWorkerService {
 }
 
 export const syncWorker = new SyncWorkerService();
-

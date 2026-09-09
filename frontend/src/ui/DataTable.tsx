@@ -24,7 +24,13 @@ export interface DataTableProps<T> {
 const ALIGN = { left: 'text-left', right: 'text-right', center: 'text-center' } as const;
 
 export function DataTable<T>({
-  columns, rows, rowKey, dense = false, empty, onRowClick, className,
+  columns,
+  rows,
+  rowKey,
+  dense = false,
+  empty,
+  onRowClick,
+  className,
 }: DataTableProps<T>) {
   if (rows.length === 0 && empty) {
     return <div className={cn('border border-line rounded-lg bg-raised', className)}>{empty}</div>;

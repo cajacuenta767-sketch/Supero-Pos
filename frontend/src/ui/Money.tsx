@@ -4,11 +4,11 @@ import { cn } from './cn';
 type Size = 'body' | 'base' | 'title' | 'display' | 'hero';
 
 const SIZE: Record<Size, string> = {
-  body:    'text-body',
-  base:    'text-base font-semibold',
-  title:   'text-title',
+  body: 'text-body',
+  base: 'text-base font-semibold',
+  title: 'text-title',
   display: 'text-display',
-  hero:    'text-hero',
+  hero: 'text-hero',
 };
 
 export interface MoneyProps {
@@ -23,7 +23,11 @@ export interface MoneyProps {
  * La cifra manda. Anchura de dígito fija: el número no baila al actualizarse.
  */
 export const Money: React.FC<MoneyProps> = ({
-  value, size = 'base', currency = '$', signed = false, className,
+  value,
+  size = 'base',
+  currency = '$',
+  signed = false,
+  className,
 }) => {
   const sign = signed && value > 0 ? '+' : value < 0 ? '−' : '';
   const abs = Math.abs(value).toLocaleString('en-US', {
@@ -32,7 +36,9 @@ export const Money: React.FC<MoneyProps> = ({
   });
   return (
     <span className={cn('font-mono tnum tracking-tight', SIZE[size], className)}>
-      {sign}{currency}{abs}
+      {sign}
+      {currency}
+      {abs}
     </span>
   );
 };

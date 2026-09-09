@@ -1,162 +1,206 @@
 import React, { useState } from 'react';
-import { 
-  History, 
-  Search, 
-  Printer, 
-  RotateCcw, 
-  Eye, 
-  ShieldAlert, 
-  CheckCircle2, 
-  XCircle, 
-  CreditCard, 
-  DollarSign, 
-  QrCode, 
-  Layers, 
-  User, 
-  Lock, 
-  AlertTriangle
+import {
+  History,
+  Search,
+  Printer,
+  RotateCcw,
+  Eye,
+  ShieldAlert,
+  CheckCircle2,
+  XCircle,
+  CreditCard,
+  DollarSign,
+  QrCode,
+  Layers,
+  User,
+  Lock,
+  AlertTriangle,
 } from 'lucide-react';
 
 import { useAuthStore } from '../store/useAuthStore';
 import { hasPermission } from '../utils/permissions';
 
 interface SoldItem {
- id: number;
- sku: string;
- name: string;
- quantity: number;
- unit_price: number;
- subtotal: number;
- serials?: string[];
- unit_type: 'UNIT' | 'FRACTION' | 'SERIALIZED';
+  id: number;
+  sku: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  serials?: string[];
+  unit_type: 'UNIT' | 'FRACTION' | 'SERIALIZED';
 }
 
 interface SaleTicket {
- id: string; // Correlative ticket number e.g. TK-10024
- timestamp: string;
- cashier_name: string;
- payment_method: 'CASH' | 'CARD' | 'QR' | 'MIXED';
- total: number;
- cash_given: number;
- change: number;
- status: 'COMPLETED' | 'CANCELLED';
- items: SoldItem[];
- cancellation_reason?: string;
- cancelled_at?: string;
- cancelled_by?: string;
+  id: string; // Correlative ticket number e.g. TK-10024
+  timestamp: string;
+  cashier_name: string;
+  payment_method: 'CASH' | 'CARD' | 'QR' | 'MIXED';
+  total: number;
+  cash_given: number;
+  change: number;
+  status: 'COMPLETED' | 'CANCELLED';
+  items: SoldItem[];
+  cancellation_reason?: string;
+  cancelled_at?: string;
+  cancelled_by?: string;
 }
 
 export const SalesHistoryView: React.FC = () => {
- const { user } = useAuthStore();
- const userRole = user?.role || 'ADMIN';
- const canVoidSaleDirect = hasPermission(userRole, 'can_void_sale');
+  const { user } = useAuthStore();
+  const userRole = user?.role || 'ADMIN';
+  const canVoidSaleDirect = hasPermission(userRole, 'can_void_sale');
 
- const [searchQuery, setSearchQuery] = useState('');
- const [statusFilter, setStatusFilter] = useState<'ALL' | 'COMPLETED' | 'CANCELLED'>('ALL');
- const [dateFilter, setDateFilter] = useState('TODAY');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'COMPLETED' | 'CANCELLED'>('ALL');
+  const [dateFilter, setDateFilter] = useState('TODAY');
 
   // Modals
- const [selectedTicket, setSelectedTicket] = useState<SaleTicket | null>(null);
- const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
- const [isVoidModalOpen, setIsVoidModalOpen] = useState(false);
-  
+  const [selectedTicket, setSelectedTicket] = useState<SaleTicket | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isVoidModalOpen, setIsVoidModalOpen] = useState(false);
+
   // Void Form State
- const [voidReason, setVoidReason] = useState('');
- const [supervisorPin, setSupervisorPin] = useState('');
- const [voidError, setVoidError] = useState('');
+  const [voidReason, setVoidReason] = useState('');
+  const [supervisorPin, setSupervisorPin] = useState('');
+  const [voidError, setVoidError] = useState('');
 
   // Mock Master Sales Tickets Data
- const [tickets, setTickets] = useState<SaleTicket[]>([
+  const [tickets, setTickets] = useState<SaleTicket[]>([
     {
- id: 'TK-10024',
- timestamp: '14/08/2026 14:15:22',
- cashier_name: 'Juan Pérez',
- payment_method: 'CASH',
- total: 864.00,
- cash_given: 900.00,
- change: 36.00,
- status: 'COMPLETED',
- items: [
-        { id: 1, sku: 'SKU-1001', name: 'Coca Cola 2 Litros Retornable', quantity: 2, unit_price: 12.00, subtotal: 24.00, unit_type: 'UNIT' },
-        { id: 3, sku: 'SKU-1003', name: 'Smartphone Samsung Galaxy A54 128GB', quantity: 1, unit_price: 1850.00, subtotal: 1850.00, serials: ['IMEI-358492019482712'], unit_type: 'SERIALIZED' }
-      ]
+      id: 'TK-10024',
+      timestamp: '14/08/2026 14:15:22',
+      cashier_name: 'Juan Pérez',
+      payment_method: 'CASH',
+      total: 864.0,
+      cash_given: 900.0,
+      change: 36.0,
+      status: 'COMPLETED',
+      items: [
+        {
+          id: 1,
+          sku: 'SKU-1001',
+          name: 'Coca Cola 2 Litros Retornable',
+          quantity: 2,
+          unit_price: 12.0,
+          subtotal: 24.0,
+          unit_type: 'UNIT',
+        },
+        {
+          id: 3,
+          sku: 'SKU-1003',
+          name: 'Smartphone Samsung Galaxy A54 128GB',
+          quantity: 1,
+          unit_price: 1850.0,
+          subtotal: 1850.0,
+          serials: ['IMEI-358492019482712'],
+          unit_type: 'SERIALIZED',
+        },
+      ],
     },
     {
- id: 'TK-10023',
- timestamp: '14/08/2026 13:40:10',
- cashier_name: 'María Gómez',
- payment_method: 'QR',
- total: 145.00,
- cash_given: 145.00,
- change: 0.00,
- status: 'COMPLETED',
- items: [
-        { id: 2, sku: 'SKU-1002', name: 'Queso Criollo San Javier (Kg)', quantity: 3.220, unit_price: 45.00, subtotal: 145.00, unit_type: 'FRACTION' }
-      ]
+      id: 'TK-10023',
+      timestamp: '14/08/2026 13:40:10',
+      cashier_name: 'María Gómez',
+      payment_method: 'QR',
+      total: 145.0,
+      cash_given: 145.0,
+      change: 0.0,
+      status: 'COMPLETED',
+      items: [
+        {
+          id: 2,
+          sku: 'SKU-1002',
+          name: 'Queso Criollo San Javier (Kg)',
+          quantity: 3.22,
+          unit_price: 45.0,
+          subtotal: 145.0,
+          unit_type: 'FRACTION',
+        },
+      ],
     },
     {
- id: 'TK-10022',
- timestamp: '14/08/2026 11:20:05',
- cashier_name: 'Juan Pérez',
- payment_method: 'CARD',
- total: 35.00,
- cash_given: 35.00,
- change: 0.00,
- status: 'CANCELLED',
- cancellation_reason: 'Error de tipeo en producto a solicitud del cliente',
- cancelled_at: '14/08/2026 11:25:00',
- cancelled_by: 'Administrador (Pin 1234)',
- items: [
-        { id: 4, sku: 'SKU-1004', name: 'Galletas Wafer Chocolate 150g', quantity: 7, unit_price: 5.00, subtotal: 35.00, unit_type: 'UNIT' }
-      ]
-    }
+      id: 'TK-10022',
+      timestamp: '14/08/2026 11:20:05',
+      cashier_name: 'Juan Pérez',
+      payment_method: 'CARD',
+      total: 35.0,
+      cash_given: 35.0,
+      change: 0.0,
+      status: 'CANCELLED',
+      cancellation_reason: 'Error de tipeo en producto a solicitud del cliente',
+      cancelled_at: '14/08/2026 11:25:00',
+      cancelled_by: 'Administrador (Pin 1234)',
+      items: [
+        {
+          id: 4,
+          sku: 'SKU-1004',
+          name: 'Galletas Wafer Chocolate 150g',
+          quantity: 7,
+          unit_price: 5.0,
+          subtotal: 35.0,
+          unit_type: 'UNIT',
+        },
+      ],
+    },
   ]);
 
- const filteredTickets = tickets.filter(t => {
- const matchesSearch = t.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
- t.cashier_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
- t.payment_method.toLowerCase().includes(searchQuery.toLowerCase());
- const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
- return matchesSearch && matchesStatus;
+  const filteredTickets = tickets.filter((t) => {
+    const matchesSearch =
+      t.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.cashier_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.payment_method.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
+    return matchesSearch && matchesStatus;
   });
 
- const handlePrintReceipt = (ticket: SaleTicket) => {
- alert(`🖨️ Enviando ticket ${ticket.id} a la impresora térmica ESC/POS (80mm)...`);
+  const handlePrintReceipt = (ticket: SaleTicket) => {
+    alert(`🖨️ Enviando ticket ${ticket.id} a la impresora térmica ESC/POS (80mm)...`);
   };
 
- const handleConfirmVoidTicket = (e: React.FormEvent) => {
- e.preventDefault();
- if (!voidReason) {
- setVoidError('Debe ingresar un motivo obligatorio para la anulación.');
- return;
+  const handleConfirmVoidTicket = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!voidReason) {
+      setVoidError('Debe ingresar un motivo obligatorio para la anulación.');
+      return;
     }
- if (supervisorPin !== '1234' && supervisorPin !== '0000') {
- setVoidError('PIN de supervisor incorrecto (Pruebe PIN: 1234).');
- return;
+    if (supervisorPin !== '1234' && supervisorPin !== '0000') {
+      setVoidError('PIN de supervisor incorrecto (Pruebe PIN: 1234).');
+      return;
     }
 
- if (selectedTicket) {
+    if (selectedTicket) {
       // 1. Update ticket status to CANCELLED
- setTickets(prev => prev.map(t => t.id === selectedTicket.id ? {
-        ...t,
- status: 'CANCELLED',
- cancellation_reason: voidReason,
- cancelled_at: new Date().toLocaleString('es-ES'),
- cancelled_by: 'Supervisor (PIN Autorizado)'
-      } : t));
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === selectedTicket.id
+            ? {
+                ...t,
+                status: 'CANCELLED',
+                cancellation_reason: voidReason,
+                cancelled_at: new Date().toLocaleString('es-ES'),
+                cancelled_by: 'Supervisor (PIN Autorizado)',
+              }
+            : t,
+        ),
+      );
 
       // 2. Revert inventory stock & free IMEIs automatically in log
- console.log(`[KARDEX] Devolución atómica de inventario ejecutada para el ticket ${selectedTicket.id}`);
- alert(`✅ Ticket ${selectedTicket.id} ANULADO correctamente. Stock devuelto a almacén y seriales/IMEIs liberados a IN_STOCK.`);
+      console.log(
+        `[KARDEX] Devolución atómica de inventario ejecutada para el ticket ${selectedTicket.id}`,
+      );
+      alert(
+        `✅ Ticket ${selectedTicket.id} ANULADO correctamente. Stock devuelto a almacén y seriales/IMEIs liberados a IN_STOCK.`,
+      );
     }
 
- setIsVoidModalOpen(false);
- setVoidReason('');
- setSupervisorPin('');
- setVoidError('');
+    setIsVoidModalOpen(false);
+    setVoidReason('');
+    setSupervisorPin('');
+    setVoidError('');
   };
 
- return (
+  return (
     <div className="p-6 bg-canvas h-[calc(100vh-56px)] overflow-y-auto pr-2 space-y-6 select-none transition-colors duration-fast ease-ease">
       {/* 1. Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
@@ -166,16 +210,17 @@ export const SalesHistoryView: React.FC = () => {
             Historial de Ventas, Tickets & Anulaciones
           </h1>
           <p className="text-body text-ink-2 mt-1">
-            Registro inalterable de transacciones, trazabilidad de IMEIs, reimpresión térmica y reversión atómica de stock
+            Registro inalterable de transacciones, trazabilidad de IMEIs, reimpresión térmica y
+            reversión atómica de stock
           </p>
         </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
           <select
- value={statusFilter}
- onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
- className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-bold focus:outline-none"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-bold focus:outline-none"
           >
             <option value="ALL">Todos los Estados</option>
             <option value="COMPLETED">Ventas Completadas</option>
@@ -183,9 +228,9 @@ export const SalesHistoryView: React.FC = () => {
           </select>
 
           <select
- value={dateFilter}
- onChange={(e) => setDateFilter(e.target.value)}
- className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-bold focus:outline-none"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-bold focus:outline-none"
           >
             <option value="TODAY">Jornada de Hoy</option>
             <option value="WEEK">Esta Semana</option>
@@ -199,11 +244,11 @@ export const SalesHistoryView: React.FC = () => {
         <div className="relative max-w-md">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
           <input
- type="text"
- value={searchQuery}
- onChange={(e) => setSearchQuery(e.target.value)}
- placeholder="Buscar por # Ticket, Cajero o Método de pago..."
- className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent font-semibold"
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar por # Ticket, Cajero o Método de pago..."
+            className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent font-semibold"
           />
         </div>
       </div>
@@ -224,28 +269,42 @@ export const SalesHistoryView: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-line text-body">
             {filteredTickets.map((t) => {
- const isCancelled = t.status === 'CANCELLED';
- const paymentBadge = {
-                CASH: { label: 'Efectivo', color: 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30', icon: <DollarSign className="w-3 h-3" /> },
-                CARD: { label: 'Tarjeta POS', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30', icon: <CreditCard className="w-3 h-3" /> },
-                QR: { label: 'Transfer QR', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30', icon: <QrCode className="w-3 h-3" /> },
-                MIXED: { label: 'Pago Mixto', color: 'bg-warn-soft text-warn-ink dark:bg-warn-soft border-warn/30', icon: <Layers className="w-3 h-3" /> },
+              const isCancelled = t.status === 'CANCELLED';
+              const paymentBadge = {
+                CASH: {
+                  label: 'Efectivo',
+                  color: 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30',
+                  icon: <DollarSign className="w-3 h-3" />,
+                },
+                CARD: {
+                  label: 'Tarjeta POS',
+                  color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30',
+                  icon: <CreditCard className="w-3 h-3" />,
+                },
+                QR: {
+                  label: 'Transfer QR',
+                  color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30',
+                  icon: <QrCode className="w-3 h-3" />,
+                },
+                MIXED: {
+                  label: 'Pago Mixto',
+                  color: 'bg-warn-soft text-warn-ink dark:bg-warn-soft border-warn/30',
+                  icon: <Layers className="w-3 h-3" />,
+                },
               }[t.payment_method];
 
- return (
+              return (
                 <tr key={t.id} className="hover:bg-sunken transition-colors">
-                  <td className="p-4 font-mono font-extrabold text-accent text-base">
-                    {t.id}
-                  </td>
-                  <td className="p-4 font-mono text-ink-2">
-                    {t.timestamp}
-                  </td>
+                  <td className="p-4 font-mono font-extrabold text-accent text-base">{t.id}</td>
+                  <td className="p-4 font-mono text-ink-2">{t.timestamp}</td>
                   <td className="p-4 font-bold text-ink flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-ink-3" />
                     {t.cashier_name}
                   </td>
                   <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-md text-micro font-bold border flex items-center gap-1 w-fit ${paymentBadge.color}`}>
+                    <span
+                      className={`px-2.5 py-1 rounded-md text-micro font-bold border flex items-center gap-1 w-fit ${paymentBadge.color}`}
+                    >
                       {paymentBadge.icon}
                       {paymentBadge.label}
                     </span>
@@ -254,41 +313,47 @@ export const SalesHistoryView: React.FC = () => {
                     ${t.total.toFixed(2)}
                   </td>
                   <td className="p-4 text-center">
-                    <span className={`px-2.5 py-1 rounded-md text-micro font-bold border flex items-center justify-center gap-1 mx-auto w-fit ${
- isCancelled 
-                        ? 'bg-danger-soft text-danger-ink dark:bg-danger-soft border-danger/30' 
- : 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30'
-                    }`}>
-                      {isCancelled ? <XCircle className="w-3 h-3 text-danger" /> : <CheckCircle2 className="w-3 h-3 text-ok" />}
+                    <span
+                      className={`px-2.5 py-1 rounded-md text-micro font-bold border flex items-center justify-center gap-1 mx-auto w-fit ${
+                        isCancelled
+                          ? 'bg-danger-soft text-danger-ink dark:bg-danger-soft border-danger/30'
+                          : 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30'
+                      }`}
+                    >
+                      {isCancelled ? (
+                        <XCircle className="w-3 h-3 text-danger" />
+                      ) : (
+                        <CheckCircle2 className="w-3 h-3 text-ok" />
+                      )}
                       {isCancelled ? 'ANULADO' : 'COMPLETADO'}
                     </span>
                   </td>
                   <td className="p-4 text-right space-x-1">
                     <button
- onClick={() => {
- setSelectedTicket(t);
- setIsDetailModalOpen(true);
+                      onClick={() => {
+                        setSelectedTicket(t);
+                        setIsDetailModalOpen(true);
                       }}
- className="p-1.5 text-accent hover:bg-accent-soft rounded-md"
- title="Ver Detalle de Ticket & Trazabilidad IMEI"
+                      className="p-1.5 text-accent hover:bg-accent-soft rounded-md"
+                      title="Ver Detalle de Ticket & Trazabilidad IMEI"
                     >
                       <Eye className="w-4 h-4" />
                     </button>
                     <button
- onClick={() => handlePrintReceipt(t)}
- className="p-1.5 text-ok hover:bg-ok-soft rounded-md"
- title="Reimprimir Comprobante Térmico ESC/POS"
+                      onClick={() => handlePrintReceipt(t)}
+                      className="p-1.5 text-ok hover:bg-ok-soft rounded-md"
+                      title="Reimprimir Comprobante Térmico ESC/POS"
                     >
                       <Printer className="w-4 h-4" />
                     </button>
                     {!isCancelled && (
                       <button
- onClick={() => {
- setSelectedTicket(t);
- setIsVoidModalOpen(true);
+                        onClick={() => {
+                          setSelectedTicket(t);
+                          setIsVoidModalOpen(true);
                         }}
- className="p-1.5 text-danger hover:bg-danger-soft rounded-md"
- title="Anular Ticket & Devolver Stock"
+                        className="p-1.5 text-danger hover:bg-danger-soft rounded-md"
+                        title="Anular Ticket & Devolver Stock"
                       >
                         <RotateCcw className="w-4 h-4" />
                       </button>
@@ -308,11 +373,19 @@ export const SalesHistoryView: React.FC = () => {
             <div className="p-5 border-b border-line flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                  Detalle del Ticket: <span className="font-mono text-accent">{selectedTicket.id}</span>
+                  Detalle del Ticket:{' '}
+                  <span className="font-mono text-accent">{selectedTicket.id}</span>
                 </h3>
-                <p className="text-body text-ink-3">{selectedTicket.timestamp} • Cajero: {selectedTicket.cashier_name}</p>
+                <p className="text-body text-ink-3">
+                  {selectedTicket.timestamp} • Cajero: {selectedTicket.cashier_name}
+                </p>
               </div>
-              <button onClick={() => setIsDetailModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
+              <button
+                onClick={() => setIsDetailModalOpen(false)}
+                className="text-ink-3 hover:text-ink-2"
+              >
+                ✕
+              </button>
             </div>
 
             <div className="p-5 space-y-4 text-body">
@@ -323,7 +396,9 @@ export const SalesHistoryView: React.FC = () => {
                     <ShieldAlert className="w-4 h-4" /> TICKET ANULADO OPERATIVAMENTE
                   </div>
                   <p className="text-micro">Motivo: {selectedTicket.cancellation_reason}</p>
-                  <span className="text-micro text-ink-3 font-mono block">Anulado el {selectedTicket.cancelled_at} por {selectedTicket.cancelled_by}</span>
+                  <span className="text-micro text-ink-3 font-mono block">
+                    Anulado el {selectedTicket.cancelled_at} por {selectedTicket.cancelled_by}
+                  </span>
                 </div>
               )}
 
@@ -346,8 +421,11 @@ export const SalesHistoryView: React.FC = () => {
                           <span className="text-ink-3 font-mono text-micro">SKU: {item.sku}</span>
                           {item.serials && item.serials.length > 0 && (
                             <div className="mt-1 flex flex-wrap gap-1">
-                              {item.serials.map(s => (
-                                <span key={s} className="px-1.5 py-0.5 bg-warn-soft text-warn-ink dark:bg-warn-soft dark:text-warn-ink rounded font-mono text-micro font-bold">
+                              {item.serials.map((s) => (
+                                <span
+                                  key={s}
+                                  className="px-1.5 py-0.5 bg-warn-soft text-warn-ink dark:bg-warn-soft dark:text-warn-ink rounded font-mono text-micro font-bold"
+                                >
                                   IMEI: {s}
                                 </span>
                               ))}
@@ -356,7 +434,9 @@ export const SalesHistoryView: React.FC = () => {
                         </td>
                         <td className="p-3 text-center font-mono font-bold">{item.quantity}</td>
                         <td className="p-3 font-mono">${item.unit_price.toFixed(2)}</td>
-                        <td className="p-3 text-right font-mono font-bold">${item.subtotal.toFixed(2)}</td>
+                        <td className="p-3 text-right font-mono font-bold">
+                          ${item.subtotal.toFixed(2)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -392,23 +472,30 @@ export const SalesHistoryView: React.FC = () => {
                 <AlertTriangle className="w-5 h-5" />
                 <span>Anulación Crítica de Ticket</span>
               </div>
-              <button onClick={() => setIsVoidModalOpen(false)} className="text-white hover:opacity-80">✕</button>
+              <button
+                onClick={() => setIsVoidModalOpen(false)}
+                className="text-white hover:opacity-80"
+              >
+                ✕
+              </button>
             </div>
 
             <form onSubmit={handleConfirmVoidTicket} className="p-5 space-y-4 text-body">
               <p className="text-ink-2 font-semibold">
-                Está a punto de anular el ticket <strong className="font-mono text-danger">{selectedTicket.id}</strong> por un total de <strong>${selectedTicket.total.toFixed(2)}</strong>.
+                Está a punto de anular el ticket{' '}
+                <strong className="font-mono text-danger">{selectedTicket.id}</strong> por un total
+                de <strong>${selectedTicket.total.toFixed(2)}</strong>.
               </p>
 
               <div>
                 <label className="font-bold text-ink">Motivo Obligatorio de Cancelación *</label>
                 <textarea
- required
- rows={2}
- value={voidReason}
- onChange={(e) => setVoidReason(e.target.value)}
- placeholder="Ej. Devolución de mercadería por falla de fábrica / Error en registro"
- className="w-full mt-1 p-2 bg-sunken border border-line rounded-md text-ink"
+                  required
+                  rows={2}
+                  value={voidReason}
+                  onChange={(e) => setVoidReason(e.target.value)}
+                  placeholder="Ej. Devolución de mercadería por falla de fábrica / Error en registro"
+                  className="w-full mt-1 p-2 bg-sunken border border-line rounded-md text-ink"
                 />
               </div>
 
@@ -416,16 +503,18 @@ export const SalesHistoryView: React.FC = () => {
                 <label className="font-bold text-ink flex items-center gap-1">
                   <Lock className="w-3.5 h-3.5 text-warn" /> PIN de Validación Supervisor / Admin *
                   {!canVoidSaleDirect && (
-                    <span className="text-micro text-danger font-semibold ml-1">(Rol {userRole} requiere aprobación)</span>
+                    <span className="text-micro text-danger font-semibold ml-1">
+                      (Rol {userRole} requiere aprobación)
+                    </span>
                   )}
                 </label>
                 <input
- type="password"
- required
- value={supervisorPin}
- onChange={(e) => setSupervisorPin(e.target.value)}
- placeholder="Ingrese PIN supervisor (Pruebe: 1234)"
- className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-mono text-center font-bold text-title"
+                  type="password"
+                  required
+                  value={supervisorPin}
+                  onChange={(e) => setSupervisorPin(e.target.value)}
+                  placeholder="Ingrese PIN supervisor (Pruebe: 1234)"
+                  className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-mono text-center font-bold text-title"
                 />
               </div>
 
@@ -437,15 +526,15 @@ export const SalesHistoryView: React.FC = () => {
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
- type="button"
- onClick={() => setIsVoidModalOpen(false)}
- className="px-4 py-2 bg-sunken text-ink rounded-md font-bold"
+                  type="button"
+                  onClick={() => setIsVoidModalOpen(false)}
+                  className="px-4 py-2 bg-sunken text-ink rounded-md font-bold"
                 >
                   Cancelar
                 </button>
                 <button
- type="submit"
- className="px-4 py-2 bg-danger hover:opacity-90 text-white rounded-md font-black shadow-e2"
+                  type="submit"
+                  className="px-4 py-2 bg-danger hover:opacity-90 text-white rounded-md font-black shadow-e2"
                 >
                   Confirmar Anulación & Devolver Stock
                 </button>

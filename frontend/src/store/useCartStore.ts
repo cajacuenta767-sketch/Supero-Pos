@@ -38,7 +38,7 @@ interface CartState {
       wholesale_min_qty?: number;
     },
     quantity?: number,
-    serial_number?: string | null
+    serial_number?: string | null,
   ) => void;
   updateQuantity: (id: number, quantity: number) => void;
   updateItemSerial: (id: number, serial_number: string) => void;
@@ -49,10 +49,16 @@ interface CartState {
   clearCart: () => void;
   getSubtotal: () => number;
   getTotal: (customerDiscountPercentage?: number, manualDiscountPercentage?: number) => number;
-  getDiscountAmount: (customerDiscountPercentage?: number, manualDiscountPercentage?: number) => number;
+  getDiscountAmount: (
+    customerDiscountPercentage?: number,
+    manualDiscountPercentage?: number,
+  ) => number;
   getTotalPaid: () => number;
   getChange: (customerDiscountPercentage?: number, manualDiscountPercentage?: number) => number;
-  isPaymentCovered: (customerDiscountPercentage?: number, manualDiscountPercentage?: number) => boolean;
+  isPaymentCovered: (
+    customerDiscountPercentage?: number,
+    manualDiscountPercentage?: number,
+  ) => boolean;
 }
 
 export const useCartStore = create<CartState>((set, get) => ({
@@ -63,15 +69,15 @@ export const useCartStore = create<CartState>((set, get) => ({
       barcode: '7750123456789',
       name: 'Smartphone Galaxy S23 Ultra (128GB)',
       unit_type: 'SERIALIZED',
-      retail_price: 850.00,
-      wholesale_price: 800.00,
+      retail_price: 850.0,
+      wholesale_price: 800.0,
       wholesale_min_qty: 3,
-      unit_price: 850.00,
+      unit_price: 850.0,
       is_wholesale_applied: false,
       quantity: 1,
       serial_number: 'IMEI-354892019482910',
       selected_serials: ['IMEI-354892019482910'],
-      subtotal: 850.00,
+      subtotal: 850.0,
     },
     {
       id: 102,
@@ -79,147 +85,157 @@ export const useCartStore = create<CartState>((set, get) => ({
       barcode: '7759876543210',
       name: 'Queso Criollo (a granel)',
       unit_type: 'FRACTION',
-      retail_price: 45.00,
-      wholesale_price: 40.00,
+      retail_price: 45.0,
+      wholesale_price: 40.0,
       wholesale_min_qty: 5,
-      unit_price: 45.00,
+      unit_price: 45.0,
       is_wholesale_applied: false,
-      quantity: 0.450,
+      quantity: 0.45,
       selected_serials: [],
       subtotal: 20.25,
-    }
+    },
   ],
   paymentMethod: 'CASH',
-  cashGiven: 900.00,
-  cashAmount: 900.00,
+  cashGiven: 900.0,
+  cashAmount: 900.0,
   cardAmount: 0,
   qrAmount: 0,
 
-  addItem: (product, quantity = 1, serial_number = null) => set((state) => {
-    const existingIndex = state.items.findIndex(
-      (i) => i.id === product.id && i.serial_number === serial_number
-    );
+  addItem: (product, quantity = 1, serial_number = null) =>
+    set((state) => {
+      const existingIndex = state.items.findIndex(
+        (i) => i.id === product.id && i.serial_number === serial_number,
+      );
 
-    const wholesalePrice = product.wholesale_price || product.retail_price;
-    const wholesaleMinQty = product.wholesale_min_qty || 10;
+      const wholesalePrice = product.wholesale_price || product.retail_price;
+      const wholesaleMinQty = product.wholesale_min_qty || 10;
 
-    if (existingIndex > -1) {
-      const updatedItems = [...state.items];
-      const existing = updatedItems[existingIndex];
-      const newQty = existing.quantity + quantity;
-      
-      // Automatic Wholesale Price Trigger
-      const isWholesale = wholesalePrice > 0 && newQty >= wholesaleMinQty;
-      const effectivePrice = isWholesale ? wholesalePrice : product.retail_price;
-      
-      const newSerials = serial_number 
-        ? [...(existing.selected_serials || []), serial_number]
-        : (existing.selected_serials || []);
+      if (existingIndex > -1) {
+        const updatedItems = [...state.items];
+        const existing = updatedItems[existingIndex];
+        const newQty = existing.quantity + quantity;
 
-      updatedItems[existingIndex] = {
-        ...existing,
-        quantity: newQty,
-        unit_price: effectivePrice,
-        is_wholesale_applied: isWholesale,
-        selected_serials: newSerials,
-        subtotal: parseFloat((newQty * effectivePrice).toFixed(4)),
-      };
-      return { items: updatedItems };
-    }
+        // Automatic Wholesale Price Trigger
+        const isWholesale = wholesalePrice > 0 && newQty >= wholesaleMinQty;
+        const effectivePrice = isWholesale ? wholesalePrice : product.retail_price;
 
-    const isWholesale = wholesalePrice > 0 && quantity >= wholesaleMinQty;
-    const effectivePrice = isWholesale ? wholesalePrice : product.retail_price;
+        const newSerials = serial_number
+          ? [...(existing.selected_serials || []), serial_number]
+          : existing.selected_serials || [];
 
-    const newItem: CartItem = {
-      id: product.id,
-      sku: product.sku,
-      barcode: product.barcode,
-      name: product.name,
-      unit_type: product.unit_type,
-      retail_price: product.retail_price,
-      wholesale_price: wholesalePrice,
-      wholesale_min_qty: wholesaleMinQty,
-      unit_price: effectivePrice,
-      is_wholesale_applied: isWholesale,
-      quantity,
-      serial_number,
-      selected_serials: serial_number ? [serial_number] : [],
-      subtotal: parseFloat((quantity * effectivePrice).toFixed(4)),
-    };
-    return { items: [...state.items, newItem] };
-  }),
-
-  updateQuantity: (id, quantity) => set((state) => ({
-    items: state.items.map((item) => {
-      if (item.id === id) {
-        const validQty = Math.max(0.001, quantity);
-        const isWholesale = item.wholesale_price > 0 && validQty >= item.wholesale_min_qty;
-        const effectivePrice = isWholesale ? item.wholesale_price : item.retail_price;
-        return {
-          ...item,
-          quantity: validQty,
+        updatedItems[existingIndex] = {
+          ...existing,
+          quantity: newQty,
           unit_price: effectivePrice,
           is_wholesale_applied: isWholesale,
-          subtotal: parseFloat((validQty * effectivePrice).toFixed(4)),
+          selected_serials: newSerials,
+          subtotal: parseFloat((newQty * effectivePrice).toFixed(4)),
         };
+        return { items: updatedItems };
       }
-      return item;
+
+      const isWholesale = wholesalePrice > 0 && quantity >= wholesaleMinQty;
+      const effectivePrice = isWholesale ? wholesalePrice : product.retail_price;
+
+      const newItem: CartItem = {
+        id: product.id,
+        sku: product.sku,
+        barcode: product.barcode,
+        name: product.name,
+        unit_type: product.unit_type,
+        retail_price: product.retail_price,
+        wholesale_price: wholesalePrice,
+        wholesale_min_qty: wholesaleMinQty,
+        unit_price: effectivePrice,
+        is_wholesale_applied: isWholesale,
+        quantity,
+        serial_number,
+        selected_serials: serial_number ? [serial_number] : [],
+        subtotal: parseFloat((quantity * effectivePrice).toFixed(4)),
+      };
+      return { items: [...state.items, newItem] };
     }),
-  })),
 
-  updateItemSerial: (id, serial_number) => set((state) => ({
-    items: state.items.map((item) =>
-      item.id === id
-        ? {
+  updateQuantity: (id, quantity) =>
+    set((state) => ({
+      items: state.items.map((item) => {
+        if (item.id === id) {
+          const validQty = Math.max(0.001, quantity);
+          const isWholesale = item.wholesale_price > 0 && validQty >= item.wholesale_min_qty;
+          const effectivePrice = isWholesale ? item.wholesale_price : item.retail_price;
+          return {
             ...item,
-            serial_number,
-            selected_serials: [serial_number],
-          }
-        : item
-    ),
-  })),
+            quantity: validQty,
+            unit_price: effectivePrice,
+            is_wholesale_applied: isWholesale,
+            subtotal: parseFloat((validQty * effectivePrice).toFixed(4)),
+          };
+        }
+        return item;
+      }),
+    })),
 
-  removeItem: (id) => set((state) => ({
-    items: state.items.filter((item) => item.id !== id),
-  })),
+  updateItemSerial: (id, serial_number) =>
+    set((state) => ({
+      items: state.items.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              serial_number,
+              selected_serials: [serial_number],
+            }
+          : item,
+      ),
+    })),
 
-  setPaymentMethod: (paymentMethod) => set(() => {
-    const total = get().getTotal();
-    if (paymentMethod === 'CASH') {
-      return { paymentMethod, cashGiven: total, cashAmount: total, cardAmount: 0, qrAmount: 0 };
-    }
-    if (paymentMethod === 'CARD') {
-      return { paymentMethod, cashGiven: 0, cashAmount: 0, cardAmount: total, qrAmount: 0 };
-    }
-    if (paymentMethod === 'QR') {
-      return { paymentMethod, cashGiven: 0, cashAmount: 0, cardAmount: 0, qrAmount: total };
-    }
-    return { paymentMethod };
-  }),
+  removeItem: (id) =>
+    set((state) => ({
+      items: state.items.filter((item) => item.id !== id),
+    })),
 
-  setCashGiven: (amount) => set((state) => ({
-    cashGiven: amount,
-    cashAmount: state.paymentMethod === 'CASH' ? amount : state.cashAmount,
-  })),
+  setPaymentMethod: (paymentMethod) =>
+    set(() => {
+      const total = get().getTotal();
+      if (paymentMethod === 'CASH') {
+        return { paymentMethod, cashGiven: total, cashAmount: total, cardAmount: 0, qrAmount: 0 };
+      }
+      if (paymentMethod === 'CARD') {
+        return { paymentMethod, cashGiven: 0, cashAmount: 0, cardAmount: total, qrAmount: 0 };
+      }
+      if (paymentMethod === 'QR') {
+        return { paymentMethod, cashGiven: 0, cashAmount: 0, cardAmount: 0, qrAmount: total };
+      }
+      return { paymentMethod };
+    }),
 
-  setMixedAmounts: (cash, card, qr) => set({
-    cashAmount: cash,
-    cardAmount: card,
-    qrAmount: qr,
-    cashGiven: cash,
-  }),
+  setCashGiven: (amount) =>
+    set((state) => ({
+      cashGiven: amount,
+      cashAmount: state.paymentMethod === 'CASH' ? amount : state.cashAmount,
+    })),
 
-  clearCart: () => set({
-    items: [],
-    cashGiven: 0,
-    cashAmount: 0,
-    cardAmount: 0,
-    qrAmount: 0,
-  }),
+  setMixedAmounts: (cash, card, qr) =>
+    set({
+      cashAmount: cash,
+      cardAmount: card,
+      qrAmount: qr,
+      cashGiven: cash,
+    }),
+
+  clearCart: () =>
+    set({
+      items: [],
+      cashGiven: 0,
+      cashAmount: 0,
+      cardAmount: 0,
+      qrAmount: 0,
+    }),
 
   getSubtotal: () => {
     return parseFloat(
-      get().items.reduce((acc, item) => acc + item.subtotal, 0).toFixed(4)
+      get()
+        .items.reduce((acc, item) => acc + item.subtotal, 0)
+        .toFixed(4),
     );
   },
 

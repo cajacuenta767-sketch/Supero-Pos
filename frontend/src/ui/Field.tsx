@@ -14,7 +14,12 @@ interface Shell {
 }
 
 const Wrap: React.FC<Shell & { children: React.ReactNode; htmlFor?: string }> = ({
-  label, hint, error, className, htmlFor, children,
+  label,
+  hint,
+  error,
+  className,
+  htmlFor,
+  children,
 }) => (
   <div className={cn('space-y-1.5', className)}>
     {label && (
@@ -39,7 +44,14 @@ export interface InputProps
 }
 
 export const Input: React.FC<InputProps> = ({
-  label, hint, error, className, leading, trailing, inputSize = 'md', ...rest
+  label,
+  hint,
+  error,
+  className,
+  leading,
+  trailing,
+  inputSize = 'md',
+  ...rest
 }) => (
   <Wrap label={label} hint={hint} error={error} className={className} htmlFor={rest.id}>
     <div className="relative">
@@ -52,7 +64,11 @@ export const Input: React.FC<InputProps> = ({
         {...rest}
         className={cn(
           CONTROL,
-          inputSize === 'display' ? 'h-16 text-display px-4 font-mono' : inputSize === 'lg' ? 'h-11 px-3.5' : 'h-9 px-3',
+          inputSize === 'display'
+            ? 'h-16 text-display px-4 font-mono'
+            : inputSize === 'lg'
+              ? 'h-11 px-3.5'
+              : 'h-9 px-3',
           leading ? 'pl-9' : '',
           trailing ? 'pr-11' : '',
           error && 'border-danger',
@@ -65,26 +81,33 @@ export const Input: React.FC<InputProps> = ({
   </Wrap>
 );
 
-export interface SelectProps
-  extends React.SelectHTMLAttributes<HTMLSelectElement>, Shell {}
+export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement>, Shell {}
 
 export const Select: React.FC<SelectProps> = ({
-  label, hint, error, className, children, ...rest
+  label,
+  hint,
+  error,
+  className,
+  children,
+  ...rest
 }) => (
   <Wrap label={label} hint={hint} error={error} className={className} htmlFor={rest.id}>
-    <select {...rest} className={cn(CONTROL, 'h-9 px-2.5 cursor-pointer', error && 'border-danger')}>
+    <select
+      {...rest}
+      className={cn(CONTROL, 'h-9 px-2.5 cursor-pointer', error && 'border-danger')}
+    >
       {children}
     </select>
   </Wrap>
 );
 
-export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement>, Shell {}
+export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement>, Shell {}
 
-export const Textarea: React.FC<TextareaProps> = ({
-  label, hint, error, className, ...rest
-}) => (
+export const Textarea: React.FC<TextareaProps> = ({ label, hint, error, className, ...rest }) => (
   <Wrap label={label} hint={hint} error={error} className={className} htmlFor={rest.id}>
-    <textarea {...rest} className={cn(CONTROL, 'p-3 resize-y min-h-[80px]', error && 'border-danger')} />
+    <textarea
+      {...rest}
+      className={cn(CONTROL, 'p-3 resize-y min-h-[80px]', error && 'border-danger')}
+    />
   </Wrap>
 );
