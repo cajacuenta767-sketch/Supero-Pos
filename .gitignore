@@ -2,6 +2,7 @@
 .env
 .gemini/dist/
 build/
-dist-electron/
 dist/
-﻿node_modules/
+dist-demo/
+dist-electron/
+node_modules/
