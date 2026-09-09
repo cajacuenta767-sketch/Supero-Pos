@@ -6,10 +6,65 @@ import {
   QrCode,
   ArrowRightLeft,
   ShieldCheck,
-  Plus,
   Lock,
   Unlock,
 } from 'lucide-react';
+import {
+  Badge,
+  Button,
+  DataTable,
+  EmptyState,
+  IconButton,
+  Input,
+  Modal,
+  Money,
+  PageHeader,
+  Select,
+  StatTile,
+  Tabs,
+  Toolbar,
+  ToolbarSelect,
+  useToast,
+} from '../ui';
+import type { Column, TabItem } from '../ui';
+
+type SubTab = 'treasury' | 'drawers' | 'banks';
+
+const TABS: TabItem[] = [
+  { id: 'treasury', label: 'Consolidado', icon: <ShieldCheck className="w-4 h-4" /> },
+  { id: 'drawers', label: 'Cajas físicas', icon: <DollarSign className="w-4 h-4" /> },
+  { id: 'banks', label: 'Bancos y QR', icon: <Building2 className="w-4 h-4" /> },
+];
+
+/* Los enums de base de datos no se muestran crudos al usuario. */
+const OPERATION_LABEL: Record<FinancialTransaction['operation_type'], string> = {
+  DEPOSIT_CASH_TO_BANK: 'Depósito a banco',
+  POS_SALE_CREDIT: 'Venta con tarjeta',
+  PETTY_CASH_EXPENSE: 'Gasto de caja chica',
+  FEE_COMMISSION: 'Comisión',
+};
+
+const OPERATION_TONE: Record<
+  FinancialTransaction['operation_type'],
+  'accent' | 'success' | 'warning' | 'neutral'
+> = {
+  DEPOSIT_CASH_TO_BANK: 'accent',
+  POS_SALE_CREDIT: 'success',
+  PETTY_CASH_EXPENSE: 'warning',
+  FEE_COMMISSION: 'neutral',
+};
+
+const ACCOUNT_LABEL: Record<PaymentAccount['type'], string> = {
+  CASH_DRAWER: 'Caja física',
+  BANK_ACCOUNT: 'Cuenta bancaria',
+  QR_GATEWAY: 'Pasarela QR',
+};
+
+const ACCOUNT_STATUS: Record<PaymentAccount['status'], string> = {
+  OPEN: 'Abierta',
+  LOCKED: 'Bloqueada',
+  RECONCILIATION_PENDING: 'Pendiente de conciliar',
+};
 
 interface PaymentAccount {
   id: string;
@@ -143,455 +198,384 @@ export const FinanceView: React.FC = () => {
   const [voucherNumber, setVoucherNumber] = useState('');
 
   // Toggle Remote Drawer Lock
-  const handleToggleDrawerLock = (accountId: string) => {
+
+  // Liquidity Aggregation
+
+  const toast = useToast();
+  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
+
+  const cashTotal = accounts
+    .filter((a) => a.type === 'CASH_DRAWER')
+    .reduce((s, a) => s + a.balance, 0);
+  const bankTotal = accounts
+    .filter((a) => a.type === 'BANK_ACCOUNT')
+    .reduce((s, a) => s + a.balance, 0);
+  const gatewayTotal = accounts
+    .filter((a) => a.type === 'QR_GATEWAY')
+    .reduce((s, a) => s + a.balance, 0);
+  /* El total líquido es la suma de los otros tres, no un dato aparte. */
+  const liquidTotal = cashTotal + bankTotal + gatewayTotal;
+
+  const filteredTx = transactions.filter((t) => {
+    const q = search.toLowerCase();
+    const matchesSearch =
+      t.id.toLowerCase().includes(q) ||
+      t.source_account.toLowerCase().includes(q) ||
+      t.dest_account.toLowerCase().includes(q) ||
+      (t.voucher_number ?? '').toLowerCase().includes(q);
+    const matchesType = typeFilter === 'ALL' || t.operation_type === typeFilter;
+    return matchesSearch && matchesType;
+  });
+
+  const toggleDrawerLock = (id: string) => {
     setAccounts((prev) =>
       prev.map((a) =>
-        a.id === accountId
-          ? {
-              ...a,
-              status: a.status === 'OPEN' ? 'LOCKED' : 'OPEN',
-            }
-          : a,
+        a.id === id ? { ...a, status: a.status === 'LOCKED' ? 'OPEN' : 'LOCKED' } : a,
       ),
     );
   };
 
-  // Liquidity Aggregation
-  const totalCashInDrawers = accounts
-    .filter((a) => a.type === 'CASH_DRAWER')
-    .reduce((acc, a) => acc + a.balance, 0);
-  const totalBankBalances = accounts
-    .filter((a) => a.type === 'BANK_ACCOUNT')
-    .reduce((acc, a) => acc + a.balance, 0);
-  const totalQRGateways = accounts
-    .filter((a) => a.type === 'QR_GATEWAY')
-    .reduce((acc, a) => acc + a.balance, 0);
-  const globalLiquidity = totalCashInDrawers + totalBankBalances + totalQRGateways;
-
-  const handleExecuteAtomicTransfer = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = parseFloat(depositAmount);
-    if (isNaN(amt) || amt <= 0) return;
-
-    const sourceAcc = accounts.find((a) => a.id === sourceAccountId);
-    const destAcc = accounts.find((a) => a.id === destAccountId);
-
-    if (!sourceAcc || !destAcc) return;
-    if (amt > sourceAcc.balance) {
-      alert(
-        `⚠️ El monto a depositar ($${amt.toFixed(2)}) supera el saldo disponible en ${sourceAcc.name} ($${sourceAcc.balance.toFixed(2)}).`,
-      );
-      return;
-    }
-
-    setAccounts((prev) =>
-      prev.map((a) => {
-        if (a.id === sourceAccountId) return { ...a, balance: a.balance - amt };
-        if (a.id === destAccountId) return { ...a, balance: a.balance + amt };
-        return a;
-      }),
-    );
-
-    const newTx: FinancialTransaction = {
-      id: `TX-${Math.floor(9000 + Math.random() * 900)}`,
-      timestamp: new Date().toLocaleString('es-ES'),
-      source_account: sourceAcc.name,
-      dest_account: destAcc.name,
-      amount: amt,
-      fee_deducted: 0,
-      operation_type: 'DEPOSIT_CASH_TO_BANK',
-      voucher_number: voucherNumber || `BOL-${Date.now()}`,
-      user_name: 'Administrador (Firma Digital)',
-    };
-
-    setTransactions((prev) => [newTx, ...prev]);
-    setIsDepositModalOpen(false);
+  const confirmDeposit = () => {
+    const value = parseFloat(depositAmount) || 0;
+    if (value <= 0 || value > cashTotal) return;
+    const source = accounts.find((a) => a.id === sourceAccountId);
+    const dest = accounts.find((a) => a.id === destAccountId);
+    setTransactions((prev) => [
+      {
+        id: `TX-${9000 + prev.length + 2}`,
+        timestamp: new Date().toLocaleString('es-ES'),
+        source_account: source?.name ?? '',
+        dest_account: dest?.name ?? '',
+        amount: value,
+        fee_deducted: 0,
+        operation_type: 'DEPOSIT_CASH_TO_BANK',
+        voucher_number: voucherNumber || undefined,
+        user_name: 'Administrador',
+      },
+      ...prev,
+    ]);
     setDepositAmount('');
     setVoucherNumber('');
-    alert(
-      `✅ Depósito registrado correctamente. Se restó $${amt.toFixed(2)} de ${sourceAcc.name} y se acreditó en ${destAcc.name}.`,
-    );
+    setIsDepositModalOpen(false);
+    toast('Depósito registrado', 'success');
   };
 
-  return (
-    <div className="p-6 bg-canvas h-[calc(100vh-56px)] overflow-y-auto pr-2 space-y-6 select-none transition-colors duration-fast ease-ease">
-      {/* 1. Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
-        <div>
-          <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <CreditCard className="w-7 h-7 text-accent" />
-            Cuentas de Pago y Finanzas Globales
-          </h1>
-          <p className="text-body text-ink-2 mt-1">
-            Administración centralizada de cajas físicas, cuentas bancarias, pasarelas QR y
-            transferencias internas
+  /* Anchos declarados: ninguna cabecera debe partirse en dos líneas. */
+  const txColumns: Array<Column<FinancialTransaction>> = [
+    {
+      key: 'id',
+      header: 'Transacción',
+      width: '130px',
+      render: (t) => <span className="font-mono text-body text-ink">{t.id}</span>,
+    },
+    {
+      key: 'date',
+      header: 'Fecha',
+      width: '170px',
+      render: (t) => <span className="font-mono tnum text-body text-ink-2">{t.timestamp}</span>,
+    },
+    {
+      key: 'op',
+      header: 'Operación',
+      width: '200px',
+      render: (t) => (
+        <Badge tone={OPERATION_TONE[t.operation_type]}>{OPERATION_LABEL[t.operation_type]}</Badge>
+      ),
+    },
+    {
+      key: 'route',
+      header: 'Origen y destino',
+      render: (t) => (
+        <div className="min-w-0">
+          <p className="text-body text-ink-2 truncate">{t.source_account}</p>
+          <p className="flex items-center gap-1.5 text-base text-ink truncate">
+            <ArrowRightLeft className="w-3.5 h-3.5 shrink-0 text-ink-3" />
+            {t.dest_account}
           </p>
         </div>
+      ),
+    },
+    {
+      key: 'amount',
+      header: 'Monto',
+      align: 'right',
+      width: '130px',
+      render: (t) => <Money value={t.amount} size="base" className="text-ink" />,
+    },
+    {
+      key: 'fee',
+      header: 'Comisión',
+      align: 'right',
+      width: '120px',
+      render: (t) =>
+        t.fee_deducted > 0 ? (
+          <Money value={-t.fee_deducted} size="body" className="text-danger" />
+        ) : (
+          <span className="text-ink-3">—</span>
+        ),
+    },
+    {
+      key: 'voucher',
+      header: 'Comprobante',
+      align: 'right',
+      width: '150px',
+      render: (t) => (
+        <span className="font-mono text-body text-ink-3">{t.voucher_number ?? '—'}</span>
+      ),
+    },
+  ];
 
-        {/* Sub-tabs Switcher */}
-        <div className="flex items-center bg-sunken p-1.5 rounded-md border border-line">
-          <button
-            onClick={() => setActiveSubTab('treasury')}
-            className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
-              activeSubTab === 'treasury' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4" />
-            Saldo Consolidado Global
-          </button>
-          <button
-            onClick={() => setActiveSubTab('drawers')}
-            className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
-              activeSubTab === 'drawers' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <DollarSign className="w-4 h-4" />
-            Cajas Físicas Mostrador
-          </button>
-          <button
-            onClick={() => setActiveSubTab('banks')}
-            className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
-              activeSubTab === 'banks' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <Building2 className="w-4 h-4" />
-            Cuentas Bancarias & QR
-          </button>
-          <button
-            onClick={() => setIsDepositModalOpen(true)}
-            className="px-3.5 py-2 bg-ok hover:opacity-90 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow"
-          >
-            <ArrowRightLeft className="w-4 h-4" /> Depósito Caja → Banco
-          </button>
+  const accountColumns: Array<Column<PaymentAccount>> = [
+    {
+      key: 'name',
+      header: 'Cuenta',
+      render: (a) => (
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-ink truncate">{a.name}</p>
+          <p className="text-body text-ink-3 truncate">{a.branch}</p>
         </div>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Tipo',
+      width: '170px',
+      render: (a) => <Badge>{ACCOUNT_LABEL[a.type]}</Badge>,
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      width: '190px',
+      render: (a) => (
+        <Badge
+          tone={a.status === 'OPEN' ? 'success' : a.status === 'LOCKED' ? 'danger' : 'warning'}
+        >
+          {ACCOUNT_STATUS[a.status]}
+        </Badge>
+      ),
+    },
+    {
+      key: 'balance',
+      header: 'Saldo',
+      align: 'right',
+      width: '150px',
+      render: (a) => <Money value={a.balance} size="base" className="text-ink" />,
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      width: '60px',
+      render: (a) =>
+        a.type === 'CASH_DRAWER' ? (
+          <IconButton
+            label={`${a.status === 'LOCKED' ? 'Desbloquear' : 'Bloquear'} ${a.name}`}
+            tone={a.status === 'LOCKED' ? 'danger' : 'neutral'}
+            onClick={() => toggleDrawerLock(a.id)}
+          >
+            {a.status === 'LOCKED' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+          </IconButton>
+        ) : null,
+    },
+  ];
+
+  const visibleAccounts =
+    activeSubTab === 'drawers'
+      ? accounts.filter((a) => a.type === 'CASH_DRAWER')
+      : accounts.filter((a) => a.type !== 'CASH_DRAWER');
+
+  return (
+    <div className="h-full overflow-y-auto bg-canvas select-none">
+      <div className="max-w-[1600px] mx-auto p-6 space-y-5">
+        <PageHeader
+          title="Cuentas"
+          subtitle="Cajas físicas, cuentas bancarias y pasarelas digitales, con su libro de movimientos."
+          actions={
+            <Button
+              icon={<ArrowRightLeft className="w-4 h-4" />}
+              onClick={() => setIsDepositModalOpen(true)}
+            >
+              Depósito a banco
+            </Button>
+          }
+          tabs={
+            <Tabs
+              items={TABS}
+              value={activeSubTab}
+              onChange={(id) => setActiveSubTab(id as SubTab)}
+              label="Secciones de cuentas"
+            />
+          }
+        />
+
+        {/* Cuatro indicadores iguales: el destacado se marca con tono, no
+            pintando la tarjeta entera del color de marca. */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+          <StatTile
+            label="Efectivo en cajas"
+            value={<Money value={cashTotal} size="display" />}
+            hint="acumulado en gavetas"
+            icon={<DollarSign className="w-4 h-4" />}
+          />
+          <StatTile
+            label="Fondos en banco"
+            value={<Money value={bankTotal} size="display" />}
+            hint="acreditado"
+            icon={<Building2 className="w-4 h-4" />}
+          />
+          <StatTile
+            label="Pasarelas y QR"
+            value={<Money value={gatewayTotal} size="display" />}
+            hint="neto tras comisiones"
+            icon={<QrCode className="w-4 h-4" />}
+          />
+          <StatTile
+            label="Total líquido"
+            value={<Money value={liquidTotal} size="display" />}
+            hint="suma de las tres anteriores"
+            icon={<ShieldCheck className="w-4 h-4" />}
+            tone="accent"
+          />
+        </div>
+
+        {activeSubTab === 'treasury' ? (
+          <div className="space-y-4">
+            <Toolbar
+              search={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Buscar por transacción, cuenta o comprobante…"
+              filters={
+                <ToolbarSelect
+                  aria-label="Tipo de operación"
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                >
+                  <option value="ALL">Todas las operaciones</option>
+                  {(
+                    Object.keys(OPERATION_LABEL) as Array<FinancialTransaction['operation_type']>
+                  ).map((k) => (
+                    <option key={k} value={k}>
+                      {OPERATION_LABEL[k]}
+                    </option>
+                  ))}
+                </ToolbarSelect>
+              }
+            />
+            <DataTable
+              columns={txColumns}
+              rows={filteredTx}
+              rowKey={(t) => t.id}
+              empty={
+                <EmptyState
+                  icon={<ArrowRightLeft className="w-6 h-6" />}
+                  title="Sin movimientos que coincidan"
+                  hint="Ajuste la búsqueda o el filtro de operación."
+                />
+              }
+            />
+          </div>
+        ) : (
+          <DataTable
+            columns={accountColumns}
+            rows={visibleAccounts}
+            rowKey={(a) => a.id}
+            empty={
+              <EmptyState
+                icon={<CreditCard className="w-6 h-6" />}
+                title="Sin cuentas registradas"
+              />
+            }
+          />
+        )}
       </div>
 
-      {/* SUB-TAB 1: TREASURY & GLOBAL LIQUIDITY DASHBOARD */}
-      {activeSubTab === 'treasury' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="p-5 bg-raised rounded-md border border-line shadow-e1">
-              <span className="text-body text-ink-3 font-bold uppercase">
-                Cajas Físicas Mostrador
-              </span>
-              <p className="font-mono font-black text-display text-ok mt-1">
-                ${totalCashInDrawers.toFixed(2)}
-              </p>
-              <span className="text-micro text-ink-3">Efectivo acumulado en gavetas</span>
-            </div>
-
-            <div className="p-5 bg-raised rounded-md border border-line shadow-e1">
-              <span className="text-body text-ink-3 font-bold uppercase">
-                Cuentas Bancarias Corporativas
-              </span>
-              <p className="font-mono font-black text-display text-accent mt-1">
-                ${totalBankBalances.toFixed(2)}
-              </p>
-              <span className="text-micro text-ink-3">Fondos acreditados en banco</span>
-            </div>
-
-            <div className="p-5 bg-raised rounded-md border border-line shadow-e1">
-              <span className="text-body text-ink-3 font-bold uppercase">
-                Pasarelas Digitales & QR
-              </span>
-              <p className="font-mono font-black text-display text-accent mt-1">
-                ${totalQRGateways.toFixed(2)}
-              </p>
-              <span className="text-micro text-ink-3">Saldo neto tras comisiones</span>
-            </div>
-
-            <div className="p-5 bg-accent dark:bg-accent-soft text-white rounded-md border border-blue-500 shadow-e1">
-              <span className="text-body font-bold uppercase text-accent-ink">
-                Liquidez Total Consolidada
-              </span>
-              <p className="font-mono font-black text-display mt-1">
-                ${globalLiquidity.toFixed(2)}
-              </p>
-              <span className="text-micro text-accent-ink">Dinero total líquido disponible</span>
-            </div>
-          </div>
-
-          <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4">
-            <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-accent" /> Libro Mayor de Movimientos Cruzados
-              (Historial Completo)
-            </h3>
-            <p className="text-body text-ink-3">
-              Registro cronológico de entradas, egresos, transferencias internas y comisiones
-            </p>
-
-            <div className="overflow-hidden border border-line rounded-md">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-sunken text-ink-2 text-micro font-extrabold uppercase tracking-wider border-b border-line">
-                    <th className="p-4"># Transacción</th>
-                    <th className="p-4">Fecha & Hora</th>
-                    <th className="p-4">Tipo Operación</th>
-                    <th className="p-4">Cuenta Origen → Destino</th>
-                    <th className="p-4 font-mono text-right">Monto ($)</th>
-                    <th className="p-4 font-mono text-right">Comisión Restada</th>
-                    <th className="p-4 text-right"># Boleta / Voucher</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line text-body font-mono">
-                  {transactions.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-sunken">
-                      <td className="p-4 font-bold text-accent">{tx.id}</td>
-                      <td className="p-4 text-ink-3">{tx.timestamp}</td>
-                      <td className="p-4 font-sans">
-                        <span className="px-2 py-0.5 bg-accent-soft text-accent-ink dark:bg-accent-soft font-bold rounded text-micro">
-                          {tx.operation_type}
-                        </span>
-                      </td>
-                      <td className="p-4 font-sans font-bold text-ink">
-                        {tx.source_account} → <span className="text-ok">{tx.dest_account}</span>
-                      </td>
-                      <td className="p-4 text-right font-black text-ink">
-                        ${tx.amount.toFixed(2)}
-                      </td>
-                      <td className="p-4 text-right text-danger font-bold">
-                        -${tx.fee_deducted.toFixed(2)}
-                      </td>
-                      <td className="p-4 text-right text-ink-3 font-bold">
-                        {tx.voucher_number || 'N/A'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SUB-TAB 2: CASH DRAWERS MANAGEMENT */}
-      {activeSubTab === 'drawers' && (
+      {/* Depósito caja → banco */}
+      <Modal
+        isOpen={isDepositModalOpen}
+        onClose={() => setIsDepositModalOpen(false)}
+        icon={<ArrowRightLeft className="w-4 h-4" />}
+        title="Depósito de caja a banco"
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setIsDepositModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={
+                !depositAmount ||
+                parseFloat(depositAmount) <= 0 ||
+                parseFloat(depositAmount) > cashTotal
+              }
+              onClick={confirmDeposit}
+            >
+              Registrar depósito
+            </Button>
+          </>
+        }
+      >
         <div className="space-y-4">
-          <div className="flex items-center justify-between bg-raised p-4 rounded-md border border-line shadow-e1">
-            <h3 className="font-extrabold text-base text-ink">
-              Administración de Cajas Físicas de Mostrador
-            </h3>
-            <button className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
-              <Plus className="w-4 h-4" /> Registrar Nueva Caja Física
-            </button>
+          <div className="flex items-center justify-between px-4 h-12 rounded-md bg-sunken border border-line">
+            <span className="text-base text-ink-2">Efectivo disponible</span>
+            <Money value={cashTotal} size="base" className="text-ink" />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {accounts
-              .filter((a) => a.type === 'CASH_DRAWER')
-              .map((acc) => {
-                const isLocked = acc.status === 'LOCKED';
-
-                return (
-                  <div
-                    key={acc.id}
-                    className="bg-raised p-6 rounded-md border border-line shadow-e1 space-y-4"
-                  >
-                    <div className="flex items-center justify-between border-b border-line pb-3">
-                      <div>
-                        <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                          <DollarSign className="w-5 h-5 text-ok" /> {acc.name}
-                        </h3>
-                        <span className="text-micro text-ink-3 font-semibold">{acc.branch}</span>
-                      </div>
-
-                      <button
-                        onClick={() => handleToggleDrawerLock(acc.id)}
-                        className={`px-3 py-1.5 rounded-md text-body font-bold flex items-center gap-1.5 border transition-all ${
-                          isLocked
-                            ? 'bg-danger-soft text-danger-ink dark:bg-danger-soft border-danger/30'
-                            : 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30'
-                        }`}
-                      >
-                        {isLocked ? (
-                          <Lock className="w-3.5 h-3.5" />
-                        ) : (
-                          <Unlock className="w-3.5 h-3.5" />
-                        )}
-                        {isLocked ? 'CAJA BLOQUEADA' : 'CAJA ABIERTA'}
-                      </button>
-                    </div>
-
-                    <div className="space-y-2 text-body">
-                      <div className="flex justify-between p-3 bg-sunken rounded-md border border-line">
-                        <span className="text-ink-3 font-bold">Efectivo Acumulado en Gaveta:</span>
-                        <span className="font-mono font-black text-title text-ok">
-                          ${acc.balance.toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Desde"
+              value={sourceAccountId}
+              onChange={(e) => setSourceAccountId(e.target.value)}
+            >
+              {accounts
+                .filter((a) => a.type === 'CASH_DRAWER')
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+            </Select>
+            <Select
+              label="Hacia"
+              value={destAccountId}
+              onChange={(e) => setDestAccountId(e.target.value)}
+            >
+              {accounts
+                .filter((a) => a.type === 'BANK_ACCOUNT')
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+            </Select>
           </div>
+
+          <Input
+            label="Importe"
+            type="number"
+            step="0.01"
+            min={0}
+            max={cashTotal}
+            value={depositAmount}
+            onChange={(e) => setDepositAmount(e.target.value)}
+            error={
+              depositAmount && parseFloat(depositAmount) > cashTotal
+                ? 'El importe supera el efectivo disponible.'
+                : undefined
+            }
+            inputSize="display"
+            className="[&_input]:text-center"
+          />
+
+          <Input
+            label="Número de boleta"
+            value={voucherNumber}
+            onChange={(e) => setVoucherNumber(e.target.value)}
+            placeholder="BOL-000000"
+            className="[&_input]:font-mono"
+          />
         </div>
-      )}
-
-      {/* SUB-TAB 3: BANK ACCOUNTS & GATEWAYS */}
-      {activeSubTab === 'banks' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between bg-raised p-4 rounded-md border border-line shadow-e1">
-            <h3 className="font-extrabold text-base text-ink">
-              Directorio de Cuentas Bancarias & Pasarelas QR
-            </h3>
-            <button className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
-              <Plus className="w-4 h-4" /> Registrar Cuenta / Pasarela QR
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {accounts
-              .filter((a) => a.type === 'BANK_ACCOUNT' || a.type === 'QR_GATEWAY')
-              .map((acc) => (
-                <div
-                  key={acc.id}
-                  className="bg-raised p-6 rounded-md border border-line shadow-e1 space-y-4"
-                >
-                  <div className="flex items-center justify-between border-b border-line pb-3">
-                    <div>
-                      <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                        {acc.type === 'BANK_ACCOUNT' ? (
-                          <Building2 className="w-5 h-5 text-accent" />
-                        ) : (
-                          <QrCode className="w-5 h-5 text-accent" />
-                        )}
-                        {acc.name}
-                      </h3>
-                      <span className="text-micro text-ink-3 font-mono">
-                        Nº Cta / Merchant: {acc.account_number}
-                      </span>
-                    </div>
-
-                    {acc.fee_percentage && (
-                      <span className="px-2.5 py-1 bg-warn-soft text-warn-ink dark:bg-warn-soft border border-warn/30 rounded-md font-mono text-micro font-bold">
-                        Comisión: {acc.fee_percentage}%
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-2 text-body font-mono">
-                    <div className="flex justify-between p-3 bg-sunken rounded-md border border-line">
-                      <span className="text-ink-3">Saldo Acreditado:</span>
-                      <span className="font-bold text-ink text-base">
-                        ${acc.balance.toFixed(2)}
-                      </span>
-                    </div>
-                    {acc.in_transit_balance !== undefined && (
-                      <div className="flex justify-between p-3 bg-accent-soft rounded-md border border-accent/30">
-                        <span className="text-accent-ink font-bold">
-                          Saldo Pendiente en Tránsito:
-                        </span>
-                        <span className="font-bold text-accent-ink text-base">
-                          ${acc.in_transit_balance.toFixed(2)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* INTERNAL TRANSFER / DEPOSIT MODAL */}
-      {isDepositModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-md overflow-hidden space-y-4">
-            <div className="p-5 border-b border-line flex items-center justify-between">
-              <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <ArrowRightLeft className="w-5 h-5 text-ok" /> Depósito Interno: Caja → Banco
-              </h3>
-              <button
-                onClick={() => setIsDepositModalOpen(false)}
-                className="text-ink-3 hover:text-ink-2"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleExecuteAtomicTransfer} className="p-5 space-y-4 text-body">
-              <div>
-                <label className="font-bold text-ink-2">Cuenta de Origen (Caja Física) *</label>
-                <select
-                  value={sourceAccountId}
-                  onChange={(e) => setSourceAccountId(e.target.value)}
-                  className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-bold"
-                >
-                  {accounts
-                    .filter((a) => a.type === 'CASH_DRAWER')
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} (Saldo: ${a.balance.toFixed(2)})
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="font-bold text-ink-2">
-                  Cuenta de Destino (Banco Concentrador) *
-                </label>
-                <select
-                  value={destAccountId}
-                  onChange={(e) => setDestAccountId(e.target.value)}
-                  className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-bold"
-                >
-                  {accounts
-                    .filter((a) => a.type === 'BANK_ACCOUNT')
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="font-bold text-ink-2">Monto a Depositar ($) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-mono font-bold text-base text-ok"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-ink-2">
-                  # Boleta de Depósito / Comprobante Bancario *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={voucherNumber}
-                  onChange={(e) => setVoucherNumber(e.target.value)}
-                  placeholder="Ej. BOL-904812"
-                  className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-mono font-bold"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsDepositModalOpen(false)}
-                  className="px-4 py-2 bg-sunken text-ink rounded-md font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-ok hover:opacity-90 text-white rounded-md font-extrabold shadow"
-                >
-                  Ejecutar Depósito Síncrono
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 };

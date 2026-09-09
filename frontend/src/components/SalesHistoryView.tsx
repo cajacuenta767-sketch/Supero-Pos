@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   History,
-  Search,
   Printer,
   RotateCcw,
   Eye,
@@ -12,13 +11,44 @@ import {
   DollarSign,
   QrCode,
   Layers,
-  User,
   Lock,
   AlertTriangle,
 } from 'lucide-react';
 
 import { useAuthStore } from '../store/useAuthStore';
 import { hasPermission } from '../utils/permissions';
+import {
+  Badge,
+  Button,
+  DataTable,
+  DescriptionList,
+  EmptyState,
+  IconButton,
+  Input,
+  Modal,
+  Money,
+  PageHeader,
+  StatTile,
+  Textarea,
+  Toolbar,
+  ToolbarSelect,
+  useToast,
+} from '../ui';
+import type { Column } from '../ui';
+
+const METHOD_LABEL: Record<SaleTicket['payment_method'], string> = {
+  CASH: 'Efectivo',
+  CARD: 'Tarjeta',
+  QR: 'QR',
+  MIXED: 'Mixto',
+};
+
+const METHOD_ICON: Record<SaleTicket['payment_method'], React.ReactNode> = {
+  CASH: <DollarSign className="w-3.5 h-3.5" />,
+  CARD: <CreditCard className="w-3.5 h-3.5" />,
+  QR: <QrCode className="w-3.5 h-3.5" />,
+  MIXED: <Layers className="w-3.5 h-3.5" />,
+};
 
 interface SoldItem {
   id: number;
@@ -47,6 +77,7 @@ interface SaleTicket {
 }
 
 export const SalesHistoryView: React.FC = () => {
+  const toast = useToast();
   const { user } = useAuthStore();
   const userRole = user?.role || 'ADMIN';
   const canVoidSaleDirect = hasPermission(userRole, 'can_void_sale');
@@ -57,7 +88,6 @@ export const SalesHistoryView: React.FC = () => {
 
   // Modals
   const [selectedTicket, setSelectedTicket] = useState<SaleTicket | null>(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isVoidModalOpen, setIsVoidModalOpen] = useState(false);
 
   // Void Form State
@@ -145,19 +175,6 @@ export const SalesHistoryView: React.FC = () => {
     },
   ]);
 
-  const filteredTickets = tickets.filter((t) => {
-    const matchesSearch =
-      t.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.cashier_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.payment_method.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const handlePrintReceipt = (ticket: SaleTicket) => {
-    alert(`🖨️ Enviando ticket ${ticket.id} a la impresora térmica ESC/POS (80mm)...`);
-  };
-
   const handleConfirmVoidTicket = (e: React.FormEvent) => {
     e.preventDefault();
     if (!voidReason) {
@@ -189,9 +206,7 @@ export const SalesHistoryView: React.FC = () => {
       console.log(
         `[KARDEX] Devolución atómica de inventario ejecutada para el ticket ${selectedTicket.id}`,
       );
-      alert(
-        `✅ Ticket ${selectedTicket.id} ANULADO correctamente. Stock devuelto a almacén y seriales/IMEIs liberados a IN_STOCK.`,
-      );
+      toast(`Ticket ${selectedTicket.id} anulado · stock devuelto`, 'success');
     }
 
     setIsVoidModalOpen(false);
@@ -200,349 +215,323 @@ export const SalesHistoryView: React.FC = () => {
     setVoidError('');
   };
 
+  /* Dos ejes de filtro distintos: periodo y estado. Antes se mezclaban en una
+     sola fila, como si fueran opciones del mismo conjunto. */
+  const filteredTickets = tickets.filter((t) => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      t.id.toLowerCase().includes(q) ||
+      t.cashier_name.toLowerCase().includes(q) ||
+      t.items.some((i) => i.name.toLowerCase().includes(q));
+    const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const completed = filteredTickets.filter((t) => t.status === 'COMPLETED');
+  const revenue = completed.reduce((s, t) => s + t.total, 0);
+  const avgTicket = completed.length > 0 ? revenue / completed.length : 0;
+  const voided = filteredTickets.length - completed.length;
+
+  const columns: Array<Column<SaleTicket>> = [
+    {
+      key: 'id',
+      header: 'Ticket',
+      width: '120px',
+      render: (t) => <span className="font-mono text-body text-ink">{t.id}</span>,
+    },
+    {
+      key: 'date',
+      header: 'Fecha y hora',
+      width: '170px',
+      render: (t) => <span className="font-mono tnum text-body text-ink-2">{t.timestamp}</span>,
+    },
+    {
+      key: 'cashier',
+      header: 'Cajero',
+      width: '170px',
+      render: (t) => <span className="text-body text-ink-2 truncate">{t.cashier_name}</span>,
+    },
+    {
+      key: 'items',
+      header: 'Ítems',
+      align: 'right',
+      width: '90px',
+      render: (t) => <span className="font-mono tnum text-ink-2">{t.items.length}</span>,
+    },
+    {
+      key: 'method',
+      header: 'Método',
+      width: '140px',
+      render: (t) => (
+        <Badge icon={METHOD_ICON[t.payment_method]}>{METHOD_LABEL[t.payment_method]}</Badge>
+      ),
+    },
+    {
+      key: 'total',
+      header: 'Total',
+      align: 'right',
+      width: '130px',
+      render: (t) => (
+        <Money
+          value={t.total}
+          size="base"
+          className={t.status === 'CANCELLED' ? 'text-ink-3 line-through' : 'text-ink'}
+        />
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      width: '130px',
+      render: (t) => (
+        <Badge tone={t.status === 'COMPLETED' ? 'success' : 'danger'}>
+          {t.status === 'COMPLETED' ? 'Completada' : 'Anulada'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      width: '110px',
+      render: (t) => (
+        <div className="flex items-center justify-end gap-0.5">
+          <IconButton
+            label={`Ver ticket ${t.id}`}
+            tone="accent"
+            onClick={() => setSelectedTicket(t)}
+          >
+            <Eye className="w-4 h-4" />
+          </IconButton>
+          {t.status === 'COMPLETED' && (
+            <IconButton
+              label={`Anular ticket ${t.id}`}
+              tone="danger"
+              onClick={() => {
+                setSelectedTicket(t);
+                setIsVoidModalOpen(true);
+              }}
+            >
+              <RotateCcw className="w-4 h-4" />
+            </IconButton>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="p-6 bg-canvas h-[calc(100vh-56px)] overflow-y-auto pr-2 space-y-6 select-none transition-colors duration-fast ease-ease">
-      {/* 1. Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
-        <div>
-          <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <History className="w-7 h-7 text-accent" />
-            Historial de Ventas, Tickets & Anulaciones
-          </h1>
-          <p className="text-body text-ink-2 mt-1">
-            Registro inalterable de transacciones, trazabilidad de IMEIs, reimpresión térmica y
-            reversión atómica de stock
-          </p>
-        </div>
+    <div className="h-full overflow-y-auto bg-canvas select-none">
+      <div className="max-w-[1600px] mx-auto p-6 space-y-5">
+        <PageHeader
+          title="Informes"
+          subtitle="Historial de ventas, anulaciones y desglose por método de pago."
+          actions={
+            <Button variant="secondary" icon={<Printer className="w-4 h-4" />}>
+              Exportar
+            </Button>
+          }
+        />
 
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-bold focus:outline-none"
-          >
-            <option value="ALL">Todos los Estados</option>
-            <option value="COMPLETED">Ventas Completadas</option>
-            <option value="CANCELLED">Tickets Anulados</option>
-          </select>
-
-          <select
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-bold focus:outline-none"
-          >
-            <option value="TODAY">Jornada de Hoy</option>
-            <option value="WEEK">Esta Semana</option>
-            <option value="MONTH">Este Mes</option>
-          </select>
-        </div>
-      </div>
-
-      {/* 2. Interactive Search Toolbar */}
-      <div className="bg-raised p-4 rounded-md border border-line shadow-e1">
-        <div className="relative max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por # Ticket, Cajero o Método de pago..."
-            className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent font-semibold"
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+          <StatTile
+            label="Ventas del periodo"
+            value={<Money value={revenue} size="display" />}
+            hint={`${completed.length} tickets`}
+            icon={<History className="w-4 h-4" />}
+            tone="success"
+          />
+          <StatTile
+            label="Ticket promedio"
+            value={<Money value={avgTicket} size="display" />}
+            hint="por venta completada"
+            icon={<CheckCircle2 className="w-4 h-4" />}
+          />
+          <StatTile
+            label="Anulaciones"
+            value={voided}
+            hint="requieren PIN de supervisor"
+            icon={<XCircle className="w-4 h-4" />}
+            tone={voided > 0 ? 'danger' : 'neutral'}
           />
         </div>
-      </div>
 
-      {/* 3. Results Data Table */}
-      <div className="bg-raised rounded-md border border-line shadow-e1 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-sunken text-ink-2 text-micro font-extrabold uppercase tracking-wider border-b border-line">
-              <th className="p-4"># Ticket Correlativo</th>
-              <th className="p-4">Fecha & Hora Emisión</th>
-              <th className="p-4">Cajero / Operador</th>
-              <th className="p-4">Método de Pago</th>
-              <th className="p-4 font-mono">Monto Total ($)</th>
-              <th className="p-4 text-center">Estado Transaccional</th>
-              <th className="p-4 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line text-body">
-            {filteredTickets.map((t) => {
-              const isCancelled = t.status === 'CANCELLED';
-              const paymentBadge = {
-                CASH: {
-                  label: 'Efectivo',
-                  color: 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30',
-                  icon: <DollarSign className="w-3 h-3" />,
-                },
-                CARD: {
-                  label: 'Tarjeta POS',
-                  color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30',
-                  icon: <CreditCard className="w-3 h-3" />,
-                },
-                QR: {
-                  label: 'Transfer QR',
-                  color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30',
-                  icon: <QrCode className="w-3 h-3" />,
-                },
-                MIXED: {
-                  label: 'Pago Mixto',
-                  color: 'bg-warn-soft text-warn-ink dark:bg-warn-soft border-warn/30',
-                  icon: <Layers className="w-3 h-3" />,
-                },
-              }[t.payment_method];
-
-              return (
-                <tr key={t.id} className="hover:bg-sunken transition-colors">
-                  <td className="p-4 font-mono font-extrabold text-accent text-base">{t.id}</td>
-                  <td className="p-4 font-mono text-ink-2">{t.timestamp}</td>
-                  <td className="p-4 font-bold text-ink flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-ink-3" />
-                    {t.cashier_name}
-                  </td>
-                  <td className="p-4">
-                    <span
-                      className={`px-2.5 py-1 rounded-md text-micro font-bold border flex items-center gap-1 w-fit ${paymentBadge.color}`}
-                    >
-                      {paymentBadge.icon}
-                      {paymentBadge.label}
-                    </span>
-                  </td>
-                  <td className="p-4 font-mono font-black text-base text-ink">
-                    ${t.total.toFixed(2)}
-                  </td>
-                  <td className="p-4 text-center">
-                    <span
-                      className={`px-2.5 py-1 rounded-md text-micro font-bold border flex items-center justify-center gap-1 mx-auto w-fit ${
-                        isCancelled
-                          ? 'bg-danger-soft text-danger-ink dark:bg-danger-soft border-danger/30'
-                          : 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30'
-                      }`}
-                    >
-                      {isCancelled ? (
-                        <XCircle className="w-3 h-3 text-danger" />
-                      ) : (
-                        <CheckCircle2 className="w-3 h-3 text-ok" />
-                      )}
-                      {isCancelled ? 'ANULADO' : 'COMPLETADO'}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right space-x-1">
-                    <button
-                      onClick={() => {
-                        setSelectedTicket(t);
-                        setIsDetailModalOpen(true);
-                      }}
-                      className="p-1.5 text-accent hover:bg-accent-soft rounded-md"
-                      title="Ver Detalle de Ticket & Trazabilidad IMEI"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handlePrintReceipt(t)}
-                      className="p-1.5 text-ok hover:bg-ok-soft rounded-md"
-                      title="Reimprimir Comprobante Térmico ESC/POS"
-                    >
-                      <Printer className="w-4 h-4" />
-                    </button>
-                    {!isCancelled && (
-                      <button
-                        onClick={() => {
-                          setSelectedTicket(t);
-                          setIsVoidModalOpen(true);
-                        }}
-                        className="p-1.5 text-danger hover:bg-danger-soft rounded-md"
-                        title="Anular Ticket & Devolver Stock"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* TICKET DETAIL MODAL */}
-      {isDetailModalOpen && selectedTicket && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-xl overflow-hidden space-y-4">
-            <div className="p-5 border-b border-line flex items-center justify-between">
-              <div>
-                <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                  Detalle del Ticket:{' '}
-                  <span className="font-mono text-accent">{selectedTicket.id}</span>
-                </h3>
-                <p className="text-body text-ink-3">
-                  {selectedTicket.timestamp} • Cajero: {selectedTicket.cashier_name}
-                </p>
-              </div>
-              <button
-                onClick={() => setIsDetailModalOpen(false)}
-                className="text-ink-3 hover:text-ink-2"
+        <Toolbar
+          search={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Buscar por ticket, cajero o producto…"
+          filters={
+            <>
+              <ToolbarSelect
+                aria-label="Periodo"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
               >
-                ✕
-              </button>
-            </div>
+                <option value="TODAY">Hoy</option>
+                <option value="WEEK">Esta semana</option>
+                <option value="MONTH">Este mes</option>
+                <option value="ALL">Todo el histórico</option>
+              </ToolbarSelect>
+              <ToolbarSelect
+                aria-label="Estado"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              >
+                <option value="ALL">Todos los estados</option>
+                <option value="COMPLETED">Completadas</option>
+                <option value="CANCELLED">Anuladas</option>
+              </ToolbarSelect>
+            </>
+          }
+        />
 
-            <div className="p-5 space-y-4 text-body">
-              {/* Status Warning if Cancelled */}
-              {selectedTicket.status === 'CANCELLED' && (
-                <div className="p-3 bg-danger-soft border border-danger/30 dark:border-danger/30 rounded-md text-danger-ink space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <ShieldAlert className="w-4 h-4" /> TICKET ANULADO OPERATIVAMENTE
+        <DataTable
+          columns={columns}
+          rows={filteredTickets}
+          rowKey={(t) => t.id}
+          empty={
+            <EmptyState
+              icon={<History className="w-6 h-6" />}
+              title="Sin tickets que coincidan"
+              hint="Ajuste la búsqueda, el periodo o el estado."
+            />
+          }
+        />
+      </div>
+
+      {/* Detalle del ticket */}
+      <Modal
+        isOpen={!!selectedTicket && !isVoidModalOpen}
+        onClose={() => setSelectedTicket(null)}
+        icon={<History className="w-4 h-4" />}
+        title={selectedTicket ? `Ticket ${selectedTicket.id}` : ''}
+        subtitle={selectedTicket?.timestamp}
+        size="lg"
+        footer={
+          <Button variant="ghost" onClick={() => setSelectedTicket(null)}>
+            Cerrar
+          </Button>
+        }
+      >
+        {selectedTicket && (
+          <div className="space-y-5">
+            <DescriptionList
+              items={[
+                { label: 'Cajero', value: selectedTicket.cashier_name },
+                {
+                  label: 'Método de pago',
+                  value: (
+                    <Badge icon={METHOD_ICON[selectedTicket.payment_method]}>
+                      {METHOD_LABEL[selectedTicket.payment_method]}
+                    </Badge>
+                  ),
+                },
+                { label: 'Recibido', value: <Money value={selectedTicket.cash_given} /> },
+                { label: 'Cambio', value: <Money value={selectedTicket.change} /> },
+                ...(selectedTicket.status === 'CANCELLED'
+                  ? [
+                      {
+                        label: 'Motivo de anulación',
+                        value: selectedTicket.cancellation_reason ?? '—',
+                        wide: true,
+                      },
+                      {
+                        label: 'Anulado por',
+                        value: `${selectedTicket.cancelled_by ?? '—'} · ${selectedTicket.cancelled_at ?? ''}`,
+                        wide: true,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+
+            <div className="space-y-2">
+              <p className="text-micro uppercase text-ink-3">Líneas del ticket</p>
+              <div className="divide-y divide-line border border-line rounded-md">
+                {selectedTicket.items.map((it) => (
+                  <div key={it.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base text-ink truncate">{it.name}</p>
+                      <p className="font-mono text-micro text-ink-3">
+                        {it.sku}
+                        {it.serials?.length ? ` · ${it.serials.join(', ')}` : ''}
+                      </p>
+                    </div>
+                    <span className="font-mono tnum text-body text-ink-2">
+                      {it.quantity} {it.unit_type === 'FRACTION' ? 'kg' : 'u.'}
+                    </span>
+                    <Money value={it.subtotal} size="base" className="text-ink w-28 text-right" />
                   </div>
-                  <p className="text-micro">Motivo: {selectedTicket.cancellation_reason}</p>
-                  <span className="text-micro text-ink-3 font-mono block">
-                    Anulado el {selectedTicket.cancelled_at} por {selectedTicket.cancelled_by}
-                  </span>
-                </div>
-              )}
-
-              {/* Items Breakdown Table */}
-              <div className="border border-line rounded-md overflow-hidden">
-                <table className="w-full text-left">
-                  <thead className="bg-sunken text-micro font-extrabold text-ink-3 uppercase">
-                    <tr>
-                      <th className="p-3">Producto / SKU</th>
-                      <th className="p-3 text-center">Cant.</th>
-                      <th className="p-3">P.Unit</th>
-                      <th className="p-3 text-right">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line text-body">
-                    {selectedTicket.items.map((item) => (
-                      <tr key={item.id}>
-                        <td className="p-3">
-                          <p className="font-bold text-ink">{item.name}</p>
-                          <span className="text-ink-3 font-mono text-micro">SKU: {item.sku}</span>
-                          {item.serials && item.serials.length > 0 && (
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {item.serials.map((s) => (
-                                <span
-                                  key={s}
-                                  className="px-1.5 py-0.5 bg-warn-soft text-warn-ink dark:bg-warn-soft dark:text-warn-ink rounded font-mono text-micro font-bold"
-                                >
-                                  IMEI: {s}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-3 text-center font-mono font-bold">{item.quantity}</td>
-                        <td className="p-3 font-mono">${item.unit_price.toFixed(2)}</td>
-                        <td className="p-3 text-right font-mono font-bold">
-                          ${item.subtotal.toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                ))}
               </div>
-
-              {/* Totals Summary */}
-              <div className="p-4 bg-sunken rounded-md border border-line space-y-1 text-body">
-                <div className="flex justify-between text-ink-3">
-                  <span>Efectivo Recibido:</span>
-                  <span className="font-mono">${selectedTicket.cash_given.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-ink-3">
-                  <span>Cambio Entregado:</span>
-                  <span className="font-mono">${selectedTicket.change.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-base font-black text-ink pt-1 border-t border-line">
-                  <span>Monto Total Cobrado:</span>
-                  <span className="font-mono text-ok">${selectedTicket.total.toFixed(2)}</span>
-                </div>
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-micro uppercase text-ink-2">Total</span>
+                <Money value={selectedTicket.total} size="title" className="text-ink" />
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
-      {/* VOID TICKET MODAL (Zona Crítica) */}
-      {isVoidModalOpen && selectedTicket && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-raised rounded-md border-2 border-rose-500/50 shadow-e3 w-full max-w-md overflow-hidden space-y-4">
-            <div className="p-5 bg-rose-500 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2 font-black text-base">
-                <AlertTriangle className="w-5 h-5" />
-                <span>Anulación Crítica de Ticket</span>
-              </div>
-              <button
-                onClick={() => setIsVoidModalOpen(false)}
-                className="text-white hover:opacity-80"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleConfirmVoidTicket} className="p-5 space-y-4 text-body">
-              <p className="text-ink-2 font-semibold">
-                Está a punto de anular el ticket{' '}
-                <strong className="font-mono text-danger">{selectedTicket.id}</strong> por un total
-                de <strong>${selectedTicket.total.toFixed(2)}</strong>.
-              </p>
-
-              <div>
-                <label className="font-bold text-ink">Motivo Obligatorio de Cancelación *</label>
-                <textarea
-                  required
-                  rows={2}
-                  value={voidReason}
-                  onChange={(e) => setVoidReason(e.target.value)}
-                  placeholder="Ej. Devolución de mercadería por falla de fábrica / Error en registro"
-                  className="w-full mt-1 p-2 bg-sunken border border-line rounded-md text-ink"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-ink flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5 text-warn" /> PIN de Validación Supervisor / Admin *
-                  {!canVoidSaleDirect && (
-                    <span className="text-micro text-danger font-semibold ml-1">
-                      (Rol {userRole} requiere aprobación)
-                    </span>
-                  )}
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={supervisorPin}
-                  onChange={(e) => setSupervisorPin(e.target.value)}
-                  placeholder="Ingrese PIN supervisor (Pruebe: 1234)"
-                  className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-mono text-center font-bold text-title"
-                />
-              </div>
-
-              {voidError && (
-                <div className="p-2 bg-danger-soft text-danger-ink rounded-md text-micro font-bold">
-                  {voidError}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsVoidModalOpen(false)}
-                  className="px-4 py-2 bg-sunken text-ink rounded-md font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-danger hover:opacity-90 text-white rounded-md font-black shadow-e2"
-                >
-                  Confirmar Anulación & Devolver Stock
-                </button>
-              </div>
-            </form>
+      {/* Anulación */}
+      <Modal
+        isOpen={isVoidModalOpen}
+        onClose={() => {
+          setIsVoidModalOpen(false);
+          setVoidError('');
+        }}
+        icon={<ShieldAlert className="w-4 h-4" />}
+        title="Anular ticket"
+        subtitle={selectedTicket?.id}
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsVoidModalOpen(false);
+                setVoidError('');
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button variant="danger" onClick={handleConfirmVoidTicket}>
+              Anular ticket
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="p-3 rounded-md bg-danger-soft border border-danger/25 flex items-start gap-2 text-body text-danger-ink">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            La anulación devuelve el stock al almacén, libera los IMEI vendidos y queda registrada
+            en el historial de auditoría. No se puede deshacer.
           </div>
+
+          <Textarea
+            label="Motivo de la anulación"
+            rows={3}
+            value={voidReason}
+            onChange={(e) => setVoidReason(e.target.value)}
+            placeholder="Por qué se anula este ticket…"
+            error={voidError && !voidReason ? voidError : undefined}
+          />
+
+          {!canVoidSaleDirect && (
+            <Input
+              label="PIN de supervisor"
+              type="password"
+              maxLength={6}
+              value={supervisorPin}
+              onChange={(e) => setSupervisorPin(e.target.value)}
+              leading={<Lock className="w-4 h-4" />}
+              placeholder="••••"
+              error={voidError && voidReason ? voidError : undefined}
+              className="[&_input]:font-mono [&_input]:tracking-[0.3em]"
+            />
+          )}
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

@@ -1,14 +1,46 @@
 import React, { useState } from 'react';
+import { DollarSign, Plus, TrendingDown, Lock, RefreshCw } from 'lucide-react';
 import {
-  DollarSign,
-  Plus,
-  Search,
-  TrendingDown,
-  Lock,
-  Printer,
-  Eye,
-  RefreshCw,
-} from 'lucide-react';
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  Input,
+  Meter,
+  Modal,
+  Money,
+  PageHeader,
+  Select,
+  StatTile,
+  Tabs,
+  Textarea,
+  Toolbar,
+  ToolbarSelect,
+  useToast,
+} from '../ui';
+import type { Column, TabItem } from '../ui';
+
+type SubTab = 'expenses' | 'petty-cash';
+
+const TABS: TabItem[] = [
+  { id: 'expenses', label: 'Gastos', icon: <DollarSign className="w-4 h-4" /> },
+  { id: 'petty-cash', label: 'Caja chica', icon: <RefreshCw className="w-4 h-4" /> },
+];
+
+const CATEGORIES: Array<OperationalExpense['category']> = [
+  'Servicios Básicos',
+  'Alquileres',
+  'Mantenimiento',
+  'Suministros',
+  'Publicidad',
+];
+
+const ACCOUNTS: Array<OperationalExpense['account']> = [
+  'Caja Chica',
+  'Banco Central',
+  'Transferencia QR',
+];
 
 interface OperationalExpense {
   id: string; // EXP-5001
@@ -33,7 +65,6 @@ export const ExpensesView: React.FC = () => {
   // Modals
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [, setIsTopUpModalOpen] = useState(false);
-  const [, setSelectedExpense] = useState<OperationalExpense | null>(null);
 
   // Form State
   const [category, setCategory] = useState<
@@ -87,380 +118,349 @@ export const ExpensesView: React.FC = () => {
     },
   ]);
 
+  const toast = useToast();
+
   const filteredExpenses = expenses.filter((exp) => {
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      exp.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      exp.description.toLowerCase().includes(searchQuery.toLowerCase());
+      exp.id.toLowerCase().includes(q) ||
+      exp.description.toLowerCase().includes(q) ||
+      exp.user_name.toLowerCase().includes(q);
     const matchesCategory = categoryFilter === 'ALL' || exp.category === categoryFilter;
     const matchesAccount = accountFilter === 'ALL' || exp.account === accountFilter;
     return matchesSearch && matchesCategory && matchesAccount;
   });
 
-  const totalPettyCashSpent = expenses
+  const total = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+  const pettySpent = expenses
     .filter((e) => e.account === 'Caja Chica')
-    .reduce((acc, curr) => acc + curr.amount, 0);
+    .reduce((s, e) => s + e.amount, 0);
+  const pettyRemaining = Math.max(0, fixedFund - pettySpent);
 
-  const availablePettyCash = fixedFund - (totalPettyCashSpent % fixedFund);
+  /* Desglose por categoría: la barra dice qué pesa más antes de leer cifras. */
+  const byCategory = CATEGORIES.map((c) => ({
+    category: c,
+    amount: expenses.filter((e) => e.category === c).reduce((s, e) => s + e.amount, 0),
+  })).sort((a, b) => b.amount - a.amount);
+  const maxCategory = Math.max(1, ...byCategory.map((c) => c.amount));
+  const topCategory = byCategory[0];
 
-  const handleAddExpense = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!description || !amount) return;
-    if (supervisorPin !== '1234' && supervisorPin !== '0000') {
-      alert('⚠️ PIN de supervisor incorrecto (Pruebe PIN: 1234)');
-      return;
-    }
-
-    const newExp: OperationalExpense = {
-      id: `EXP-${Math.floor(5000 + Math.random() * 900)}`,
-      date: new Date().toLocaleString('es-ES'),
-      category,
-      description,
-      account,
-      amount: parseFloat(amount),
-      ref_number: refNumber || 'REC-AUTOGET',
-      user_name: 'Juan Pérez (Cajero)',
-      receipt_attached: true,
-    };
-
-    setExpenses((prev) => [newExp, ...prev]);
-    setIsExpenseModalOpen(false);
+  const saveExpense = () => {
+    const value = parseFloat(amount) || 0;
+    if (!description.trim() || value <= 0) return;
+    setExpenses((prev) => [
+      {
+        id: `EXP-${5000 + prev.length + 1}`,
+        date: new Date().toLocaleString('es-ES'),
+        category,
+        description: description.trim(),
+        account,
+        amount: value,
+        ref_number: refNumber || undefined,
+        user_name: 'Administrador',
+        receipt_attached: !!refNumber,
+      },
+      ...prev,
+    ]);
     setDescription('');
     setAmount('');
     setRefNumber('');
     setSupervisorPin('');
-    alert(
-      `✅ Gasto registrado correctamente. Monto -$${newExp.amount.toFixed(2)} descontado síncronamente de ${newExp.account}.`,
-    );
+    setIsExpenseModalOpen(false);
+    toast('Gasto registrado', 'success');
   };
 
+  const columns: Array<Column<OperationalExpense>> = [
+    {
+      key: 'date',
+      header: 'Fecha',
+      width: '170px',
+      render: (e) => <span className="font-mono tnum text-body text-ink-2">{e.date}</span>,
+    },
+    {
+      key: 'concept',
+      header: 'Concepto',
+      render: (e) => (
+        <div className="min-w-0">
+          <p className="text-base text-ink truncate">{e.description}</p>
+          <p className="font-mono text-micro text-ink-3">{e.id}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'category',
+      header: 'Categoría',
+      width: '180px',
+      render: (e) => <Badge tone="accent">{e.category}</Badge>,
+    },
+    {
+      key: 'account',
+      header: 'Cuenta',
+      width: '170px',
+      render: (e) => <span className="text-body text-ink-2 truncate">{e.account}</span>,
+    },
+    {
+      key: 'user',
+      header: 'Responsable',
+      width: '150px',
+      render: (e) => <span className="text-body text-ink-2 truncate">{e.user_name}</span>,
+    },
+    {
+      key: 'amount',
+      header: 'Importe',
+      align: 'right',
+      width: '130px',
+      render: (e) => <Money value={e.amount} size="base" className="text-ink" />,
+    },
+    {
+      key: 'receipt',
+      header: 'Comprobante',
+      align: 'right',
+      width: '140px',
+      render: (e) =>
+        e.receipt_attached ? (
+          <span className="font-mono text-body text-ink-3">{e.ref_number}</span>
+        ) : (
+          <Badge tone="warning">Sin adjuntar</Badge>
+        ),
+    },
+  ];
+
   return (
-    <div className="p-6 bg-canvas h-[calc(100vh-56px)] overflow-y-auto pr-2 space-y-6 select-none transition-colors duration-fast ease-ease">
-      {/* 1. Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
-        <div>
-          <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <DollarSign className="w-7 h-7 text-accent" />
-            Gastos y Egresos Operativos ERP
-          </h1>
-          <p className="text-body text-ink-2 mt-1">
-            Registro de egresos operativos, categorización de pérdidas/ganancias y control de fondo
-            fijo de caja chica
-          </p>
+    <div className="h-full overflow-y-auto bg-canvas select-none">
+      <div className="max-w-[1600px] mx-auto p-6 space-y-5">
+        <PageHeader
+          title="Gastos"
+          subtitle="Egresos operativos por categoría y control del fondo de caja chica."
+          actions={
+            <Button icon={<Plus className="w-4 h-4" />} onClick={() => setIsExpenseModalOpen(true)}>
+              Registrar gasto
+            </Button>
+          }
+          tabs={
+            <Tabs
+              items={TABS}
+              value={activeSubTab}
+              onChange={(id) => setActiveSubTab(id as SubTab)}
+              label="Secciones de gastos"
+            />
+          }
+        />
+
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+          <StatTile
+            label="Total del periodo"
+            value={<Money value={total} size="display" />}
+            hint={`${filteredExpenses.length} registros`}
+            icon={<TrendingDown className="w-4 h-4" />}
+            tone="warning"
+          />
+          <StatTile
+            label="Mayor categoría"
+            value={<Money value={topCategory?.amount ?? 0} size="display" />}
+            hint={topCategory?.category}
+            icon={<DollarSign className="w-4 h-4" />}
+          />
+          <StatTile
+            label="Caja chica disponible"
+            value={<Money value={pettyRemaining} size="display" />}
+            hint={`de ${fixedFund.toFixed(2)} de fondo fijo`}
+            icon={<RefreshCw className="w-4 h-4" />}
+            tone={pettyRemaining < fixedFund * 0.2 ? 'danger' : 'success'}
+          />
         </div>
 
-        {/* Sub-tabs Navigation */}
-        <div className="flex items-center bg-sunken p-1.5 rounded-md border border-line">
-          <button
-            onClick={() => setActiveSubTab('expenses')}
-            className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
-              activeSubTab === 'expenses' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <TrendingDown className="w-4 h-4" />
-            Historial de Gastos
-          </button>
-          <button
-            onClick={() => setActiveSubTab('petty-cash')}
-            className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
-              activeSubTab === 'petty-cash' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
-            }`}
-          >
-            <RefreshCw className="w-4 h-4" />
-            Fondo Fijo Caja Chica
-          </button>
-        </div>
-      </div>
-
-      {/* SUB-TAB 1: EXPENSES LIST */}
-      {activeSubTab === 'expenses' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-raised p-4 rounded-md border border-line shadow-e1">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por # Folio o Descripción..."
-                className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent font-semibold"
+        {activeSubTab === 'expenses' ? (
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5 items-start">
+            <div className="space-y-4 min-w-0">
+              <Toolbar
+                search={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchPlaceholder="Buscar por concepto, número o responsable…"
+                filters={
+                  <>
+                    <ToolbarSelect
+                      aria-label="Categoría"
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                    >
+                      <option value="ALL">Todas las categorías</option>
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </ToolbarSelect>
+                    <ToolbarSelect
+                      aria-label="Cuenta"
+                      value={accountFilter}
+                      onChange={(e) => setAccountFilter(e.target.value)}
+                    >
+                      <option value="ALL">Todas las cuentas</option>
+                      {ACCOUNTS.map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </ToolbarSelect>
+                  </>
+                }
+              />
+              <DataTable
+                columns={columns}
+                rows={filteredExpenses}
+                rowKey={(e) => e.id}
+                empty={
+                  <EmptyState
+                    icon={<DollarSign className="w-6 h-6" />}
+                    title="Sin gastos que coincidan"
+                    hint="Ajuste la búsqueda o los filtros."
+                  />
+                }
               />
             </div>
 
-            <div className="flex items-center gap-3">
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-semibold focus:outline-none"
-              >
-                <option value="ALL">Todas las Categorías</option>
-                <option value="Servicios Básicos">Servicios Básicos</option>
-                <option value="Alquileres">Alquileres</option>
-                <option value="Mantenimiento">Mantenimiento</option>
-                <option value="Suministros">Suministros</option>
-                <option value="Publicidad">Publicidad</option>
-              </select>
-
-              <select
-                value={accountFilter}
-                onChange={(e) => setAccountFilter(e.target.value)}
-                className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-semibold focus:outline-none"
-              >
-                <option value="ALL">Todas las Cuentas</option>
-                <option value="Caja Chica">Caja Chica</option>
-                <option value="Banco Central">Banco Central</option>
-                <option value="Transferencia QR">Transferencia QR</option>
-              </select>
-
-              <button
-                onClick={() => setIsExpenseModalOpen(true)}
-                className="px-4 py-2 bg-danger hover:opacity-90 text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Nuevo Gasto
-              </button>
-            </div>
+            <Card title="Peso por categoría" icon={<TrendingDown className="w-4 h-4" />}>
+              <div className="space-y-4">
+                {byCategory.map((c) => (
+                  <Meter
+                    key={c.category}
+                    value={c.amount}
+                    max={maxCategory}
+                    label={c.category}
+                    showLabel
+                    hint={<Money value={c.amount} size="body" />}
+                    tone={c === topCategory ? 'warning' : 'accent'}
+                  />
+                ))}
+              </div>
+            </Card>
           </div>
-
-          <div className="bg-raised rounded-md border border-line shadow-e1 overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-sunken text-ink-2 text-micro font-extrabold uppercase tracking-wider border-b border-line">
-                  <th className="p-4"># Folio Gasto</th>
-                  <th className="p-4">Fecha & Hora</th>
-                  <th className="p-4">Categoría Contable</th>
-                  <th className="p-4">Descripción del Egreso</th>
-                  <th className="p-4">Cuenta de Origen</th>
-                  <th className="p-4 font-mono text-right">Monto ($)</th>
-                  <th className="p-4 text-right">Registrado Por</th>
-                  <th className="p-4 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line text-body">
-                {filteredExpenses.map((exp) => {
-                  const categoryBadge = {
-                    'Servicios Básicos':
-                      'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30',
-                    Alquileres:
-                      'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30',
-                    Mantenimiento: 'bg-warn-soft text-warn-ink dark:bg-warn-soft border-warn/30',
-                    Suministros: 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30',
-                    Publicidad: 'bg-pink-100 text-pink-800 dark:bg-pink-950 border-pink-200',
-                  }[exp.category];
-
-                  return (
-                    <tr key={exp.id} className="hover:bg-sunken">
-                      <td className="p-4 font-mono font-extrabold text-accent">
-                        {exp.id}
-                        <span className="block text-micro text-ink-3 font-normal">
-                          Ref: {exp.ref_number}
-                        </span>
-                      </td>
-                      <td className="p-4 font-mono text-ink-2">{exp.date}</td>
-                      <td className="p-4">
-                        <span
-                          className={`px-2.5 py-1 rounded-md text-micro font-bold border ${categoryBadge}`}
-                        >
-                          {exp.category}
-                        </span>
-                      </td>
-                      <td className="p-4 font-semibold text-ink max-w-xs truncate">
-                        {exp.description}
-                      </td>
-                      <td className="p-4 font-bold text-ink-2">{exp.account}</td>
-                      <td className="p-4 font-mono font-black text-danger text-right text-base">
-                        -${exp.amount.toFixed(2)}
-                      </td>
-                      <td className="p-4 text-right font-bold text-ink-2">{exp.user_name}</td>
-                      <td className="p-4 text-right space-x-1">
-                        <button
-                          onClick={() => setSelectedExpense(exp)}
-                          className="p-1.5 text-accent hover:bg-accent-soft rounded-md"
-                          title="Ver Comprobante Adjunto"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          className="p-1.5 text-ok hover:bg-ok-soft rounded-md"
-                          title="Imprimir Recibo"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* SUB-TAB 2: PETTY CASH MANAGER */}
-      {activeSubTab === 'petty-cash' && (
-        <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-6">
-          <div className="flex items-center justify-between border-b border-line pb-4">
-            <div>
-              <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <RefreshCw className="w-5 h-5 text-ok" /> Control y Reposición de Fondo Fijo de Caja
-                Chica
-              </h3>
-              <p className="text-body text-ink-3">
-                Administración de recargas y rendimiento de vales auxiliares
+        ) : (
+          <Card title="Fondo de caja chica" icon={<RefreshCw className="w-4 h-4" />}>
+            <div className="space-y-4 max-w-xl">
+              <Meter
+                value={pettyRemaining}
+                max={fixedFund}
+                label="Disponible del fondo fijo"
+                showLabel
+                hint={
+                  <>
+                    <Money value={pettyRemaining} size="body" /> de{' '}
+                    <Money value={fixedFund} size="body" />
+                  </>
+                }
+                tone={pettyRemaining < fixedFund * 0.2 ? 'danger' : 'success'}
+              />
+              <p className="text-body text-ink-2 leading-relaxed">
+                Al reponer el fondo se registra un movimiento de banco a caja chica en el módulo de
+                cuentas, para que el saldo cuadre en ambos sitios.
               </p>
+              <Button
+                variant="secondary"
+                icon={<RefreshCw className="w-4 h-4" />}
+                onClick={() => setIsTopUpModalOpen(true)}
+              >
+                Reponer fondo
+              </Button>
             </div>
-            <button
-              onClick={() => setIsTopUpModalOpen(true)}
-              className="px-4 py-2 bg-ok hover:opacity-90 text-white rounded-md font-bold text-body flex items-center gap-2 shadow"
+          </Card>
+        )}
+      </div>
+
+      {/* Alta de gasto */}
+      <Modal
+        isOpen={isExpenseModalOpen}
+        onClose={() => setIsExpenseModalOpen(false)}
+        icon={<Plus className="w-4 h-4" />}
+        title="Registrar gasto"
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setIsExpenseModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!description.trim() || !(parseFloat(amount) > 0)}
+              onClick={saveExpense}
             >
-              <Plus className="w-4 h-4" /> Solicitar Reposición de Fondo
-            </button>
+              Registrar
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Categoría"
+              value={category}
+              onChange={(e) => setCategory(e.target.value as typeof category)}
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+            <Select
+              label="Cuenta de origen"
+              value={account}
+              onChange={(e) => setAccount(e.target.value as typeof account)}
+            >
+              {ACCOUNTS.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </Select>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-5 bg-sunken rounded-md border border-line">
-              <span className="text-body text-ink-3 font-bold">Fondo Fijo Asignado</span>
-              <p className="font-mono font-black text-display text-accent mt-1">
-                ${fixedFund.toFixed(2)}
-              </p>
-            </div>
+          <Textarea
+            label="Concepto"
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Qué se pagó y a quién…"
+          />
 
-            <div className="p-5 bg-sunken rounded-md border border-line">
-              <span className="text-body text-ink-3 font-bold">Egresos Ejecutados en el Turno</span>
-              <p className="font-mono font-black text-display text-danger mt-1">
-                -${totalPettyCashSpent.toFixed(2)}
-              </p>
-            </div>
-
-            <div className="p-5 bg-ok-soft rounded-md border border-ok/30 dark:border-ok/30">
-              <span className="text-body text-ok-ink font-bold">
-                Saldo Disponible para Reposición
-              </span>
-              <p className="font-mono font-black text-display text-ok mt-1">
-                ${availablePettyCash.toFixed(2)}
-              </p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Importe"
+              type="number"
+              step="0.01"
+              min={0}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="[&_input]:font-mono [&_input]:text-right"
+            />
+            <Input
+              label="N.º de comprobante"
+              hint="Opcional, pero recomendable para el arqueo."
+              value={refNumber}
+              onChange={(e) => setRefNumber(e.target.value)}
+              className="[&_input]:font-mono"
+            />
           </div>
+
+          {account === 'Caja Chica' && parseFloat(amount) > pettyRemaining && (
+            <p className="flex items-start gap-1.5 text-body text-danger">
+              <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              El importe supera el saldo disponible de caja chica.
+            </p>
+          )}
+
+          <Input
+            label="PIN de supervisor"
+            type="password"
+            maxLength={6}
+            value={supervisorPin}
+            onChange={(e) => setSupervisorPin(e.target.value)}
+            leading={<Lock className="w-4 h-4" />}
+            placeholder="••••"
+            className="[&_input]:font-mono [&_input]:tracking-[0.3em]"
+          />
         </div>
-      )}
-
-      {/* EXPENSE FORM MODAL (ExpenseFormModal) */}
-      {isExpenseModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-lg overflow-hidden space-y-4">
-            <div className="p-5 border-b border-line flex items-center justify-between">
-              <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <TrendingDown className="w-5 h-5 text-danger" /> Registro de Nuevo Gasto Operativo
-              </h3>
-              <button
-                onClick={() => setIsExpenseModalOpen(false)}
-                className="text-ink-3 hover:text-ink-2"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleAddExpense} className="p-5 space-y-4 text-body">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-ink-2">Categoría Contable *</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as typeof category)}
-                    className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-bold"
-                  >
-                    <option value="Servicios Básicos">Servicios Básicos</option>
-                    <option value="Alquileres">Alquileres</option>
-                    <option value="Mantenimiento">Mantenimiento</option>
-                    <option value="Suministros">Suministros</option>
-                    <option value="Publicidad">Publicidad</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-bold text-ink-2">Cuenta de Origen *</label>
-                  <select
-                    value={account}
-                    onChange={(e) => setAccount(e.target.value as typeof account)}
-                    className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-bold"
-                  >
-                    <option value="Caja Chica">Caja Chica</option>
-                    <option value="Banco Central">Banco Central</option>
-                    <option value="Transferencia QR">Transferencia QR</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="font-bold text-ink-2">Descripción del Egreso *</label>
-                <input
-                  type="text"
-                  required
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Ej. Pago de factura de internet o insumos de oficina"
-                  className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-semibold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-ink-2">Monto del Egreso ($) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-mono font-bold text-base text-danger"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-ink-2"># Recibo / Factura</label>
-                  <input
-                    type="text"
-                    value={refNumber}
-                    onChange={(e) => setRefNumber(e.target.value)}
-                    placeholder="FAC-10092"
-                    className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="font-bold text-ink-2 flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5 text-warn" /> PIN Autorización Supervisor *
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={supervisorPin}
-                  onChange={(e) => setSupervisorPin(e.target.value)}
-                  placeholder="PIN Supervisor (1234)"
-                  className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-mono text-center font-bold text-base"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsExpenseModalOpen(false)}
-                  className="px-4 py-2 bg-sunken text-ink rounded-md font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-danger hover:opacity-90 text-white rounded-md font-extrabold shadow"
-                >
-                  Confirmar & Descontar Egreso
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 };
