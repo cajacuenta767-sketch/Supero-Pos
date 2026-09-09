@@ -17,17 +17,17 @@ import { SupervisorPinModal } from './SupervisorPinModal';
 import { Badge, Button, EmptyState, IconButton, Kbd, Money, cn } from '../ui';
 
 interface ProductItem {
-  id: number;
-  sku: string;
-  barcode: string;
-  name: string;
-  unit_type: 'UNIT' | 'FRACTION' | 'SERIALIZED';
-  retail_price: number;
-  wholesale_price: number;
-  wholesale_min_qty: number;
-  stock: number;
-  min_stock: number;
-  category: string;
+ id: number;
+ sku: string;
+ barcode: string;
+ name: string;
+ unit_type: 'UNIT' | 'FRACTION' | 'SERIALIZED';
+ retail_price: number;
+ wholesale_price: number;
+ wholesale_min_qty: number;
+ stock: number;
+ min_stock: number;
+ category: string;
 }
 
 const MASTER_POS_CATALOG: ProductItem[] = [
@@ -42,119 +42,119 @@ const MASTER_POS_CATALOG: ProductItem[] = [
 const CATEGORIES = ['TODOS', 'Abarrotes', 'Electrónica', 'Bebidas', 'Lácteos'];
 
 export const PosView: React.FC = () => {
-  const { user } = useAuthStore();
-  const userRole = user?.role || 'ADMIN';
-  const canAccessPos = hasPermission(userRole, 'can_access_pos');
-  const canApplyDiscount = hasPermission(userRole, 'can_apply_discount');
+ const { user } = useAuthStore();
+ const userRole = user?.role || 'ADMIN';
+ const canAccessPos = hasPermission(userRole, 'can_access_pos');
+ const canApplyDiscount = hasPermission(userRole, 'can_apply_discount');
 
-  const { cashShift, selectedCustomer, manualDiscount, pendingSyncCount, setManualDiscount } = usePosStore();
-  const { items, addItem, removeItem, updateQuantity, clearCart, getSubtotal, getTotal, getDiscountAmount } = useCartStore();
+ const { cashShift, selectedCustomer, manualDiscount, pendingSyncCount, setManualDiscount } = usePosStore();
+ const { items, addItem, removeItem, updateQuantity, clearCart, getSubtotal, getTotal, getDiscountAmount } = useCartStore();
 
-  const [selectedCategory, setSelectedCategory] = useState('TODOS');
-  const [searchQuery, setSearchQuery] = useState('');
-  const searchInputRef = useRef<HTMLInputElement>(null);
+ const [selectedCategory, setSelectedCategory] = useState('TODOS');
+ const [searchQuery, setSearchQuery] = useState('');
+ const searchInputRef = useRef<HTMLInputElement>(null);
 
   /* Retroalimentación periférica: la última fila añadida destella 420ms.
      El cajero confirma el escaneo sin apartar la vista del producto. */
-  const [flashId, setFlashId] = useState<number | null>(null);
-  const cartEndRef = useRef<HTMLDivElement>(null);
+ const [flashId, setFlashId] = useState<number | null>(null);
+ const cartEndRef = useRef<HTMLDivElement>(null);
 
-  const [isCashShiftModalOpen, setIsCashShiftModalOpen] = useState(false);
-  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-  const [isSupervisorModalOpen, setIsSupervisorModalOpen] = useState(false);
-  const [targetManualDiscount, setTargetManualDiscount] = useState(0);
-  const [pendingSerializedProduct, setPendingSerializedProduct] = useState<ProductItem | null>(null);
-  const [pendingFractionalProduct, setPendingFractionalProduct] = useState<ProductItem | null>(null);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+ const [shiftModalDismissed, setShiftModalDismissed] = useState(false);
+ const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+ const [isSupervisorModalOpen, setIsSupervisorModalOpen] = useState(false);
+ const [targetManualDiscount, setTargetManualDiscount] = useState(0);
+ const [pendingSerializedProduct, setPendingSerializedProduct] = useState<ProductItem | null>(null);
+ const [pendingFractionalProduct, setPendingFractionalProduct] = useState<ProductItem | null>(null);
+ const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
-  useEffect(() => {
-    if (cashShift === null) setIsCashShiftModalOpen(true);
-  }, [cashShift]);
+  /* Sin turno abierto la terminal no vende: el modal se deriva del estado en
+ lugar de forzarse con un efecto, que causaría un render en cascada. */
+ const isCashShiftModalOpen = cashShift === null && !shiftModalDismissed;
 
-  const signalAdded = (id: number) => {
-    setFlashId(id);
-    window.setTimeout(() => setFlashId((c) => (c === id ? null : c)), 460);
-    window.requestAnimationFrame(() =>
-      cartEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }),
+ const signalAdded = (id: number) => {
+ setFlashId(id);
+ window.setTimeout(() => setFlashId((c) => (c === id ? null : c)), 460);
+ window.requestAnimationFrame(() =>
+ cartEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }),
     );
   };
 
-  const handleSelectProduct = (product: ProductItem) => {
-    if (cashShift === null) {
-      setIsCashShiftModalOpen(true);
-      return;
+ const handleSelectProduct = (product: ProductItem) => {
+ if (cashShift === null) {
+ setShiftModalDismissed(false);
+ return;
     }
-    if (product.unit_type === 'SERIALIZED') {
-      setPendingSerializedProduct(product);
+ if (product.unit_type === 'SERIALIZED') {
+ setPendingSerializedProduct(product);
     } else if (product.unit_type === 'FRACTION') {
-      setPendingFractionalProduct(product);
+ setPendingFractionalProduct(product);
     } else {
-      addItem({ ...product }, 1);
-      signalAdded(product.id);
+ addItem({ ...product }, 1);
+ signalAdded(product.id);
     }
   };
 
   // Lector láser nativo (<10 ms)
-  useBarcodeScanner((barcode) => {
-    const matched = MASTER_POS_CATALOG.find(
+ useBarcodeScanner((barcode) => {
+ const matched = MASTER_POS_CATALOG.find(
       (p) => p.barcode === barcode || p.sku.toLowerCase() === barcode.toLowerCase(),
     );
-    if (matched) {
-      handleSelectProduct(matched);
-      setSearchQuery('');
+ if (matched) {
+ handleSelectProduct(matched);
+ setSearchQuery('');
     }
   });
 
   // F2 busca · F8/F12 cobra
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'F2') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
+ useEffect(() => {
+ const onKey = (e: KeyboardEvent) => {
+ if (e.key === 'F2') {
+ e.preventDefault();
+ searchInputRef.current?.focus();
+ searchInputRef.current?.select();
       } else if (e.key === 'F8' || e.key === 'F12') {
-        e.preventDefault();
-        if (items.length > 0 && cashShift !== null) setIsCheckoutOpen(true);
+ e.preventDefault();
+ if (items.length > 0 && cashShift !== null) setIsCheckoutOpen(true);
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+ window.addEventListener('keydown', onKey);
+ return () => window.removeEventListener('keydown', onKey);
   }, [items, cashShift]);
 
-  if (!canAccessPos) {
-    return (
+ if (!canAccessPos) {
+ return (
       <EmptyState
-        className="bg-canvas"
-        icon={<ShieldAlert className="w-6 h-6 text-danger" />}
-        title="Acceso restringido al punto de venta"
-        hint={`El rol ${userRole} no tiene permisos para operar la terminal de ventas.`}
+ className="bg-canvas"
+ icon={<ShieldAlert className="w-6 h-6 text-danger" />}
+ title="Acceso restringido al punto de venta"
+ hint={`El rol ${userRole} no tiene permisos para operar la terminal de ventas.`}
       />
     );
   }
 
-  const handleApplyManualDiscountClick = (desired: number) => {
-    if (desired > 10) {
-      setTargetManualDiscount(desired);
-      setIsSupervisorModalOpen(true);
+ const handleApplyManualDiscountClick = (desired: number) => {
+ if (desired > 10) {
+ setTargetManualDiscount(desired);
+ setIsSupervisorModalOpen(true);
     } else {
-      setManualDiscount(desired);
+ setManualDiscount(desired);
     }
   };
 
-  const q = searchQuery.toLowerCase();
-  const filteredCatalog = MASTER_POS_CATALOG.filter(
+ const q = searchQuery.toLowerCase();
+ const filteredCatalog = MASTER_POS_CATALOG.filter(
     (p) =>
       (selectedCategory === 'TODOS' || p.category === selectedCategory) &&
       (p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.barcode.includes(searchQuery)),
   );
 
-  const customerDiscountRate = selectedCustomer?.discountPercentage || 0;
-  const subtotalNeto = getSubtotal();
-  const totalDiscount = getDiscountAmount(customerDiscountRate, manualDiscount);
-  const totalPagar = getTotal(customerDiscountRate, manualDiscount);
-  const canCheckout = items.length > 0 && cashShift !== null;
+ const customerDiscountRate = selectedCustomer?.discountPercentage || 0;
+ const subtotalNeto = getSubtotal();
+ const totalDiscount = getDiscountAmount(customerDiscountRate, manualDiscount);
+ const totalPagar = getTotal(customerDiscountRate, manualDiscount);
+ const canCheckout = items.length > 0 && cashShift !== null;
 
-  return (
+ return (
     <div className="flex flex-col h-full bg-canvas overflow-hidden select-none">
       {/* Turno cerrado: bloqueo explícito, sin animación ansiosa */}
       {cashShift === null && (
@@ -163,7 +163,7 @@ export const PosView: React.FC = () => {
             <Lock className="w-4 h-4 shrink-0" />
             Apertura de caja obligatoria para registrar ventas.
           </span>
-          <Button variant="danger" size="sm" onClick={() => setIsCashShiftModalOpen(true)}>
+          <Button variant="danger" size="sm" onClick={() => setShiftModalDismissed(false)}>
             Abrir turno
           </Button>
         </div>
@@ -211,8 +211,8 @@ export const PosView: React.FC = () => {
           {/* Cliente activo */}
           <div className="shrink-0 h-14 px-3 border-b border-line flex items-center justify-between gap-3">
             <button
-              onClick={() => setIsCustomerModalOpen(true)}
-              className="flex items-center gap-2.5 min-w-0 rounded-md p-1 -m-1 hover:bg-sunken transition-colors duration-fast ease-ease"
+ onClick={() => setIsCustomerModalOpen(true)}
+ className="flex items-center gap-2.5 min-w-0 rounded-md p-1 -m-1 hover:bg-sunken transition-colors duration-fast ease-ease"
             >
               <span className="w-9 h-9 shrink-0 rounded-md bg-accent-soft text-accent-ink flex items-center justify-center">
                 <User className="w-4 h-4" />
@@ -248,18 +248,18 @@ export const PosView: React.FC = () => {
           <div className="flex-1 overflow-y-auto">
             {items.length === 0 ? (
               <EmptyState
-                icon={<ShoppingBag className="w-6 h-6" />}
-                title="Ticket vacío"
-                hint="Escanee un código de barras o toque un producto del catálogo."
+ icon={<ShoppingBag className="w-6 h-6" />}
+ title="Ticket vacío"
+ hint="Escanee un código de barras o toque un producto del catálogo."
               />
             ) : (
               <div className="divide-y divide-line">
                 {items.map((item) => (
                   <div
-                    key={item.id}
-                    className={cn(
+ key={item.id}
+ className={cn(
                       'min-h-16 px-3 py-2.5 flex items-center gap-3 bg-raised',
-                      flashId === item.id && 'animate-scan-flash',
+ flashId === item.id && 'animate-scan-flash',
                     )}
                   >
                     <div className="flex-1 min-w-0 space-y-0.5">
@@ -293,12 +293,12 @@ export const PosView: React.FC = () => {
                     {/* Controles táctiles de 44px */}
                     <div className="flex items-center gap-1 shrink-0">
                       <IconButton
-                        label="Restar cantidad"
-                        size="touch"
-                        onClick={() =>
-                          updateQuantity(item.id, Math.max(0.001, item.quantity - (item.unit_type === 'FRACTION' ? 0.1 : 1)))
+ label="Restar cantidad"
+ size="touch"
+ onClick={() =>
+ updateQuantity(item.id, Math.max(0.001, item.quantity - (item.unit_type === 'FRACTION' ? 0.1 : 1)))
                         }
-                        className="border border-line-strong"
+ className="border border-line-strong"
                       >
                         <Minus className="w-4 h-4" />
                       </IconButton>
@@ -306,12 +306,12 @@ export const PosView: React.FC = () => {
                         {item.unit_type === 'FRACTION' ? item.quantity.toFixed(3) : item.quantity}
                       </span>
                       <IconButton
-                        label="Sumar cantidad"
-                        size="touch"
-                        onClick={() =>
-                          updateQuantity(item.id, item.quantity + (item.unit_type === 'FRACTION' ? 0.1 : 1))
+ label="Sumar cantidad"
+ size="touch"
+ onClick={() =>
+ updateQuantity(item.id, item.quantity + (item.unit_type === 'FRACTION' ? 0.1 : 1))
                         }
-                        className="border border-line-strong"
+ className="border border-line-strong"
                       >
                         <Plus className="w-4 h-4" />
                       </IconButton>
@@ -340,14 +340,14 @@ export const PosView: React.FC = () => {
               <div className="flex gap-1">
                 {[0, 5, 10, 15, 20].map((d) => (
                   <button
-                    key={d}
-                    onClick={() => handleApplyManualDiscountClick(d)}
-                    className={cn(
+ key={d}
+ onClick={() => handleApplyManualDiscountClick(d)}
+ className={cn(
                       'h-7 px-2.5 rounded-sm border font-mono tnum text-body font-bold',
                       'transition-colors duration-fast ease-ease',
-                      manualDiscount === d
+ manualDiscount === d
                         ? 'bg-accent text-white border-accent'
-                        : 'bg-raised border-line-strong text-ink-2 hover:border-accent hover:text-accent',
+ : 'bg-raised border-line-strong text-ink-2 hover:border-accent hover:text-accent',
                     )}
                   >
                     {d}%{d > 10 ? ' 🔒' : ''}
@@ -383,12 +383,12 @@ export const PosView: React.FC = () => {
 
             <div className="px-4 pb-4">
               <Button
-                variant="success"
-                size="pos"
-                block
-                disabled={!canCheckout}
-                onClick={() => setIsCheckoutOpen(true)}
-                icon={<CreditCard className="w-5 h-5" />}
+ variant="success"
+ size="pos"
+ block
+ disabled={!canCheckout}
+ onClick={() => setIsCheckoutOpen(true)}
+ icon={<CreditCard className="w-5 h-5" />}
               >
                 Cobrar
                 <Kbd keys={['F8', 'F12']} className="bg-white/20 border-white/25 text-white ml-1" />
@@ -402,13 +402,13 @@ export const PosView: React.FC = () => {
           <div className="relative shrink-0">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none" />
             <input
-              ref={searchInputRef}
-              type="text"
-              autoFocus
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Escanear código de barras o buscar por SKU / nombre…"
-              className="w-full h-11 pl-10 pr-14 bg-raised border border-line-strong rounded-md text-base text-ink hover:border-ink-3 focus:border-accent transition-colors duration-fast ease-ease"
+ ref={searchInputRef}
+ type="text"
+ autoFocus
+ value={searchQuery}
+ onChange={(e) => setSearchQuery(e.target.value)}
+ placeholder="Escanear código de barras o buscar por SKU / nombre…"
+ className="w-full h-11 pl-10 pr-14 bg-raised border border-line-strong rounded-md text-base text-ink hover:border-ink-3 focus:border-accent transition-colors duration-fast ease-ease"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2">
               <Kbd keys="F2" />
@@ -418,14 +418,14 @@ export const PosView: React.FC = () => {
           <div className="shrink-0 flex gap-2 overflow-x-auto pb-0.5">
             {CATEGORIES.map((cat) => (
               <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={cn(
+ key={cat}
+ onClick={() => setSelectedCategory(cat)}
+ className={cn(
                   'h-9 px-4 rounded-md border text-body font-semibold whitespace-nowrap',
                   'transition-colors duration-fast ease-ease',
-                  selectedCategory === cat
+ selectedCategory === cat
                     ? 'bg-accent-soft border-accent/40 text-accent-ink'
-                    : 'bg-raised border-line text-ink-2 hover:border-line-strong hover:text-ink',
+ : 'bg-raised border-line text-ink-2 hover:border-line-strong hover:text-ink',
                 )}
               >
                 {cat}
@@ -436,23 +436,23 @@ export const PosView: React.FC = () => {
           <div className="flex-1 overflow-y-auto -mr-1 pr-1">
             {filteredCatalog.length === 0 ? (
               <EmptyState
-                icon={<Search className="w-6 h-6" />}
-                title="Sin coincidencias"
-                hint="Revise el término de búsqueda o cambie de categoría."
+ icon={<Search className="w-6 h-6" />}
+ title="Sin coincidencias"
+ hint="Revise el término de búsqueda o cambie de categoría."
               />
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 content-start">
                 {filteredCatalog.map((product) => {
-                  const low = product.stock <= product.min_stock;
-                  return (
+ const low = product.stock <= product.min_stock;
+ return (
                     <button
-                      key={product.id}
-                      onClick={() => handleSelectProduct(product)}
-                      className={cn(
+ key={product.id}
+ onClick={() => handleSelectProduct(product)}
+ className={cn(
                         'group text-left min-h-[132px] p-3 flex flex-col gap-2 rounded-lg border bg-raised',
                         'transition-colors duration-fast ease-ease hover:border-accent',
                         /* Stock crítico: borde ámbar, no texto de alarma */
-                        low ? 'border-warn/50' : 'border-line',
+ low ? 'border-warn/50' : 'border-line',
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -499,46 +499,46 @@ export const PosView: React.FC = () => {
       </div>
 
       {/* Modales */}
-      <CashShiftModal isOpen={isCashShiftModalOpen} onClose={() => setIsCashShiftModalOpen(false)} />
+      <CashShiftModal isOpen={isCashShiftModalOpen} onClose={() => setShiftModalDismissed(true)} />
       <CustomerModal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} />
 
       <SupervisorPinModal
-        isOpen={isSupervisorModalOpen}
-        targetDiscountPercentage={targetManualDiscount}
-        onClose={() => setIsSupervisorModalOpen(false)}
+ isOpen={isSupervisorModalOpen}
+ targetDiscountPercentage={targetManualDiscount}
+ onClose={() => setIsSupervisorModalOpen(false)}
         /* El modal aplica el descuento al validar el PIN. */
-        onSuccess={() => undefined}
+ onSuccess={() => undefined}
       />
 
       <ImeiModal
-        isOpen={!!pendingSerializedProduct}
-        productName={pendingSerializedProduct?.name || ''}
-        onConfirm={(serial) => {
-          if (!pendingSerializedProduct) return;
-          addItem({ ...pendingSerializedProduct }, 1, serial);
-          signalAdded(pendingSerializedProduct.id);
-          setPendingSerializedProduct(null);
+ isOpen={!!pendingSerializedProduct}
+ productName={pendingSerializedProduct?.name || ''}
+ onConfirm={(serial) => {
+ if (!pendingSerializedProduct) return;
+ addItem({ ...pendingSerializedProduct }, 1, serial);
+ signalAdded(pendingSerializedProduct.id);
+ setPendingSerializedProduct(null);
         }}
-        onClose={() => setPendingSerializedProduct(null)}
+ onClose={() => setPendingSerializedProduct(null)}
       />
 
       <DecimalQuantityModal
-        isOpen={!!pendingFractionalProduct}
-        productName={pendingFractionalProduct?.name || ''}
-        unitPrice={pendingFractionalProduct?.retail_price || 0}
-        onConfirm={(qty) => {
-          if (!pendingFractionalProduct) return;
-          addItem({ ...pendingFractionalProduct }, qty);
-          signalAdded(pendingFractionalProduct.id);
-          setPendingFractionalProduct(null);
+ isOpen={!!pendingFractionalProduct}
+ productName={pendingFractionalProduct?.name || ''}
+ unitPrice={pendingFractionalProduct?.retail_price || 0}
+ onConfirm={(qty) => {
+ if (!pendingFractionalProduct) return;
+ addItem({ ...pendingFractionalProduct }, qty);
+ signalAdded(pendingFractionalProduct.id);
+ setPendingFractionalProduct(null);
         }}
-        onClose={() => setPendingFractionalProduct(null)}
+ onClose={() => setPendingFractionalProduct(null)}
       />
 
       <CheckoutModal
-        isOpen={isCheckoutOpen}
-        onClose={() => setIsCheckoutOpen(false)}
-        onSuccess={() => searchInputRef.current?.focus()}
+ isOpen={isCheckoutOpen}
+ onClose={() => setIsCheckoutOpen(false)}
+ onSuccess={() => searchInputRef.current?.focus()}
       />
     </div>
   );

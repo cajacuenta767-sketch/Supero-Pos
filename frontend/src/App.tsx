@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { LayoutGrid } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -47,12 +47,13 @@ export const App: React.FC = () => {
   // Hook de sincronización offline (listeners pasivos + worker de 30 s)
   useOfflineSync();
 
-  // El almacenero no opera caja: se le abre el catálogo
-  useEffect(() => {
-    if (userRole === 'ALMACENERO' && ['pos', 'users', 'settings'].includes(activeTab)) {
-      setActiveTab('products');
-    }
-  }, [userRole, activeTab]);
+  /* El almacenero no opera caja ni administra: se deriva su vista efectiva
+     en el render en lugar de corregirla con un efecto, que provocaría un
+     render en cascada por cada cambio de pestaña. */
+  const effectiveTab =
+    userRole === 'ALMACENERO' && ['pos', 'users', 'settings'].includes(activeTab)
+      ? 'products'
+      : activeTab;
 
   if (!isAuthenticated) {
     return (
@@ -62,12 +63,12 @@ export const App: React.FC = () => {
     );
   }
 
-  const ActiveView = VIEWS[activeTab];
+  const ActiveView = VIEWS[effectiveTab];
 
   return (
     <ToastProvider>
       <div className="flex h-screen bg-canvas text-ink overflow-hidden">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <Sidebar activeTab={effectiveTab} setActiveTab={setActiveTab} />
 
         <div className="flex-1 flex flex-col min-w-0">
           <Header searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
@@ -78,7 +79,7 @@ export const App: React.FC = () => {
             ) : (
               <EmptyState
                 icon={<LayoutGrid className="w-6 h-6" />}
-                title={`Módulo ${activeTab}`}
+                title={`Módulo ${effectiveTab}`}
                 hint="Este módulo está configurado con permisos estables para su rol de usuario."
               />
             )}

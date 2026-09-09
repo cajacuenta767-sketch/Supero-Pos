@@ -130,7 +130,7 @@ export const StockAdjustmentsView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
         <div>
           <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <Sliders className="w-7 h-7 text-blue-500" />
+            <Sliders className="w-7 h-7 text-accent" />
             Ajuste de Stock & Auditoría de Inventario
           </h1>
           <p className="text-body text-ink-2 mt-1">
@@ -143,7 +143,7 @@ export const StockAdjustmentsView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('adjustments')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeSubTab === 'adjustments' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'adjustments' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Sliders className="w-4 h-4" />
@@ -151,14 +151,14 @@ export const StockAdjustmentsView: React.FC = () => {
           </button>
           <button
  onClick={() => setIsLossModalOpen(true)}
- className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow"
+ className="px-3 py-2 bg-danger hover:opacity-90 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow"
           >
             <AlertTriangle className="w-4 h-4" />
             Registrar Merma / Daño
           </button>
           <button
  onClick={() => setIsAuditModalOpen(true)}
- className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow"
+ className="px-3 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow"
           >
             <Calculator className="w-4 h-4" />
             Conteo Físico Ciego
@@ -171,13 +171,13 @@ export const StockAdjustmentsView: React.FC = () => {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-raised p-4 rounded-md border border-line shadow-e1">
             <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
               <input
  type="text"
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
  placeholder="Buscar por # Folio de Ajuste o Responsable..."
- className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink placeholder-gray-400 focus:border-accent"
+ className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent"
               />
             </div>
 
@@ -212,9 +212,9 @@ export const StockAdjustmentsView: React.FC = () => {
               <tbody className="divide-y divide-line text-body">
                 {filteredAdjustments.map((adj) => {
  const typeBadge = {
-                    LOSS_DAMAGE: { label: 'MERMA / DAÑO', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 border-rose-200' },
-                    PHYSICAL_AUDIT: { label: 'AUDITORÍA CIEGA', color: 'bg-blue-100 text-blue-800 dark:bg-blue-950 border-blue-200' },
-                    MANUAL_CORRECTION: { label: 'CORRECCIÓN MANUAL', color: 'bg-amber-100 text-amber-800 dark:bg-amber-950 border-amber-200' },
+                    LOSS_DAMAGE: { label: 'MERMA / DAÑO', color: 'bg-danger-soft text-danger-ink dark:bg-danger-soft border-danger/30' },
+                    PHYSICAL_AUDIT: { label: 'AUDITORÍA CIEGA', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30' },
+                    MANUAL_CORRECTION: { label: 'CORRECCIÓN MANUAL', color: 'bg-warn-soft text-warn-ink dark:bg-warn-soft border-warn/30' },
                   }[adj.type];
 
  return (
@@ -240,7 +240,7 @@ export const StockAdjustmentsView: React.FC = () => {
                         {adj.user_name}
                       </td>
                       <td className="p-4 text-center">
-                        <span className="px-2.5 py-1 rounded-md text-micro font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 border border-emerald-200">
+                        <span className="px-2.5 py-1 rounded-md text-micro font-bold bg-ok-soft text-ok-ink dark:bg-ok-soft border border-ok/30">
                           APLICADO
                         </span>
                       </td>
@@ -250,11 +250,11 @@ export const StockAdjustmentsView: React.FC = () => {
  setSelectedRecord(adj);
  setIsReconciliationModalOpen(true);
                           }}
- className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md" title="Ver Conciliación de Diferencias"
+ className="p-1.5 text-accent hover:bg-accent-soft rounded-md" title="Ver Conciliación de Diferencias"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md" title="Imprimir Reporte Kardex">
+                        <button className="p-1.5 text-ok hover:bg-ok-soft rounded-md" title="Imprimir Reporte Kardex">
                           <Printer className="w-4 h-4" />
                         </button>
                       </td>
@@ -273,9 +273,9 @@ export const StockAdjustmentsView: React.FC = () => {
           <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-md overflow-hidden space-y-4">
             <div className="p-5 border-b border-line flex items-center justify-between">
               <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-rose-500" /> Registro de Merma, Daño o Extravío
+                <AlertTriangle className="w-5 h-5 text-danger" /> Registro de Merma, Daño o Extravío
               </h3>
-              <button onClick={() => setIsLossModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsLossModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
 
             <form onSubmit={handleConfirmLoss} className="p-5 space-y-4 text-body">
@@ -307,7 +307,7 @@ export const StockAdjustmentsView: React.FC = () => {
 
               <div>
                 <label className="font-bold text-ink-2 flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5 text-amber-500" /> PIN Autorización Supervisor *
+                  <Lock className="w-3.5 h-3.5 text-warn" /> PIN Autorización Supervisor *
                 </label>
                 <input
  type="password" required
@@ -319,8 +319,8 @@ export const StockAdjustmentsView: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsLossModalOpen(false)} className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-md font-extrabold shadow">
+                <button type="button" onClick={() => setIsLossModalOpen(false)} className="px-4 py-2 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-danger hover:opacity-90 text-white rounded-md font-extrabold shadow">
                   Confirmar Baja de Stock en Kardex
                 </button>
               </div>
@@ -336,17 +336,17 @@ export const StockAdjustmentsView: React.FC = () => {
             <div className="p-5 border-b border-line flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                  <Calculator className="w-5 h-5 text-blue-500" /> Sesión de Conteo Físico Ciego de Inventario
+                  <Calculator className="w-5 h-5 text-accent" /> Sesión de Conteo Físico Ciego de Inventario
                 </h3>
-                <p className="text-body text-gray-500">Sucursal: {auditBranch} (El stock teórico permanece oculto)</p>
+                <p className="text-body text-ink-3">Sucursal: {auditBranch} (El stock teórico permanece oculto)</p>
               </div>
-              <button onClick={() => setIsAuditModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsAuditModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
 
             <div className="p-5 space-y-4 text-body">
               <div className="border border-line rounded-md overflow-hidden">
                 <table className="w-full text-left">
-                  <thead className="bg-sunken text-micro font-bold uppercase text-gray-500">
+                  <thead className="bg-sunken text-micro font-bold uppercase text-ink-3">
                     <tr>
                       <th className="p-3">Producto / SKU</th>
                       <th className="p-3 text-center">Tipo Unidad</th>
@@ -358,14 +358,14 @@ export const StockAdjustmentsView: React.FC = () => {
                       <tr key={item.id}>
                         <td className="p-3 font-bold text-ink">
                           {item.name}
-                          <span className="block text-micro text-gray-400 font-mono">SKU: {item.sku}</span>
+                          <span className="block text-micro text-ink-3 font-mono">SKU: {item.sku}</span>
                         </td>
                         <td className="p-3 text-center font-mono font-bold">{item.unit_type}</td>
                         <td className="p-3 text-center">
                           <input
  type="number"
  defaultValue={item.physical_count}
- className="w-20 p-1 bg-accent-soft border border-blue-300 rounded text-center font-mono font-black text-base text-blue-600"
+ className="w-20 p-1 bg-accent-soft border border-accent/30 rounded text-center font-mono font-black text-base text-accent"
                           />
                         </td>
                       </tr>
@@ -375,13 +375,13 @@ export const StockAdjustmentsView: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsAuditModalOpen(false)} className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
+                <button type="button" onClick={() => setIsAuditModalOpen(false)} className="px-4 py-2 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
                 <button
  onClick={() => {
  setIsAuditModalOpen(false);
  setIsReconciliationModalOpen(true);
                   }}
- className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-extrabold shadow"
+ className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md font-extrabold shadow"
                 >
                   Finalizar Conteo & Generar Conciliación
                 </button>
@@ -398,17 +398,17 @@ export const StockAdjustmentsView: React.FC = () => {
             <div className="p-5 border-b border-line flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                  <Calculator className="w-5 h-5 text-emerald-500" /> Reporte de Conciliación & Desviaciones de Stock
+                  <Calculator className="w-5 h-5 text-ok" /> Reporte de Conciliación & Desviaciones de Stock
                 </h3>
-                <p className="text-body text-gray-500">Cruce automático entre Stock Teórico vs Stock Físico Contado</p>
+                <p className="text-body text-ink-3">Cruce automático entre Stock Teórico vs Stock Físico Contado</p>
               </div>
-              <button onClick={() => { setIsReconciliationModalOpen(false); setSelectedRecord(null); }} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => { setIsReconciliationModalOpen(false); setSelectedRecord(null); }} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
 
             <div className="p-5 space-y-4 text-body">
               <div className="border border-line rounded-md overflow-hidden">
                 <table className="w-full text-left border-collapse">
-                  <thead className="bg-sunken text-micro font-bold uppercase text-gray-500">
+                  <thead className="bg-sunken text-micro font-bold uppercase text-ink-3">
                     <tr>
                       <th className="p-3">Producto</th>
                       <th className="p-3 text-center">Stock Teórico</th>
@@ -427,18 +427,18 @@ export const StockAdjustmentsView: React.FC = () => {
                         <tr key={item.id}>
                           <td className="p-3 font-sans font-bold text-ink">
                             {item.name}
-                            <span className="block text-micro text-gray-400 font-mono">SKU: {item.sku}</span>
+                            <span className="block text-micro text-ink-3 font-mono">SKU: {item.sku}</span>
                           </td>
                           <td className="p-3 text-center font-bold">{item.theoretical_stock}</td>
                           <td className="p-3 text-center font-bold">{item.physical_count}</td>
                           <td className={`p-3 text-center font-black text-base ${
- isFaltante ? 'text-rose-600' : isSobrante ? 'text-emerald-600' : 'text-gray-400'
+ isFaltante ? 'text-danger' : isSobrante ? 'text-ok' : 'text-ink-3'
                           }`}>
                             {item.difference > 0 ? `+${item.difference}` : item.difference}
                           </td>
                           <td className="p-3 text-right font-sans">
                             <span className={`px-2 py-0.5 rounded text-micro font-bold ${
- isFaltante ? 'bg-rose-100 text-rose-800' : isSobrante ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+ isFaltante ? 'bg-danger-soft text-danger-ink' : isSobrante ? 'bg-ok-soft text-ok-ink' : 'bg-sunken text-ink-2'
                             }`}>
                               {isFaltante && 'FALTANTE (MERMA)'}
                               {isSobrante && 'SOBRANTE'}
@@ -453,8 +453,8 @@ export const StockAdjustmentsView: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => { setIsReconciliationModalOpen(false); setSelectedRecord(null); }} className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold">Cerrar</button>
-                <button onClick={handleApplyAuditReconciliation} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-extrabold shadow">
+                <button type="button" onClick={() => { setIsReconciliationModalOpen(false); setSelectedRecord(null); }} className="px-4 py-2 bg-sunken text-ink rounded-md font-bold">Cerrar</button>
+                <button onClick={handleApplyAuditReconciliation} className="px-4 py-2 bg-ok hover:opacity-90 text-white rounded-md font-extrabold shadow">
                   Aplicar Ajustes Masivos al Kardex
                 </button>
               </div>

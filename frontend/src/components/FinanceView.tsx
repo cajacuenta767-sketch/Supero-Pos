@@ -121,7 +121,7 @@ export const FinanceView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
         <div>
           <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <CreditCard className="w-7 h-7 text-blue-500" />
+            <CreditCard className="w-7 h-7 text-accent" />
             Cuentas de Pago y Finanzas Globales
           </h1>
           <p className="text-body text-ink-2 mt-1">
@@ -134,7 +134,7 @@ export const FinanceView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('treasury')}
  className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
- activeSubTab === 'treasury' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'treasury' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
@@ -143,7 +143,7 @@ export const FinanceView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('drawers')}
  className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
- activeSubTab === 'drawers' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'drawers' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <DollarSign className="w-4 h-4" />
@@ -152,7 +152,7 @@ export const FinanceView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('banks')}
  className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
- activeSubTab === 'banks' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'banks' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Building2 className="w-4 h-4" />
@@ -160,7 +160,7 @@ export const FinanceView: React.FC = () => {
           </button>
           <button
  onClick={() => setIsDepositModalOpen(true)}
- className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow"
+ className="px-3.5 py-2 bg-ok hover:opacity-90 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow"
           >
             <ArrowRightLeft className="w-4 h-4" /> Depósito Caja → Banco
           </button>
@@ -172,35 +172,35 @@ export const FinanceView: React.FC = () => {
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="p-5 bg-raised rounded-md border border-line shadow-e1">
-              <span className="text-body text-gray-500 font-bold uppercase">Cajas Físicas Mostrador</span>
+              <span className="text-body text-ink-3 font-bold uppercase">Cajas Físicas Mostrador</span>
               <p className="font-mono font-black text-display text-ok mt-1">${totalCashInDrawers.toFixed(2)}</p>
-              <span className="text-micro text-gray-400">Efectivo acumulado en gavetas</span>
+              <span className="text-micro text-ink-3">Efectivo acumulado en gavetas</span>
             </div>
 
             <div className="p-5 bg-raised rounded-md border border-line shadow-e1">
-              <span className="text-body text-gray-500 font-bold uppercase">Cuentas Bancarias Corporativas</span>
+              <span className="text-body text-ink-3 font-bold uppercase">Cuentas Bancarias Corporativas</span>
               <p className="font-mono font-black text-display text-accent mt-1">${totalBankBalances.toFixed(2)}</p>
-              <span className="text-micro text-gray-400">Fondos acreditados en banco</span>
+              <span className="text-micro text-ink-3">Fondos acreditados en banco</span>
             </div>
 
             <div className="p-5 bg-raised rounded-md border border-line shadow-e1">
-              <span className="text-body text-gray-500 font-bold uppercase">Pasarelas Digitales & QR</span>
+              <span className="text-body text-ink-3 font-bold uppercase">Pasarelas Digitales & QR</span>
               <p className="font-mono font-black text-display text-accent mt-1">${totalQRGateways.toFixed(2)}</p>
-              <span className="text-micro text-gray-400">Saldo neto tras comisiones</span>
+              <span className="text-micro text-ink-3">Saldo neto tras comisiones</span>
             </div>
 
-            <div className="p-5 bg-blue-600 dark:bg-blue-950 text-white rounded-md border border-blue-500 shadow-e1">
-              <span className="text-body font-bold uppercase text-blue-200">Liquidez Total Consolidada</span>
+            <div className="p-5 bg-accent dark:bg-accent-soft text-white rounded-md border border-blue-500 shadow-e1">
+              <span className="text-body font-bold uppercase text-accent-ink">Liquidez Total Consolidada</span>
               <p className="font-mono font-black text-display mt-1">${globalLiquidity.toFixed(2)}</p>
-              <span className="text-micro text-blue-200">Dinero total líquido disponible</span>
+              <span className="text-micro text-accent-ink">Dinero total líquido disponible</span>
             </div>
           </div>
 
           <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4">
             <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-blue-500" /> Libro Mayor de Movimientos Cruzados (Historial Completo)
+              <ShieldCheck className="w-5 h-5 text-accent" /> Libro Mayor de Movimientos Cruzados (Historial Completo)
             </h3>
-            <p className="text-body text-gray-500">Registro cronológico de entradas, egresos, transferencias internas y comisiones</p>
+            <p className="text-body text-ink-3">Registro cronológico de entradas, egresos, transferencias internas y comisiones</p>
 
             <div className="overflow-hidden border border-line rounded-md">
               <table className="w-full text-left border-collapse">
@@ -219,9 +219,9 @@ export const FinanceView: React.FC = () => {
                   {transactions.map((tx) => (
                     <tr key={tx.id} className="hover:bg-sunken">
                       <td className="p-4 font-bold text-accent">{tx.id}</td>
-                      <td className="p-4 text-gray-500">{tx.timestamp}</td>
+                      <td className="p-4 text-ink-3">{tx.timestamp}</td>
                       <td className="p-4 font-sans">
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-950 font-bold rounded text-micro">
+                        <span className="px-2 py-0.5 bg-accent-soft text-accent-ink dark:bg-accent-soft font-bold rounded text-micro">
                           {tx.operation_type}
                         </span>
                       </td>
@@ -229,8 +229,8 @@ export const FinanceView: React.FC = () => {
                         {tx.source_account} → <span className="text-ok">{tx.dest_account}</span>
                       </td>
                       <td className="p-4 text-right font-black text-ink">${tx.amount.toFixed(2)}</td>
-                      <td className="p-4 text-right text-rose-600 font-bold">-${tx.fee_deducted.toFixed(2)}</td>
-                      <td className="p-4 text-right text-gray-500 font-bold">{tx.voucher_number || 'N/A'}</td>
+                      <td className="p-4 text-right text-danger font-bold">-${tx.fee_deducted.toFixed(2)}</td>
+                      <td className="p-4 text-right text-ink-3 font-bold">{tx.voucher_number || 'N/A'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -245,7 +245,7 @@ export const FinanceView: React.FC = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between bg-raised p-4 rounded-md border border-line shadow-e1">
             <h3 className="font-extrabold text-base text-ink">Administración de Cajas Físicas de Mostrador</h3>
-            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
+            <button className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
               <Plus className="w-4 h-4" /> Registrar Nueva Caja Física
             </button>
           </div>
@@ -259,15 +259,15 @@ export const FinanceView: React.FC = () => {
                   <div className="flex items-center justify-between border-b border-line pb-3">
                     <div>
                       <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                        <DollarSign className="w-5 h-5 text-emerald-500" /> {acc.name}
+                        <DollarSign className="w-5 h-5 text-ok" /> {acc.name}
                       </h3>
-                      <span className="text-micro text-gray-400 font-semibold">{acc.branch}</span>
+                      <span className="text-micro text-ink-3 font-semibold">{acc.branch}</span>
                     </div>
 
                     <button
  onClick={() => handleToggleDrawerLock(acc.id)}
  className={`px-3 py-1.5 rounded-md text-body font-bold flex items-center gap-1.5 border transition-all ${
- isLocked ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 border-rose-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 border-emerald-200'
+ isLocked ? 'bg-danger-soft text-danger-ink dark:bg-danger-soft border-danger/30' : 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30'
                       }`}
                     >
                       {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
@@ -277,7 +277,7 @@ export const FinanceView: React.FC = () => {
 
                   <div className="space-y-2 text-body">
                     <div className="flex justify-between p-3 bg-sunken rounded-md border border-line">
-                      <span className="text-gray-500 font-bold">Efectivo Acumulado en Gaveta:</span>
+                      <span className="text-ink-3 font-bold">Efectivo Acumulado en Gaveta:</span>
                       <span className="font-mono font-black text-title text-ok">${acc.balance.toFixed(2)}</span>
                     </div>
                   </div>
@@ -293,7 +293,7 @@ export const FinanceView: React.FC = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between bg-raised p-4 rounded-md border border-line shadow-e1">
             <h3 className="font-extrabold text-base text-ink">Directorio de Cuentas Bancarias & Pasarelas QR</h3>
-            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
+            <button className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
               <Plus className="w-4 h-4" /> Registrar Cuenta / Pasarela QR
             </button>
           </div>
@@ -304,14 +304,14 @@ export const FinanceView: React.FC = () => {
                 <div className="flex items-center justify-between border-b border-line pb-3">
                   <div>
                     <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                      {acc.type === 'BANK_ACCOUNT' ? <Building2 className="w-5 h-5 text-blue-500" /> : <QrCode className="w-5 h-5 text-purple-500" />}
+                      {acc.type === 'BANK_ACCOUNT' ? <Building2 className="w-5 h-5 text-accent" /> : <QrCode className="w-5 h-5 text-accent" />}
                       {acc.name}
                     </h3>
-                    <span className="text-micro text-gray-400 font-mono">Nº Cta / Merchant: {acc.account_number}</span>
+                    <span className="text-micro text-ink-3 font-mono">Nº Cta / Merchant: {acc.account_number}</span>
                   </div>
 
                   {acc.fee_percentage && (
-                    <span className="px-2.5 py-1 bg-amber-100 text-amber-800 dark:bg-amber-950 border border-amber-200 rounded-md font-mono text-micro font-bold">
+                    <span className="px-2.5 py-1 bg-warn-soft text-warn-ink dark:bg-warn-soft border border-warn/30 rounded-md font-mono text-micro font-bold">
                       Comisión: {acc.fee_percentage}%
                     </span>
                   )}
@@ -319,11 +319,11 @@ export const FinanceView: React.FC = () => {
 
                 <div className="space-y-2 text-body font-mono">
                   <div className="flex justify-between p-3 bg-sunken rounded-md border border-line">
-                    <span className="text-gray-500">Saldo Acreditado:</span>
+                    <span className="text-ink-3">Saldo Acreditado:</span>
                     <span className="font-bold text-ink text-base">${acc.balance.toFixed(2)}</span>
                   </div>
                   {acc.in_transit_balance !== undefined && (
-                    <div className="flex justify-between p-3 bg-accent-soft rounded-md border border-purple-200">
+                    <div className="flex justify-between p-3 bg-accent-soft rounded-md border border-accent/30">
                       <span className="text-accent-ink font-bold">Saldo Pendiente en Tránsito:</span>
                       <span className="font-bold text-accent-ink text-base">${acc.in_transit_balance.toFixed(2)}</span>
                     </div>
@@ -341,9 +341,9 @@ export const FinanceView: React.FC = () => {
           <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-md overflow-hidden space-y-4">
             <div className="p-5 border-b border-line flex items-center justify-between">
               <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <ArrowRightLeft className="w-5 h-5 text-emerald-500" /> Depósito Interno: Caja → Banco
+                <ArrowRightLeft className="w-5 h-5 text-ok" /> Depósito Interno: Caja → Banco
               </h3>
-              <button onClick={() => setIsDepositModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsDepositModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
 
             <form onSubmit={handleExecuteAtomicTransfer} className="p-5 space-y-4 text-body">
@@ -380,7 +380,7 @@ export const FinanceView: React.FC = () => {
  value={depositAmount}
  onChange={(e) => setDepositAmount(e.target.value)}
  placeholder="0.00"
- className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-mono font-bold text-base text-emerald-600"
+ className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-mono font-bold text-base text-ok"
                 />
               </div>
 
@@ -396,8 +396,8 @@ export const FinanceView: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsDepositModalOpen(false)} className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-extrabold shadow">
+                <button type="button" onClick={() => setIsDepositModalOpen(false)} className="px-4 py-2 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-ok hover:opacity-90 text-white rounded-md font-extrabold shadow">
                   Ejecutar Depósito Síncrono
                 </button>
               </div>

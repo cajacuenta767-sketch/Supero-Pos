@@ -162,7 +162,7 @@ export const SalesHistoryView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
         <div>
           <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <History className="w-7 h-7 text-blue-500" />
+            <History className="w-7 h-7 text-accent" />
             Historial de Ventas, Tickets & Anulaciones
           </h1>
           <p className="text-body text-ink-2 mt-1">
@@ -174,7 +174,7 @@ export const SalesHistoryView: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3">
           <select
  value={statusFilter}
- onChange={(e) => setStatusFilter(e.target.value as any)}
+ onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
  className="px-3 py-2 bg-sunken text-ink rounded-md border border-line text-body font-bold focus:outline-none"
           >
             <option value="ALL">Todos los Estados</option>
@@ -197,13 +197,13 @@ export const SalesHistoryView: React.FC = () => {
       {/* 2. Interactive Search Toolbar */}
       <div className="bg-raised p-4 rounded-md border border-line shadow-e1">
         <div className="relative max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
           <input
  type="text"
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
  placeholder="Buscar por # Ticket, Cajero o Método de pago..."
- className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink placeholder-gray-400 focus:border-accent font-semibold"
+ className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent font-semibold"
           />
         </div>
       </div>
@@ -226,10 +226,10 @@ export const SalesHistoryView: React.FC = () => {
             {filteredTickets.map((t) => {
  const isCancelled = t.status === 'CANCELLED';
  const paymentBadge = {
-                CASH: { label: 'Efectivo', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 border-emerald-200', icon: <DollarSign className="w-3 h-3" /> },
-                CARD: { label: 'Tarjeta POS', color: 'bg-blue-100 text-blue-800 dark:bg-blue-950 border-blue-200', icon: <CreditCard className="w-3 h-3" /> },
-                QR: { label: 'Transfer QR', color: 'bg-purple-100 text-purple-800 dark:bg-purple-950 border-purple-200', icon: <QrCode className="w-3 h-3" /> },
-                MIXED: { label: 'Pago Mixto', color: 'bg-amber-100 text-amber-800 dark:bg-amber-950 border-amber-200', icon: <Layers className="w-3 h-3" /> },
+                CASH: { label: 'Efectivo', color: 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30', icon: <DollarSign className="w-3 h-3" /> },
+                CARD: { label: 'Tarjeta POS', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30', icon: <CreditCard className="w-3 h-3" /> },
+                QR: { label: 'Transfer QR', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30', icon: <QrCode className="w-3 h-3" /> },
+                MIXED: { label: 'Pago Mixto', color: 'bg-warn-soft text-warn-ink dark:bg-warn-soft border-warn/30', icon: <Layers className="w-3 h-3" /> },
               }[t.payment_method];
 
  return (
@@ -241,7 +241,7 @@ export const SalesHistoryView: React.FC = () => {
                     {t.timestamp}
                   </td>
                   <td className="p-4 font-bold text-ink flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-gray-400" />
+                    <User className="w-3.5 h-3.5 text-ink-3" />
                     {t.cashier_name}
                   </td>
                   <td className="p-4">
@@ -256,10 +256,10 @@ export const SalesHistoryView: React.FC = () => {
                   <td className="p-4 text-center">
                     <span className={`px-2.5 py-1 rounded-md text-micro font-bold border flex items-center justify-center gap-1 mx-auto w-fit ${
  isCancelled 
-                        ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 border-rose-200' 
- : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 border-emerald-200'
+                        ? 'bg-danger-soft text-danger-ink dark:bg-danger-soft border-danger/30' 
+ : 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30'
                     }`}>
-                      {isCancelled ? <XCircle className="w-3 h-3 text-rose-500" /> : <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                      {isCancelled ? <XCircle className="w-3 h-3 text-danger" /> : <CheckCircle2 className="w-3 h-3 text-ok" />}
                       {isCancelled ? 'ANULADO' : 'COMPLETADO'}
                     </span>
                   </td>
@@ -269,14 +269,14 @@ export const SalesHistoryView: React.FC = () => {
  setSelectedTicket(t);
  setIsDetailModalOpen(true);
                       }}
- className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"
+ className="p-1.5 text-accent hover:bg-accent-soft rounded-md"
  title="Ver Detalle de Ticket & Trazabilidad IMEI"
                     >
                       <Eye className="w-4 h-4" />
                     </button>
                     <button
  onClick={() => handlePrintReceipt(t)}
- className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md"
+ className="p-1.5 text-ok hover:bg-ok-soft rounded-md"
  title="Reimprimir Comprobante Térmico ESC/POS"
                     >
                       <Printer className="w-4 h-4" />
@@ -287,7 +287,7 @@ export const SalesHistoryView: React.FC = () => {
  setSelectedTicket(t);
  setIsVoidModalOpen(true);
                         }}
- className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md"
+ className="p-1.5 text-danger hover:bg-danger-soft rounded-md"
  title="Anular Ticket & Devolver Stock"
                       >
                         <RotateCcw className="w-4 h-4" />
@@ -310,27 +310,27 @@ export const SalesHistoryView: React.FC = () => {
                 <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
                   Detalle del Ticket: <span className="font-mono text-accent">{selectedTicket.id}</span>
                 </h3>
-                <p className="text-body text-gray-500">{selectedTicket.timestamp} • Cajero: {selectedTicket.cashier_name}</p>
+                <p className="text-body text-ink-3">{selectedTicket.timestamp} • Cajero: {selectedTicket.cashier_name}</p>
               </div>
-              <button onClick={() => setIsDetailModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsDetailModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
 
             <div className="p-5 space-y-4 text-body">
               {/* Status Warning if Cancelled */}
               {selectedTicket.status === 'CANCELLED' && (
-                <div className="p-3 bg-danger-soft border border-rose-200 dark:border-rose-800 rounded-md text-danger-ink space-y-1">
+                <div className="p-3 bg-danger-soft border border-danger/30 dark:border-danger/30 rounded-md text-danger-ink space-y-1">
                   <div className="flex items-center gap-1.5 font-bold">
                     <ShieldAlert className="w-4 h-4" /> TICKET ANULADO OPERATIVAMENTE
                   </div>
                   <p className="text-micro">Motivo: {selectedTicket.cancellation_reason}</p>
-                  <span className="text-micro text-gray-500 font-mono block">Anulado el {selectedTicket.cancelled_at} por {selectedTicket.cancelled_by}</span>
+                  <span className="text-micro text-ink-3 font-mono block">Anulado el {selectedTicket.cancelled_at} por {selectedTicket.cancelled_by}</span>
                 </div>
               )}
 
               {/* Items Breakdown Table */}
               <div className="border border-line rounded-md overflow-hidden">
                 <table className="w-full text-left">
-                  <thead className="bg-sunken text-micro font-extrabold text-gray-500 uppercase">
+                  <thead className="bg-sunken text-micro font-extrabold text-ink-3 uppercase">
                     <tr>
                       <th className="p-3">Producto / SKU</th>
                       <th className="p-3 text-center">Cant.</th>
@@ -343,11 +343,11 @@ export const SalesHistoryView: React.FC = () => {
                       <tr key={item.id}>
                         <td className="p-3">
                           <p className="font-bold text-ink">{item.name}</p>
-                          <span className="text-gray-400 font-mono text-micro">SKU: {item.sku}</span>
+                          <span className="text-ink-3 font-mono text-micro">SKU: {item.sku}</span>
                           {item.serials && item.serials.length > 0 && (
                             <div className="mt-1 flex flex-wrap gap-1">
                               {item.serials.map(s => (
-                                <span key={s} className="px-1.5 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 rounded font-mono text-micro font-bold">
+                                <span key={s} className="px-1.5 py-0.5 bg-warn-soft text-warn-ink dark:bg-warn-soft dark:text-warn-ink rounded font-mono text-micro font-bold">
                                   IMEI: {s}
                                 </span>
                               ))}
@@ -365,11 +365,11 @@ export const SalesHistoryView: React.FC = () => {
 
               {/* Totals Summary */}
               <div className="p-4 bg-sunken rounded-md border border-line space-y-1 text-body">
-                <div className="flex justify-between text-gray-500">
+                <div className="flex justify-between text-ink-3">
                   <span>Efectivo Recibido:</span>
                   <span className="font-mono">${selectedTicket.cash_given.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-gray-500">
+                <div className="flex justify-between text-ink-3">
                   <span>Cambio Entregado:</span>
                   <span className="font-mono">${selectedTicket.change.toFixed(2)}</span>
                 </div>
@@ -414,9 +414,9 @@ export const SalesHistoryView: React.FC = () => {
 
               <div>
                 <label className="font-bold text-ink flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5 text-amber-500" /> PIN de Validación Supervisor / Admin *
+                  <Lock className="w-3.5 h-3.5 text-warn" /> PIN de Validación Supervisor / Admin *
                   {!canVoidSaleDirect && (
-                    <span className="text-micro text-rose-500 font-semibold ml-1">(Rol {userRole} requiere aprobación)</span>
+                    <span className="text-micro text-danger font-semibold ml-1">(Rol {userRole} requiere aprobación)</span>
                   )}
                 </label>
                 <input
@@ -430,7 +430,7 @@ export const SalesHistoryView: React.FC = () => {
               </div>
 
               {voidError && (
-                <div className="p-2 bg-rose-100 text-rose-800 rounded-md text-micro font-bold">
+                <div className="p-2 bg-danger-soft text-danger-ink rounded-md text-micro font-bold">
                   {voidError}
                 </div>
               )}
@@ -439,13 +439,13 @@ export const SalesHistoryView: React.FC = () => {
                 <button
  type="button"
  onClick={() => setIsVoidModalOpen(false)}
- className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold"
+ className="px-4 py-2 bg-sunken text-ink rounded-md font-bold"
                 >
                   Cancelar
                 </button>
                 <button
  type="submit"
- className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-md font-black shadow-e2"
+ className="px-4 py-2 bg-danger hover:opacity-90 text-white rounded-md font-black shadow-e2"
                 >
                   Confirmar Anulación & Devolver Stock
                 </button>

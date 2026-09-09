@@ -153,7 +153,7 @@ export const ProductsView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
         <div>
           <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <Package className="w-7 h-7 text-blue-500" />
+            <Package className="w-7 h-7 text-accent" />
             Productos y Catálogo Maestro
           </h1>
           <p className="text-body text-ink-2 mt-1">
@@ -166,7 +166,7 @@ export const ProductsView: React.FC = () => {
           <button
  onClick={() => setActiveTab('catalog')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeTab === 'catalog' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeTab === 'catalog' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Package className="w-4 h-4" />
@@ -175,7 +175,7 @@ export const ProductsView: React.FC = () => {
           <button
  onClick={() => setActiveTab('serials')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeTab === 'serials' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeTab === 'serials' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Cpu className="w-4 h-4" />
@@ -184,7 +184,7 @@ export const ProductsView: React.FC = () => {
           <button
  onClick={() => setActiveTab('categories')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeTab === 'categories' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeTab === 'categories' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Layers className="w-4 h-4" />
@@ -193,7 +193,7 @@ export const ProductsView: React.FC = () => {
           <button
  onClick={() => setActiveTab('labels')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeTab === 'labels' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeTab === 'labels' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Printer className="w-4 h-4" />
@@ -208,13 +208,13 @@ export const ProductsView: React.FC = () => {
           {/* Top Toolbar */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-raised p-4 rounded-md border border-line shadow-e1">
             <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
               <input
  type="text"
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
  placeholder="Buscar por SKU, Código de Barras o Nombre..."
- className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink placeholder-gray-400 focus:border-accent"
+ className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent"
               />
             </div>
 
@@ -261,7 +261,7 @@ export const ProductsView: React.FC = () => {
  setEditingProduct(null);
  setIsProductModalOpen(true);
                   }}
- className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
+ className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   Nuevo Producto
@@ -287,20 +287,20 @@ export const ProductsView: React.FC = () => {
                 {filteredProducts.map((p) => {
  const isLowStock = p.stock <= p.min_stock;
  const unitBadge = {
-                    UNIT: { label: 'Unitario', color: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-200', icon: <Package className="w-3 h-3" /> },
-                    FRACTION: { label: 'Pesable / Granel', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200', icon: <Scale className="w-3 h-3" /> },
-                    SERIALIZED: { label: 'Serializado / IMEI', color: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-200', icon: <Cpu className="w-3 h-3" /> },
+                    UNIT: { label: 'Unitario', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft dark:text-accent-ink border-accent/30', icon: <Package className="w-3 h-3" /> },
+                    FRACTION: { label: 'Pesable / Granel', color: 'bg-ok-soft text-ok-ink dark:bg-ok-soft dark:text-ok-ink border-ok/30', icon: <Scale className="w-3 h-3" /> },
+                    SERIALIZED: { label: 'Serializado / IMEI', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft dark:text-accent-ink border-accent/30', icon: <Cpu className="w-3 h-3" /> },
                   }[p.unit_type];
 
  return (
                     <tr key={p.id} className="hover:bg-sunken transition-colors">
                       <td className="p-4 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-md bg-sunken border border-line flex items-center justify-center font-bold text-gray-400">
-                          {p.unit_type === 'UNIT' ? <Package className="w-5 h-5 text-blue-500" /> : p.unit_type === 'FRACTION' ? <Scale className="w-5 h-5 text-emerald-500" /> : <Cpu className="w-5 h-5 text-purple-500" />}
+                        <div className="w-10 h-10 rounded-md bg-sunken border border-line flex items-center justify-center font-bold text-ink-3">
+                          {p.unit_type === 'UNIT' ? <Package className="w-5 h-5 text-accent" /> : p.unit_type === 'FRACTION' ? <Scale className="w-5 h-5 text-ok" /> : <Cpu className="w-5 h-5 text-accent" />}
                         </div>
                         <div>
                           <p className="font-bold text-ink">{p.name}</p>
-                          <span className="text-gray-400 font-mono text-micro block">{p.sku} • EAN: {p.barcode}</span>
+                          <span className="text-ink-3 font-mono text-micro block">{p.sku} • EAN: {p.barcode}</span>
                         </div>
                       </td>
                       <td className="p-4">
@@ -311,7 +311,7 @@ export const ProductsView: React.FC = () => {
                       </td>
                       <td className="p-4 font-mono">
                         <div className="text-micro">
-                          <span className="text-gray-400">Costo: <span className="font-bold text-ink-2">${p.cost_price.toFixed(2)}</span></span>
+                          <span className="text-ink-3">Costo: <span className="font-bold text-ink-2">${p.cost_price.toFixed(2)}</span></span>
                           <span className="mx-1">•</span>
                           <span className="text-accent font-extrabold">P.Venta: ${p.sale_price.toFixed(2)}</span>
                         </div>
@@ -321,9 +321,9 @@ export const ProductsView: React.FC = () => {
                       </td>
                       <td className="p-4 font-mono font-bold">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-body ${
- isLowStock ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 animate-pulse' : 'text-ink'
+ isLowStock ? 'bg-danger-soft text-danger-ink dark:bg-danger-soft dark:text-danger-ink animate-pulse' : 'text-ink'
                         }`}>
-                          {isLowStock && <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />}
+                          {isLowStock && <AlertTriangle className="w-3.5 h-3.5 text-danger" />}
                           {p.stock} {p.unit_type === 'FRACTION' ? 'kg' : 'unid'}
                         </span>
                       </td>
@@ -331,7 +331,7 @@ export const ProductsView: React.FC = () => {
                         <button
  onClick={() => handleToggleProductStatus(p.id)}
  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
- p.is_active ? 'bg-emerald-500' : 'bg-gray-300 bg-sunken'
+ p.is_active ? 'bg-emerald-500' : 'bg-sunken'
                           }`}
                         >
                           <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${p.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -345,15 +345,15 @@ export const ProductsView: React.FC = () => {
  setFormData({ ...p });
  setIsProductModalOpen(true);
                             }}
- className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md" title="Editar Producto"
+ className="p-1.5 text-accent hover:bg-accent-soft rounded-md" title="Editar Producto"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
                         )}
-                        <button className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-md" title="Duplicar">
+                        <button className="p-1.5 text-warn hover:bg-warn-soft rounded-md" title="Duplicar">
                           <Copy className="w-4 h-4" />
                         </button>
-                        <button className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-md" title="Kardex Individual">
+                        <button className="p-1.5 text-ink-2 hover:bg-sunken rounded-md" title="Kardex Individual">
                           <History className="w-4 h-4" />
                         </button>
                       </td>
@@ -364,7 +364,7 @@ export const ProductsView: React.FC = () => {
             </table>
 
             {/* Table Footer */}
-            <div className="p-4 bg-sunken border-t border-line flex items-center justify-between text-body text-gray-500">
+            <div className="p-4 bg-sunken border-t border-line flex items-center justify-between text-body text-ink-3">
               <span>Mostrando {filteredProducts.length} de {products.length} productos registrados</span>
               <div className="flex items-center gap-2">
                 <span>Registros por página:</span>
@@ -390,13 +390,13 @@ export const ProductsView: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
             <div>
               <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <Cpu className="w-5 h-5 text-purple-500" /> Control Forense de Seriales & IMEIs
+                <Cpu className="w-5 h-5 text-accent" /> Control Forense de Seriales & IMEIs
               </h3>
-              <p className="text-body text-gray-500">Búsqueda rápida y estado de garantía de equipos con número de serie único</p>
+              <p className="text-body text-ink-3">Búsqueda rápida y estado de garantía de equipos con número de serie único</p>
             </div>
             
             <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
               <input
  type="text"
  value={serialSearch}
@@ -424,7 +424,7 @@ export const ProductsView: React.FC = () => {
                   <td className="p-4 font-bold text-accent">{s.serial_number}</td>
                   <td className="p-4 text-center font-sans">
                     <span className={`px-2.5 py-1 rounded-md text-micro font-bold border ${
- s.status === 'IN_STOCK' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 border-emerald-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-950 border-blue-200'
+ s.status === 'IN_STOCK' ? 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30' : 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30'
                     }`}>
                       {s.status === 'IN_STOCK' ? 'EN STOCK' : 'VENDIDO'}
                     </span>
@@ -432,7 +432,7 @@ export const ProductsView: React.FC = () => {
                   <td className="p-4 font-sans text-ink-2">
                     {s.ticket_id ? `${s.ticket_id} • ${s.customer_name}` : 'Sin asignar (En Tienda)'}
                   </td>
-                  <td className="p-4 text-right text-gray-400 text-micro">{s.updated_at}</td>
+                  <td className="p-4 text-right text-ink-3 text-micro">{s.updated_at}</td>
                 </tr>
               ))}
             </tbody>
@@ -446,7 +446,7 @@ export const ProductsView: React.FC = () => {
           <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <h3 className="font-extrabold text-base text-ink">Categorías Comerciales</h3>
-              <button className="px-3 py-1.5 bg-blue-600 text-white font-bold text-body rounded-md flex items-center gap-1">
+              <button className="px-3 py-1.5 bg-accent text-white font-bold text-body rounded-md flex items-center gap-1">
                 <FolderPlus className="w-3.5 h-3.5" /> Nueva Categoría
               </button>
             </div>
@@ -454,7 +454,7 @@ export const ProductsView: React.FC = () => {
               {['Bebidas & Gaseosas', 'Lácteos & Fiambrería', 'Electrónica & Celulares', 'Golosinas & Snacks'].map((cat, idx) => (
                 <div key={idx} className="p-3 bg-sunken rounded-md border border-line flex items-center justify-between font-bold">
                   <span>{cat}</span>
-                  <span className="text-gray-400 font-mono text-micro">Activa</span>
+                  <span className="text-ink-3 font-mono text-micro">Activa</span>
                 </div>
               ))}
             </div>
@@ -463,16 +463,16 @@ export const ProductsView: React.FC = () => {
           <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <h3 className="font-extrabold text-base text-ink">Unidades de Medida y Conversiones</h3>
-              <button className="px-3 py-1.5 bg-blue-600 text-white font-bold text-body rounded-md">+ Nueva Unidad</button>
+              <button className="px-3 py-1.5 bg-accent text-white font-bold text-body rounded-md">+ Nueva Unidad</button>
             </div>
             <div className="space-y-2 text-body">
               <div className="p-3 bg-sunken rounded-md border border-line flex items-center justify-between">
                 <span className="font-bold">Caja x 24 Unidades → Pieza Individual</span>
-                <span className="font-mono text-blue-600 font-bold">Factor 24</span>
+                <span className="font-mono text-accent font-bold">Factor 24</span>
               </div>
               <div className="p-3 bg-sunken rounded-md border border-line flex items-center justify-between">
                 <span className="font-bold">Kilogramo (Kg) → Gramos (g)</span>
-                <span className="font-mono text-blue-600 font-bold">Factor 1000</span>
+                <span className="font-mono text-accent font-bold">Factor 1000</span>
               </div>
             </div>
           </div>
@@ -484,7 +484,7 @@ export const ProductsView: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4">
             <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-              <Scan className="w-5 h-5 text-blue-500" /> Configuración de Plantilla Térmica
+              <Scan className="w-5 h-5 text-accent" /> Configuración de Plantilla Térmica
             </h3>
             
             <div className="space-y-3 text-body">
@@ -510,7 +510,7 @@ export const ProductsView: React.FC = () => {
                 </div>
               </div>
 
-              <button className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-extrabold flex items-center justify-center gap-2 shadow-e2 transition-all">
+              <button className="w-full py-3 bg-accent hover:bg-accent-hover text-white rounded-md font-extrabold flex items-center justify-center gap-2 shadow-e2 transition-all">
                 <Printer className="w-4 h-4" /> Enviar a Impresora Térmica POS
               </button>
             </div>
@@ -518,7 +518,7 @@ export const ProductsView: React.FC = () => {
 
           {/* Real-time Label Preview */}
           <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4 flex flex-col items-center justify-center">
-            <span className="text-body font-extrabold text-gray-400 uppercase tracking-widest">Vista Previa de Etiqueta Térmica</span>
+            <span className="text-body font-extrabold text-ink-3 uppercase tracking-widest">Vista Previa de Etiqueta Térmica</span>
             
             {/* Thermal Label Mockup */}
             <div className="w-64 p-4 bg-white text-black border-2 border-dashed border-gray-400 rounded-md text-center space-y-2 shadow-e1">
@@ -528,7 +528,7 @@ export const ProductsView: React.FC = () => {
                 ||||| | |||||| |||| | |||||
               </div>
               <span className="font-mono text-micro block">{products[0]?.barcode}</span>
-              <span className="font-black text-base text-blue-700 block">${products[0]?.sale_price.toFixed(2)}</span>
+              <span className="font-black text-base text-accent-ink block">${products[0]?.sale_price.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -542,7 +542,7 @@ export const ProductsView: React.FC = () => {
               <h3 className="font-extrabold text-base text-ink">
                 {editingProduct ? 'Editar Producto del Catálogo' : 'Crear Nuevo Producto en Catálogo Maestro'}
               </h3>
-              <button onClick={() => setIsProductModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsProductModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
 
             <form onSubmit={handleSaveProduct} className="p-5 space-y-4 text-body">
@@ -556,7 +556,7 @@ export const ProductsView: React.FC = () => {
  placeholder="SKU-1001"
  className="w-full p-2 bg-sunken border border-line rounded-md font-mono font-bold"
                     />
-                    <button type="button" onClick={generateSKU} className="px-3 bg-blue-50 text-blue-600 font-bold rounded-md text-micro" title="Generar SKU">Auto</button>
+                    <button type="button" onClick={generateSKU} className="px-3 bg-accent-soft text-accent font-bold rounded-md text-micro" title="Generar SKU">Auto</button>
                   </div>
                 </div>
 
@@ -569,7 +569,7 @@ export const ProductsView: React.FC = () => {
  placeholder="7771234567890"
  className="w-full p-2 bg-sunken border border-line rounded-md font-mono"
                     />
-                    <button type="button" onClick={generateEAN13} className="px-3 bg-emerald-50 text-emerald-600 font-bold rounded-md text-micro" title="Generar EAN13">EAN</button>
+                    <button type="button" onClick={generateEAN13} className="px-3 bg-ok-soft text-ok font-bold rounded-md text-micro" title="Generar EAN13">EAN</button>
                   </div>
                 </div>
               </div>
@@ -589,7 +589,7 @@ export const ProductsView: React.FC = () => {
                   <label className="font-bold text-ink-2">Tipo de Unidad *</label>
                   <select
  value={formData.unit_type}
- onChange={(e) => setFormData({ ...formData, unit_type: e.target.value as any })}
+ onChange={(e) => setFormData({ ...formData, unit_type: e.target.value as typeof formData.unit_type })}
  className="w-full mt-1 p-2 bg-sunken border border-line rounded-md font-bold"
                   >
                     <option value="UNIT">Pieza Estándar (UNIT)</option>
@@ -616,7 +616,7 @@ export const ProductsView: React.FC = () => {
               <div className="p-3 bg-sunken rounded-md border border-line space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-extrabold text-ink">Precios & Margen de Rentabilidad (CPP)</span>
-                  <span className="text-body font-extrabold text-ok bg-ok-soft px-2 py-0.5 rounded-md border border-emerald-200">
+                  <span className="text-body font-extrabold text-ok bg-ok-soft px-2 py-0.5 rounded-md border border-ok/30">
                     Margen Utilidad: {profitMargin}%
                   </span>
                 </div>
@@ -635,7 +635,7 @@ export const ProductsView: React.FC = () => {
                     <input
  type="number" step="0.1" value={formData.sale_price}
  onChange={(e) => setFormData({ ...formData, sale_price: Number(e.target.value) })}
- className="w-full mt-1 p-2 bg-raised border border-line rounded-md font-mono font-extrabold text-blue-600"
+ className="w-full mt-1 p-2 bg-raised border border-line rounded-md font-mono font-extrabold text-accent"
                     />
                   </div>
                   <div>
@@ -650,8 +650,8 @@ export const ProductsView: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-extrabold shadow">Guardar Producto</button>
+                <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md font-extrabold shadow">Guardar Producto</button>
               </div>
             </form>
           </div>

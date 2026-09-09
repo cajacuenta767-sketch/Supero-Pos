@@ -20,6 +20,25 @@ import {
   UserX
 } from 'lucide-react';
 
+/** Formas mínimas que esta vista consume de /api/v1/users y /roles. */
+interface ApiUser {
+ id: string;
+ username: string;
+ fullName?: string;
+ email: string;
+ phone?: string;
+ role?: { name?: string };
+ roleId?: string;
+ branch?: { name?: string };
+ branchId?: string;
+ isActive?: boolean;
+ lastLogin?: string;
+}
+interface ApiNamed {
+ id?: string;
+ name: string;
+}
+
 export interface UserItem {
  id: string;
  name: string;
@@ -117,7 +136,7 @@ export const UsersView: React.FC = () => {
     { id: 'Sucursal Norte', name: 'Sucursal Norte' },
     { id: 'Sucursal Sur', name: 'Sucursal Sur' },
   ]);
- const [loading, setLoading] = useState(false);
+ const [loading, setLoading] = useState(true);
  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   // Modal State for User Create / Edit
@@ -185,7 +204,6 @@ export const UsersView: React.FC = () => {
 
   // API Data Fetching
  const fetchUsers = useCallback(async () => {
- setLoading(true);
  try {
  const response = await fetch('http://localhost:3000/api/v1/users', {
  headers: {
@@ -196,7 +214,7 @@ export const UsersView: React.FC = () => {
  if (response.ok) {
  const resData = await response.json();
  if (resData.success && Array.isArray(resData.data)) {
- const apiUsers: UserItem[] = resData.data.map((u: any) => ({
+ const apiUsers: UserItem[] = resData.data.map((u: ApiUser) => ({
  id: u.id,
  name: u.fullName || u.username,
  username: u.username,
@@ -229,14 +247,14 @@ export const UsersView: React.FC = () => {
  if (rolesRes.ok) {
  const rolesData = await rolesRes.json();
  if (rolesData.success && Array.isArray(rolesData.data)) {
- setRolesList(rolesData.data.map((r: any) => ({ id: r.id || r.name, name: r.name })));
+ setRolesList(rolesData.data.map((r: ApiNamed) => ({ id: r.id || r.name, name: r.name })));
         }
       }
 
  if (branchesRes.ok) {
  const branchesData = await branchesRes.json();
  if (branchesData.success && Array.isArray(branchesData.data)) {
- setBranchesList(branchesData.data.map((b: any) => ({ id: b.id || b.name, name: b.name })));
+ setBranchesList(branchesData.data.map((b: ApiNamed) => ({ id: b.id || b.name, name: b.name })));
         }
       }
     } catch {
@@ -245,16 +263,21 @@ export const UsersView: React.FC = () => {
   }, []);
 
  useEffect(() => {
- fetchUsers();
- fetchRolesAndBranches();
+    /* Carga inicial desde la API. La regla marca cualquier setState alcanzable
+ desde el efecto, aunque aquí ocurra después de `await`: es el caso de
+ sincronización con un sistema externo que la propia regla contempla.
+       Eliminarlo del todo exigiría una librería de data-fetching, fuera del
+ alcance del rediseño de presentación. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+ void Promise.all([fetchUsers(), fetchRolesAndBranches()]);
   }, [fetchUsers, fetchRolesAndBranches]);
 
   // Password strength helper
  const calculatePasswordStrength = (pass: string) => {
- if (!pass) return { text: 'N/A', color: 'text-gray-400', width: 'w-0' };
- if (pass.length < 6) return { text: 'Débil', color: 'text-red-500', width: 'w-1/3 bg-red-500' };
- if (pass.length < 10) return { text: 'Media', color: 'text-amber-500', width: 'w-2/3 bg-amber-500' };
- return { text: 'Fuerte', color: 'text-emerald-500', width: 'w-full bg-emerald-500' };
+ if (!pass) return { text: 'N/A', color: 'text-ink-3', width: 'w-0' };
+ if (pass.length < 6) return { text: 'Débil', color: 'text-danger', width: 'w-1/3 bg-red-500' };
+ if (pass.length < 10) return { text: 'Media', color: 'text-warn', width: 'w-2/3 bg-warn' };
+ return { text: 'Fuerte', color: 'text-ok', width: 'w-full bg-emerald-500' };
   };
 
  const passwordStrength = calculatePasswordStrength(formData.password);
@@ -389,6 +412,7 @@ export const UsersView: React.FC = () => {
 
  if (response.ok && resData.success) {
  showToast(resData.message || (editingUser ? 'Usuario actualizado' : 'Usuario registrado exitosamente'));
+ setLoading(true);
  fetchUsers();
  setIsUserModalOpen(false);
  return;
@@ -466,9 +490,9 @@ export const UsersView: React.FC = () => {
       {/* Toast Notification Alert */}
       {toastMessage && (
         <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-5 py-3 rounded-md shadow-e2 border text-body font-bold transition-all transform animate-bounce ${
- toastMessage.type === 'success' ? 'bg-emerald-600 text-white border-emerald-500' :
- toastMessage.type === 'error' ? 'bg-rose-600 text-white border-rose-500' :
-          'bg-blue-600 text-white border-blue-500'
+ toastMessage.type === 'success' ? 'bg-ok text-white border-emerald-500' :
+ toastMessage.type === 'error' ? 'bg-danger text-white border-rose-500' :
+          'bg-accent text-white border-blue-500'
         }`}>
           {toastMessage.type === 'success' && <CheckCircle2 className="w-5 h-5" />}
           {toastMessage.type === 'error' && <AlertCircle className="w-5 h-5" />}
@@ -481,7 +505,7 @@ export const UsersView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
         <div>
           <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <Users className="w-7 h-7 text-blue-500" />
+            <Users className="w-7 h-7 text-accent" />
             Gestión de Personal, Usuarios y Seguridad
           </h1>
           <p className="text-body text-ink-2 mt-1">
@@ -494,7 +518,7 @@ export const UsersView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('users')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeSubTab === 'users' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'users' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Users className="w-4 h-4" />
@@ -503,7 +527,7 @@ export const UsersView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('rbac')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeSubTab === 'rbac' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'rbac' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
@@ -512,7 +536,7 @@ export const UsersView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('commissions')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeSubTab === 'commissions' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'commissions' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Percent className="w-4 h-4" />
@@ -528,13 +552,13 @@ export const UsersView: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-raised p-4 rounded-md border border-line shadow-e1">
             {/* Search Input */}
             <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
               <input
  type="text"
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
  placeholder="Buscar por nombre completo, @usuario o email..."
- className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink placeholder-gray-400 focus:border-accent"
+ className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent"
               />
             </div>
 
@@ -542,9 +566,9 @@ export const UsersView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3">
               {/* Refresh Button */}
               <button
- onClick={fetchUsers}
+ onClick={() => { setLoading(true); fetchUsers(); }}
  disabled={loading}
- className="p-2 bg-sunken text-ink-2 rounded-md border border-line hover:bg-gray-200 transition-colors"
+ className="p-2 bg-sunken text-ink-2 rounded-md border border-line hover:bg-sunken transition-colors"
  title="Actualizar catálogo de usuarios"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -589,7 +613,7 @@ export const UsersView: React.FC = () => {
               {/* New User Primary Button */}
               <button
  onClick={handleOpenNewUser}
- className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all active:scale-95"
+ className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all active:scale-95"
               >
                 <UserPlus className="w-4 h-4" />
                 Nuevo Usuario
@@ -614,25 +638,25 @@ export const UsersView: React.FC = () => {
               <tbody className="divide-y divide-line text-body">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-gray-400 font-semibold">
+                    <td colSpan={7} className="p-8 text-center text-ink-3 font-semibold">
                       No se encontraron usuarios que coincidan con los criterios de búsqueda.
                     </td>
                   </tr>
                 ) : (
  filteredUsers.map((u) => {
  const roleBadgeColors: Record<string, string> = {
-                      ADMIN: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-200',
-                      CAJERO: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200',
-                      ALMACENERO: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200',
-                      SUPERVISOR: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-200',
+                      ADMIN: 'bg-accent-soft text-accent-ink dark:bg-accent-soft dark:text-accent-ink border-accent/30',
+                      CAJERO: 'bg-ok-soft text-ok-ink dark:bg-ok-soft dark:text-ok-ink border-ok/30',
+                      ALMACENERO: 'bg-warn-soft text-warn-ink dark:bg-warn-soft dark:text-warn-ink border-warn/30',
+                      SUPERVISOR: 'bg-accent-soft text-accent-ink dark:bg-accent-soft dark:text-accent-ink border-accent/30',
                     };
- const badgeClass = roleBadgeColors[u.role?.toUpperCase()] || 'bg-gray-100 text-gray-800 border-gray-200';
+ const badgeClass = roleBadgeColors[u.role?.toUpperCase()] || 'bg-sunken text-ink border-line';
 
  return (
-                      <tr key={u.id} className={`hover:bg-sunken transition-colors ${!u.is_active ? 'opacity-65 bg-gray-50/50 bg-sunken/20' : ''}`}>
+                      <tr key={u.id} className={`hover:bg-sunken transition-colors ${!u.is_active ? 'opacity-65 bg-sunken/50 bg-sunken/20' : ''}`}>
                         <td className="p-4 flex items-center gap-3">
                           <div className={`w-9 h-9 rounded-full font-bold flex items-center justify-center text-base shadow ${
- u.is_active ? 'bg-blue-600 text-white' : 'bg-gray-400 text-white'
+ u.is_active ? 'bg-accent text-white' : 'bg-gray-400 text-white'
                           }`}>
                             {u.name.charAt(0).toUpperCase()}
                           </div>
@@ -640,12 +664,12 @@ export const UsersView: React.FC = () => {
                             <p className="font-bold text-ink flex items-center gap-1.5">
                               {u.name}
                               {!u.is_active && (
-                                <span className="px-1.5 py-0.5 rounded text-micro font-black bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400 border border-rose-200">
+                                <span className="px-1.5 py-0.5 rounded text-micro font-black bg-danger-soft text-danger-ink dark:bg-danger-soft dark:text-danger border border-danger/30">
                                   INACTIVO
                                 </span>
                               )}
                             </p>
-                            <span className="text-gray-400 text-micro">{u.email}</span>
+                            <span className="text-ink-3 text-micro">{u.email}</span>
                           </div>
                         </td>
                         <td className="p-4 font-mono text-ink-2 font-semibold">
@@ -657,7 +681,7 @@ export const UsersView: React.FC = () => {
                           </span>
                         </td>
                         <td className="p-4 font-semibold text-ink-2 flex items-center gap-1.5">
-                          <Building2 className="w-3.5 h-3.5 text-blue-500" />
+                          <Building2 className="w-3.5 h-3.5 text-accent" />
                           {u.branch}
                         </td>
                         <td className="p-4 text-center">
@@ -665,7 +689,7 @@ export const UsersView: React.FC = () => {
                           <button
  onClick={() => handleToggleUserStatus(u)}
  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
- u.is_active ? 'bg-emerald-500' : 'bg-gray-300 bg-sunken'
+ u.is_active ? 'bg-emerald-500' : 'bg-sunken'
                             }`}
  title={u.is_active ? 'Usuario Activo. Click para Baja Lógica' : 'Usuario Inactivo. Click para Reactivar'}
                           >
@@ -682,7 +706,7 @@ export const UsersView: React.FC = () => {
                         <td className="p-4 text-right space-x-1">
                           <button
  onClick={() => handleEditUser(u)}
- className="p-1.5 text-accent hover:bg-blue-50 dark:hover:bg-blue-950 rounded-md transition-colors"
+ className="p-1.5 text-accent hover:bg-accent-soft dark:hover:bg-accent-soft rounded-md transition-colors"
  title="Editar Datos de Usuario"
                           >
                             <Edit3 className="w-4 h-4" />
@@ -693,7 +717,7 @@ export const UsersView: React.FC = () => {
  setNewPasswordValue('');
  setIsPasswordModalOpen(true);
                             }}
- className="p-1.5 text-warn hover:bg-amber-50 dark:hover:bg-amber-950 rounded-md transition-colors"
+ className="p-1.5 text-warn hover:bg-warn-soft dark:hover:bg-warn-soft rounded-md transition-colors"
  title="Restablecer Contraseña (Argon2id)"
                           >
                             <Key className="w-4 h-4" />
@@ -702,8 +726,8 @@ export const UsersView: React.FC = () => {
  onClick={() => handleToggleUserStatus(u)}
  className={`p-1.5 rounded-md transition-colors ${
  u.is_active 
-                                ? 'text-danger hover:bg-rose-50 dark:hover:bg-rose-950'
- : 'text-ok hover:bg-emerald-50 dark:hover:bg-emerald-950'
+                                ? 'text-danger hover:bg-danger-soft dark:hover:bg-danger-soft'
+ : 'text-ok hover:bg-ok-soft dark:hover:bg-ok-soft'
                             }`}
  title={u.is_active ? "Baja Lógica (Desactivar usuario)" : "Reactivar cuenta de usuario"}
                           >
@@ -718,7 +742,7 @@ export const UsersView: React.FC = () => {
             </table>
 
             {/* Table Footer */}
-            <div className="p-4 bg-sunken border-t border-line flex items-center justify-between text-body text-gray-500">
+            <div className="p-4 bg-sunken border-t border-line flex items-center justify-between text-body text-ink-3">
               <span>Mostrando {filteredUsers.length} de {usersList.length} usuarios registrados en la base de datos</span>
               <div className="flex items-center gap-2">
                 <span>Registros por página:</span>
@@ -752,8 +776,8 @@ export const UsersView: React.FC = () => {
  onClick={() => setSelectedRoleRBAC(r)}
  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-body font-bold transition-all ${
  selectedRoleRBAC === r
-                      ? 'bg-blue-600 text-white shadow-e1'
- : 'bg-sunken text-ink-2 hover:bg-gray-100'
+                      ? 'bg-accent text-white shadow-e1'
+ : 'bg-sunken text-ink-2 hover:bg-sunken'
                   }`}
                 >
                   <span>{r}</span>
@@ -770,11 +794,11 @@ export const UsersView: React.FC = () => {
                 <h3 className="font-extrabold text-base text-ink">
                   Matriz de Permisos para: <span className="text-accent">{selectedRoleRBAC}</span>
                 </h3>
-                <p className="text-body text-gray-500">Configure los privilegios operativos específicos por módulo</p>
+                <p className="text-body text-ink-3">Configure los privilegios operativos específicos por módulo</p>
               </div>
               <button 
  onClick={() => showToast(`Matriz de permisos para ${selectedRoleRBAC} guardada.`)}
- className="px-4 py-2 bg-blue-600 text-white font-extrabold text-body rounded-md flex items-center gap-2 shadow hover:bg-blue-700 transition-colors"
+ className="px-4 py-2 bg-accent text-white font-extrabold text-body rounded-md flex items-center gap-2 shadow hover:bg-accent-hover transition-colors"
               >
                 <Save className="w-4 h-4" />
                 Guardar Matriz
@@ -805,7 +829,7 @@ export const UsersView: React.FC = () => {
  type="checkbox"
  checked={!!rbacPermissions[p.key]}
  onChange={(e) => setRbacPermissions({ ...rbacPermissions, [p.key]: e.target.checked })}
- className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+ className="w-4 h-4 text-accent rounded focus:ring-blue-500"
                       />
                     </label>
                   ))}
@@ -833,7 +857,7 @@ export const UsersView: React.FC = () => {
  type="checkbox"
  checked={!!rbacPermissions[p.key]}
  onChange={(e) => setRbacPermissions({ ...rbacPermissions, [p.key]: e.target.checked })}
- className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+ className="w-4 h-4 text-accent rounded focus:ring-blue-500"
                       />
                     </label>
                   ))}
@@ -860,7 +884,7 @@ export const UsersView: React.FC = () => {
  type="checkbox"
  checked={!!rbacPermissions[p.key]}
  onChange={(e) => setRbacPermissions({ ...rbacPermissions, [p.key]: e.target.checked })}
- className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+ className="w-4 h-4 text-accent rounded focus:ring-blue-500"
                       />
                     </label>
                   ))}
@@ -879,11 +903,11 @@ export const UsersView: React.FC = () => {
               <h3 className="font-extrabold text-base text-ink">
                 Configuración de Comisiones de Venta
               </h3>
-              <p className="text-body text-gray-500">Asignación de metas mensuales y porcentaje de incentivo por vendedor</p>
+              <p className="text-body text-ink-3">Asignación de metas mensuales y porcentaje de incentivo por vendedor</p>
             </div>
             <button 
  onClick={() => showToast('Parámetros de comisiones guardados.')}
- className="px-4 py-2 bg-blue-600 text-white font-extrabold text-body rounded-md shadow hover:bg-blue-700 transition-colors"
+ className="px-4 py-2 bg-accent text-white font-extrabold text-body rounded-md shadow hover:bg-accent-hover transition-colors"
             >
               Guardar Cambios
             </button>
@@ -952,14 +976,14 @@ export const UsersView: React.FC = () => {
           <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-xl overflow-hidden space-y-4 animate-in fade-in zoom-in duration-150">
             <div className="p-5 border-b border-line flex items-center justify-between">
               <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-blue-500" />
+                <UserPlus className="w-5 h-5 text-accent" />
                 {editingUser ? 'Editar Cuenta de Usuario' : 'Crear Nueva Cuenta de Usuario'}
               </h3>
-              <button onClick={() => setIsUserModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white text-title font-bold">✕</button>
+              <button onClick={() => setIsUserModalOpen(false)} className="text-ink-3 hover:text-ink-2 dark:hover:text-white text-title font-bold">✕</button>
             </div>
 
             {formError && (
-              <div className="mx-5 p-3 bg-danger-soft border border-rose-200 dark:border-rose-800 rounded-md flex items-center gap-2 text-danger-ink text-body font-semibold">
+              <div className="mx-5 p-3 bg-danger-soft border border-danger/30 dark:border-danger/30 rounded-md flex items-center gap-2 text-danger-ink text-body font-semibold">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{formError}</span>
               </div>
@@ -1031,7 +1055,7 @@ export const UsersView: React.FC = () => {
                 </div>
                 <div>
                   <label className="font-bold text-ink-2 flex items-center gap-1">
-                    <Building2 className="w-3.5 h-3.5 text-blue-500" />
+                    <Building2 className="w-3.5 h-3.5 text-accent" />
                     Asignación de Sucursal Obligatoria *
                   </label>
                   <select
@@ -1050,7 +1074,7 @@ export const UsersView: React.FC = () => {
               <div className="p-4 bg-sunken rounded-md border border-line space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-extrabold text-ink flex items-center gap-1.5">
-                    <Key className="w-4 h-4 text-amber-500" />
+                    <Key className="w-4 h-4 text-warn" />
                     Credenciales de Acceso (Hashing Argon2id)
                   </span>
                   <button
@@ -1073,7 +1097,7 @@ export const UsersView: React.FC = () => {
                   <button
  type="button"
  onClick={() => setShowPassword(!showPassword)}
- className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+ className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -1082,7 +1106,7 @@ export const UsersView: React.FC = () => {
                 {/* Password Strength Indicator */}
                 {formData.password && (
                   <div className="space-y-1">
-                    <div className="h-1.5 w-full bg-gray-200 bg-sunken rounded-full overflow-hidden">
+                    <div className="h-1.5 w-full bg-sunken rounded-full overflow-hidden">
                       <div className={`h-full ${passwordStrength.width} transition-all duration-300`} />
                     </div>
                     <span className={`text-micro font-bold ${passwordStrength.color}`}>
@@ -1099,7 +1123,7 @@ export const UsersView: React.FC = () => {
  type="checkbox"
  checked={formData.is_active}
  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
- className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+ className="w-4 h-4 text-accent rounded focus:ring-blue-500"
                   />
                   <span>Estado Operativo Habilitado (isActive)</span>
                 </label>
@@ -1107,13 +1131,13 @@ export const UsersView: React.FC = () => {
                   <button
  type="button"
  onClick={() => setIsUserModalOpen(false)}
- className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
+ className="px-4 py-2 bg-sunken text-ink rounded-md font-bold hover:bg-sunken dark:hover:bg-sunken transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
  type="submit"
- className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-extrabold shadow flex items-center gap-2 transition-all active:scale-95"
+ className="px-5 py-2 bg-accent hover:bg-accent-hover text-white rounded-md font-extrabold shadow flex items-center gap-2 transition-all active:scale-95"
                   >
                     <Check className="w-4 h-4" />
                     Guardar Usuario
@@ -1131,10 +1155,10 @@ export const UsersView: React.FC = () => {
           <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-md overflow-hidden space-y-4 p-5">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <Key className="w-5 h-5 text-amber-500" />
+                <Key className="w-5 h-5 text-warn" />
                 Restablecer Contraseña
               </h3>
-              <button onClick={() => setIsPasswordModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-title font-bold">✕</button>
+              <button onClick={() => setIsPasswordModalOpen(false)} className="text-ink-3 hover:text-ink-2 text-title font-bold">✕</button>
             </div>
 
             <p className="text-body text-ink-2">
@@ -1158,13 +1182,13 @@ export const UsersView: React.FC = () => {
                 <button
  type="button"
  onClick={() => setIsPasswordModalOpen(false)}
- className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold"
+ className="px-4 py-2 bg-sunken text-ink rounded-md font-bold"
                 >
                   Cancelar
                 </button>
                 <button
  type="submit"
- className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-md font-extrabold shadow flex items-center gap-1.5"
+ className="px-4 py-2 bg-warn hover:opacity-90 text-white rounded-md font-extrabold shadow flex items-center gap-1.5"
                 >
                   <Key className="w-4 h-4" />
                   Actualizar Clave

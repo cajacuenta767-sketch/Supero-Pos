@@ -69,8 +69,25 @@ export interface FourBlockSalePayload {
   block_d: BlockD;
 }
 
+/** Superficie de better-sqlite3 que este motor realmente usa. El paquete se
+ *  carga en tiempo de ejecución vía `window.require` de Electron, así que no
+ *  hay tipos publicados que importar. */
+interface SqliteStatement {
+  run: (...params: unknown[]) => { lastInsertRowid: number | bigint; changes: number };
+  get: (...params: unknown[]) => unknown;
+  all: (...params: unknown[]) => unknown[];
+}
+interface SqliteHandle {
+  prepare: (sql: string) => SqliteStatement;
+  exec: (sql: string) => void;
+  transaction: <T extends (...args: never[]) => unknown>(fn: T) => T;
+}
+interface ElectronWindow extends Window {
+  require?: (moduleName: string) => new (filename: string) => SqliteHandle;
+}
+
 class LocalDatabaseEngine {
-  private db: any = null;
+  private db: SqliteHandle | null = null;
   private mockSyncQueue: LocalSyncQueueItem[] = [];
 
   constructor() {
@@ -80,8 +97,9 @@ class LocalDatabaseEngine {
 
   private initDatabase() {
     try {
-      if (typeof window === 'undefined' || (window as any).require) {
-        const Database = (window as any).require('better-sqlite3');
+      const electronWindow = typeof window !== 'undefined' ? (window as ElectronWindow) : undefined;
+      if (!electronWindow || electronWindow.require) {
+        const Database = electronWindow!.require!('better-sqlite3');
         this.db = new Database('supero_pos_local.db');
         this.createTables();
       }
@@ -173,9 +191,10 @@ class LocalDatabaseEngine {
       return { success: true, saleId: saleData.transaction_id };
     }
 
-    const transaction = this.db.transaction((data: FourBlockSalePayload) => {
+    const db = this.db;
+    const transaction = db.transaction((data: FourBlockSalePayload) => {
       // 1. Insert sale header with UUID transaction_id
-      const saleStmt = this.db.prepare(`
+      const saleStmt = db.prepare(`
         INSERT INTO sales (transaction_id, cash_register_id, user_id, customer_id, subtotal, total_discount, grand_total, payment_method, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
@@ -193,7 +212,7 @@ class LocalDatabaseEngine {
 
       // 2. Iterate items & deduct stock decimal
       for (const item of data.items) {
-        this.db.prepare(`
+        db.prepare(`
           INSERT INTO sale_details (sale_id, product_id, quantity, unit_price, subtotal, serial_number)
           VALUES (?, ?, ?, ?, ?, ?)
         `).run(
@@ -207,7 +226,7 @@ class LocalDatabaseEngine {
       }
 
       // 3. Queue into sync_queue in the SAME atomic transaction
-      this.db.prepare(`
+      db.prepare(`
         INSERT INTO sync_queue (payload_type, local_id, payload_data, status)
         VALUES ('SALE_TRANSACTION', ?, ?, 'PENDING')
       `).run(data.transaction_id, JSON.stringify(data));
@@ -226,7 +245,9 @@ class LocalDatabaseEngine {
         .sort((a, b) => (a.id || 0) - (b.id || 0))
         .slice(0, limit);
     }
-    return this.db.prepare("SELECT * FROM sync_queue WHERE status = 'PENDING' ORDER BY id ASC LIMIT ?").all(limit);
+    return this.db
+      .prepare("SELECT * FROM sync_queue WHERE status = 'PENDING' ORDER BY id ASC LIMIT ?")
+      .all(limit) as LocalSyncQueueItem[];
   }
 
   // Remove synced item from queue after 200 OK confirmation
@@ -271,7 +292,9 @@ class LocalDatabaseEngine {
     if (!this.db) {
       return this.mockSyncQueue.filter((item) => item.status === 'PENDING').length;
     }
-    const res = this.db.prepare("SELECT COUNT(*) as count FROM sync_queue WHERE status = 'PENDING'").get();
+    const res = this.db
+      .prepare("SELECT COUNT(*) as count FROM sync_queue WHERE status = 'PENDING'")
+      .get() as { count: number } | undefined;
     return res?.count || 0;
   }
 }

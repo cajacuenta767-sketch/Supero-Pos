@@ -104,7 +104,7 @@ export const ContactsView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
         <div>
           <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <Contact className="w-7 h-7 text-blue-500" />
+            <Contact className="w-7 h-7 text-accent" />
             Contactos y Directorio Comercial
           </h1>
           <p className="text-body text-ink-2 mt-1">
@@ -117,7 +117,7 @@ export const ContactsView: React.FC = () => {
           <button
  onClick={() => setActiveTab('customers')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeTab === 'customers' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeTab === 'customers' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <UserCheck className="w-4 h-4" />
@@ -126,7 +126,7 @@ export const ContactsView: React.FC = () => {
           <button
  onClick={() => setActiveTab('suppliers')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeTab === 'suppliers' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeTab === 'suppliers' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Truck className="w-4 h-4" />
@@ -135,7 +135,7 @@ export const ContactsView: React.FC = () => {
           <button
  onClick={() => setActiveTab('groups')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeTab === 'groups' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeTab === 'groups' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Users className="w-4 h-4" />
@@ -150,13 +150,13 @@ export const ContactsView: React.FC = () => {
           {/* Top Toolbar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-raised p-4 rounded-md border border-line shadow-e1">
             <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
               <input
  type="text"
  value={customerSearch}
  onChange={(e) => setCustomerSearch(e.target.value)}
  placeholder="Buscar cliente por nombre, NIT/RUC o teléfono..."
- className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink placeholder-gray-400 focus:border-accent"
+ className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent"
               />
             </div>
 
@@ -175,7 +175,7 @@ export const ContactsView: React.FC = () => {
 
               <button
  onClick={() => setIsCustomerModalOpen(true)}
- className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
+ className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
               >
                 <Plus className="w-4 h-4" />
                 Nuevo Cliente
@@ -204,22 +204,22 @@ export const ContactsView: React.FC = () => {
                     <tr key={c.id} className="hover:bg-sunken transition-colors">
                       <td className="p-4">
                         <p className="font-bold text-ink">{c.name}</p>
-                        <span className="text-gray-400 font-mono text-micro">NIT/RUC: {c.tax_id} • {c.email}</span>
+                        <span className="text-ink-3 font-mono text-micro">NIT/RUC: {c.tax_id} • {c.email}</span>
                       </td>
                       <td className="p-4">
                         <p className="font-semibold text-ink">{c.phone}</p>
-                        <span className="text-gray-400 text-micro truncate block max-w-xs">{c.address}</span>
+                        <span className="text-ink-3 text-micro truncate block max-w-xs">{c.address}</span>
                       </td>
                       <td className="p-4">
                         <div className="space-y-1 w-48">
                           <div className="flex justify-between font-mono font-bold text-micro">
-                            <span className="text-gray-500">Deuda: <span className="text-accent">${c.current_balance.toFixed(2)}</span></span>
-                            <span className="text-gray-400">Lím: ${c.credit_limit}</span>
+                            <span className="text-ink-3">Deuda: <span className="text-accent">${c.current_balance.toFixed(2)}</span></span>
+                            <span className="text-ink-3">Lím: ${c.credit_limit}</span>
                           </div>
-                          <div className="w-full bg-gray-200 bg-sunken h-2 rounded-full overflow-hidden">
+                          <div className="w-full bg-sunken h-2 rounded-full overflow-hidden">
                             <div 
  style={{ width: `${creditPct}%` }}
- className={`h-full ${isBlocked ? 'bg-rose-500' : creditPct > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+ className={`h-full ${isBlocked ? 'bg-rose-500' : creditPct > 60 ? 'bg-warn' : 'bg-emerald-500'}`}
                             />
                           </div>
                         </div>
@@ -227,8 +227,8 @@ export const ContactsView: React.FC = () => {
                       <td className="p-4 text-center">
                         <span className={`px-2.5 py-1 rounded-md text-micro font-bold border ${
  isBlocked 
-                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-200' 
- : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200'
+                            ? 'bg-danger-soft text-danger-ink dark:bg-danger-soft dark:text-danger-ink border-danger/30' 
+ : 'bg-ok-soft text-ok-ink dark:bg-ok-soft dark:text-ok-ink border-ok/30'
                         }`}>
                           {isBlocked ? 'BLOQUEADO MORA' : 'ACTIVO'}
                         </span>
@@ -239,12 +239,12 @@ export const ContactsView: React.FC = () => {
  setSelectedCustomer(c);
  setIsLedgerModalOpen(true);
                           }}
- className="p-1.5 text-accent hover:bg-blue-50 rounded-md"
+ className="p-1.5 text-accent hover:bg-accent-soft rounded-md"
  title="Ver Estado de Cuenta (Historial CxC)"
                         >
                           <History className="w-4 h-4" />
                         </button>
-                        <button className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-md" title="Editar">
+                        <button className="p-1.5 text-warn hover:bg-warn-soft rounded-md" title="Editar">
                           <Edit3 className="w-4 h-4" />
                         </button>
                       </td>
@@ -262,19 +262,19 @@ export const ContactsView: React.FC = () => {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-raised p-4 rounded-md border border-line shadow-e1">
             <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
               <input
  type="text"
  value={supplierSearch}
  onChange={(e) => setSupplierSearch(e.target.value)}
  placeholder="Buscar proveedor por empresa, contacto o NIT..."
- className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink placeholder-gray-400 focus:border-accent"
+ className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent"
               />
             </div>
 
             <button
  onClick={() => setIsSupplierModalOpen(true)}
- className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
+ className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
             >
               <Plus className="w-4 h-4" />
               Nuevo Proveedor
@@ -297,26 +297,26 @@ export const ContactsView: React.FC = () => {
                   <tr key={s.id} className="hover:bg-sunken">
                     <td className="p-4">
                       <p className="font-bold text-ink">{s.company_name}</p>
-                      <span className="text-gray-400 font-mono text-micro">Contacto: {s.contact_person} • NIT: {s.tax_id}</span>
+                      <span className="text-ink-3 font-mono text-micro">Contacto: {s.contact_person} • NIT: {s.tax_id}</span>
                     </td>
                     <td className="p-4">
                       <p className="font-semibold text-ink">{s.phone} • WA: {s.whatsapp}</p>
-                      <span className="text-gray-400 text-micro">{s.email}</span>
+                      <span className="text-ink-3 text-micro">{s.email}</span>
                     </td>
                     <td className="p-4 font-mono font-bold">
-                      <span className={s.balance_payable > 0 ? 'text-warn' : 'text-gray-500'}>
+                      <span className={s.balance_payable > 0 ? 'text-warn' : 'text-ink-3'}>
                         ${s.balance_payable.toFixed(2)}
                       </span>
-                      <span className="block text-micro text-gray-400 font-normal">Última OC: {s.last_po_date}</span>
+                      <span className="block text-micro text-ink-3 font-normal">Última OC: {s.last_po_date}</span>
                     </td>
                     <td className="p-4 font-semibold text-ink-2">
                       {s.payment_terms}
                     </td>
                     <td className="p-4 text-right space-x-1">
-                      <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md" title="Registrar Pago CxP">
+                      <button className="p-1.5 text-accent hover:bg-accent-soft rounded-md" title="Registrar Pago CxP">
                         <DollarSign className="w-4 h-4" />
                       </button>
-                      <button className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-md" title="Editar">
+                      <button className="p-1.5 text-warn hover:bg-warn-soft rounded-md" title="Editar">
                         <Edit3 className="w-4 h-4" />
                       </button>
                     </td>
@@ -334,9 +334,9 @@ export const ContactsView: React.FC = () => {
           <div className="flex items-center justify-between border-b border-line pb-4">
             <div>
               <h3 className="font-extrabold text-base text-ink">Grupos de Clientes y Niveles de Precios</h3>
-              <p className="text-body text-gray-500">Defina reglas de tarificación predeterminadas para aplicar automáticamente en el POS</p>
+              <p className="text-body text-ink-3">Defina reglas de tarificación predeterminadas para aplicar automáticamente en el POS</p>
             </div>
-            <button className="px-4 py-2 bg-blue-600 text-white font-extrabold text-body rounded-md shadow hover:bg-blue-700">
+            <button className="px-4 py-2 bg-accent text-white font-extrabold text-body rounded-md shadow hover:bg-accent-hover">
               + Nuevo Grupo
             </button>
           </div>
@@ -386,7 +386,7 @@ export const ContactsView: React.FC = () => {
           <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-lg overflow-hidden space-y-4">
             <div className="p-5 border-b border-line flex items-center justify-between">
               <h3 className="font-extrabold text-base text-ink">Crear Nuevo Cliente</h3>
-              <button onClick={() => setIsCustomerModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsCustomerModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
             <form onSubmit={(e) => { e.preventDefault(); setIsCustomerModalOpen(false); }} className="p-5 space-y-4 text-body">
               <div>
@@ -418,8 +418,8 @@ export const ContactsView: React.FC = () => {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsCustomerModalOpen(false)} className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-extrabold shadow">Guardar Cliente</button>
+                <button type="button" onClick={() => setIsCustomerModalOpen(false)} className="px-4 py-2 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md font-extrabold shadow">Guardar Cliente</button>
               </div>
             </form>
           </div>
@@ -432,7 +432,7 @@ export const ContactsView: React.FC = () => {
           <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-lg overflow-hidden space-y-4">
             <div className="p-5 border-b border-line flex items-center justify-between">
               <h3 className="font-extrabold text-base text-ink">Crear Nuevo Proveedor</h3>
-              <button onClick={() => setIsSupplierModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsSupplierModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
             <form onSubmit={(e) => { e.preventDefault(); setIsSupplierModalOpen(false); }} className="p-5 space-y-4 text-body">
               <div>
@@ -450,8 +450,8 @@ export const ContactsView: React.FC = () => {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsSupplierModalOpen(false)} className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-extrabold shadow">Guardar Proveedor</button>
+                <button type="button" onClick={() => setIsSupplierModalOpen(false)} className="px-4 py-2 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md font-extrabold shadow">Guardar Proveedor</button>
               </div>
             </form>
           </div>
@@ -465,23 +465,23 @@ export const ContactsView: React.FC = () => {
             <div className="p-5 border-b border-line flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-base text-ink">Estado de Cuenta (CxC)</h3>
-                <p className="text-body text-gray-500">{selectedCustomer.name} • NIT: {selectedCustomer.tax_id}</p>
+                <p className="text-body text-ink-3">{selectedCustomer.name} • NIT: {selectedCustomer.tax_id}</p>
               </div>
-              <button onClick={() => setIsLedgerModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsLedgerModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
 
             <div className="p-5 space-y-4 text-body">
               <div className="grid grid-cols-3 gap-3 p-4 bg-sunken rounded-md border border-line">
                 <div>
-                  <span className="text-gray-400 font-bold text-micro">TOTAL COMPRADO</span>
+                  <span className="text-ink-3 font-bold text-micro">TOTAL COMPRADO</span>
                   <p className="font-mono font-bold text-base text-ink">$12,450.00</p>
                 </div>
                 <div>
-                  <span className="text-gray-400 font-bold text-micro">TOTAL ABONADO</span>
+                  <span className="text-ink-3 font-bold text-micro">TOTAL ABONADO</span>
                   <p className="font-mono font-bold text-base text-ok">$9,000.00</p>
                 </div>
                 <div>
-                  <span className="text-gray-400 font-bold text-micro">SALDO PENDIENTE</span>
+                  <span className="text-ink-3 font-bold text-micro">SALDO PENDIENTE</span>
                   <p className="font-mono font-bold text-base text-accent">${selectedCustomer.current_balance.toFixed(2)}</p>
                 </div>
               </div>
@@ -489,7 +489,7 @@ export const ContactsView: React.FC = () => {
               <h4 className="font-bold text-ink">Historial de Tickets a Crédito</h4>
               <div className="max-h-48 overflow-y-auto border border-line rounded-md">
                 <table className="w-full text-left">
-                  <thead className="bg-sunken text-micro font-bold uppercase text-gray-500">
+                  <thead className="bg-sunken text-micro font-bold uppercase text-ink-3">
                     <tr>
                       <th className="p-2.5">Ticket</th>
                       <th className="p-2.5">Fecha</th>
@@ -503,8 +503,8 @@ export const ContactsView: React.FC = () => {
                       <td className="p-2.5 font-bold">TK-10012</td>
                       <td className="p-2.5">02/08/2026</td>
                       <td className="p-2.5">$3,450.00</td>
-                      <td className="p-2.5 text-emerald-600">$0.00</td>
-                      <td className="p-2.5 text-right font-bold text-blue-600">$3,450.00</td>
+                      <td className="p-2.5 text-ok">$0.00</td>
+                      <td className="p-2.5 text-right font-bold text-accent">$3,450.00</td>
                     </tr>
                   </tbody>
                 </table>

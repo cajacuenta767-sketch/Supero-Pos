@@ -76,7 +76,7 @@ export const NotificationsView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
         <div>
           <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <Bell className="w-7 h-7 text-blue-500" />
+            <Bell className="w-7 h-7 text-accent" />
             Plantillas de Notificación & Comprobantes Digitales
           </h1>
           <p className="text-body text-ink-2 mt-1">
@@ -89,7 +89,7 @@ export const NotificationsView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('thermal-editor')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeSubTab === 'thermal-editor' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'thermal-editor' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Printer className="w-4 h-4" />
@@ -98,7 +98,7 @@ export const NotificationsView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('digital-channels')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeSubTab === 'digital-channels' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'digital-channels' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <MessageSquare className="w-4 h-4" />
@@ -114,18 +114,18 @@ export const NotificationsView: React.FC = () => {
           <div className="lg:col-span-7 bg-raised p-6 rounded-md border border-line shadow-e1 space-y-6">
             <div className="flex items-center justify-between border-b border-line pb-4">
               <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <Settings2 className="w-5 h-5 text-blue-500" /> Parámetros del Comprobante Impreso
+                <Settings2 className="w-5 h-5 text-accent" /> Parámetros del Comprobante Impreso
               </h3>
               <div className="flex items-center gap-2">
                 <button
  onClick={handleResetToDefault}
- className="px-3 py-1.5 bg-sunken hover:bg-gray-200 text-ink-2 rounded-md text-body font-bold flex items-center gap-1 border border-line"
+ className="px-3 py-1.5 bg-sunken hover:bg-sunken text-ink-2 rounded-md text-body font-bold flex items-center gap-1 border border-line"
                 >
                   <RotateCcw className="w-3.5 h-3.5" /> Restablecer
                 </button>
                 <button
  onClick={handleSaveConfig}
- className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-extrabold flex items-center gap-1.5 shadow"
+ className="px-4 py-1.5 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-extrabold flex items-center gap-1.5 shadow"
                 >
                   <Save className="w-3.5 h-3.5" /> Guardar
                 </button>
@@ -139,7 +139,7 @@ export const NotificationsView: React.FC = () => {
                   <label className="font-bold text-ink-2">Ancho de Papel Térmico *</label>
                   <select
  value={config.paper_width}
- onChange={(e) => setConfig({ ...config, paper_width: e.target.value as any })}
+ onChange={(e) => setConfig({ ...config, paper_width: e.target.value as typeof config.paper_width })}
  className="w-full mt-1 p-2.5 bg-sunken border border-line rounded-md font-bold"
                   >
                     <option value="80mm">Impresora Térmica 80 mm (Estándar)</option>
@@ -199,7 +199,7 @@ export const NotificationsView: React.FC = () => {
  type="checkbox"
  checked={config.show_customer_info}
  onChange={(e) => setConfig({ ...config, show_customer_info: e.target.checked })}
- className="w-4 h-4 text-blue-600 rounded"
+ className="w-4 h-4 text-accent rounded"
                   />
                   <span>Mostrar Datos Cliente (&#123;&#123;client_name&#125;&#125;)</span>
                 </label>
@@ -209,7 +209,7 @@ export const NotificationsView: React.FC = () => {
  type="checkbox"
  checked={config.show_imei_serials}
  onChange={(e) => setConfig({ ...config, show_imei_serials: e.target.checked })}
- className="w-4 h-4 text-blue-600 rounded"
+ className="w-4 h-4 text-accent rounded"
                   />
                   <span>Desglosar Números de Serie / IMEI</span>
                 </label>
@@ -219,7 +219,7 @@ export const NotificationsView: React.FC = () => {
  type="checkbox"
  checked={config.show_qr_validation}
  onChange={(e) => setConfig({ ...config, show_qr_validation: e.target.checked })}
- className="w-4 h-4 text-blue-600 rounded"
+ className="w-4 h-4 text-accent rounded"
                   />
                   <span>Imprimir Código QR de Validación</span>
                 </label>
@@ -250,17 +250,17 @@ export const NotificationsView: React.FC = () => {
 
           {/* Right Panel: Live Thermal Ticket Preview */}
           <div className="lg:col-span-5 space-y-4">
-            <div className="bg-gray-900 text-white p-4 rounded-md flex items-center justify-between shadow-e1">
+            <div className="bg-sunken text-white p-4 rounded-md flex items-center justify-between shadow-e1">
               <span className="font-extrabold text-body flex items-center gap-2">
-                <Eye className="w-4 h-4 text-emerald-400" /> Previsualización Térmica en Tiempo Real ({config.paper_width})
+                <Eye className="w-4 h-4 text-ok" /> Previsualización Térmica en Tiempo Real ({config.paper_width})
               </span>
-              <span className="px-2 py-0.5 bg-gray-800 text-gray-300 rounded font-mono text-micro">
+              <span className="px-2 py-0.5 bg-sunken text-ink-2 rounded font-mono text-micro">
                 {config.paper_width === '80mm' ? '32 Caracteres / Línea' : '24 Caracteres / Línea'}
               </span>
             </div>
 
             {/* Simulated Receipt Render */}
-            <div className={`mx-auto bg-white text-black p-6 rounded-md shadow-e3 font-mono text-micro leading-tight select-none border border-gray-300 transition-all ${
+            <div className={`mx-auto bg-white text-black p-6 rounded-md shadow-e3 font-mono text-micro leading-tight select-none border border-line-strong transition-all ${
  config.paper_width === '80mm' ? 'max-w-[320px]' : 'max-w-[240px]'
             }`}>
               {/* Header */}
@@ -304,7 +304,7 @@ export const NotificationsView: React.FC = () => {
                     <span>2 x Coca Cola 2L</span>
                     <span>24.00</span>
                   </div>
-                  <span className="text-micro text-gray-600 block">@ $12.00 / u</span>
+                  <span className="text-micro text-ink-2 block">@ $12.00 / u</span>
                 </div>
 
                 <div>
@@ -313,7 +313,7 @@ export const NotificationsView: React.FC = () => {
                     <span>1850.00</span>
                   </div>
                   {config.show_imei_serials && (
-                    <span className="text-micro text-gray-700 font-bold block">IMEI: 358492019482712</span>
+                    <span className="text-micro text-ink-2 font-bold block">IMEI: 358492019482712</span>
                   )}
                 </div>
               </div>
@@ -328,7 +328,7 @@ export const NotificationsView: React.FC = () => {
                   <span>TOTAL ($):</span>
                   <span>1874.00</span>
                 </div>
-                <div className="flex justify-between text-micro text-gray-700">
+                <div className="flex justify-between text-micro text-ink-2">
                   <span>FORMA PAGO:</span>
                   <span>EFECTIVO</span>
                 </div>
@@ -337,9 +337,9 @@ export const NotificationsView: React.FC = () => {
               {/* Footer */}
               <div className="text-center pt-3 space-y-2">
                 <p className="font-bold">{config.footer_message}</p>
-                <p className="text-micro text-gray-600 leading-none">{config.legal_disclaimer}</p>
+                <p className="text-micro text-ink-2 leading-none">{config.legal_disclaimer}</p>
                 {config.show_qr_validation && (
-                  <div className="w-16 h-16 bg-gray-200 border border-black mx-auto flex items-center justify-center text-micro font-bold">
+                  <div className="w-16 h-16 bg-sunken border border-black mx-auto flex items-center justify-center text-micro font-bold">
  [ CÓDIGO QR ]
                   </div>
                 )}
@@ -356,14 +356,14 @@ export const NotificationsView: React.FC = () => {
           <div className="bg-raised p-6 rounded-md border border-line shadow-e1 space-y-4">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-emerald-500" /> Canal de Envío por WhatsApp
+                <MessageSquare className="w-5 h-5 text-ok" /> Canal de Envío por WhatsApp
               </h3>
               <label className="flex items-center gap-2 cursor-pointer font-bold text-body">
                 <input
  type="checkbox"
  checked={whatsappEnabled}
  onChange={(e) => setWhatsappEnabled(e.target.checked)}
- className="w-4 h-4 text-emerald-600 rounded"
+ className="w-4 h-4 text-ok rounded"
                 />
                 <span>Habilitar</span>
               </label>
@@ -380,7 +380,7 @@ export const NotificationsView: React.FC = () => {
                 />
               </div>
 
-              <div className="p-3 bg-ok-soft border border-emerald-200 rounded-md text-ok-ink">
+              <div className="p-3 bg-ok-soft border border-ok/30 rounded-md text-ok-ink">
                 <span className="font-bold block mb-1">Variables Dinámicas Soportadas:</span>
                 <p className="font-mono text-micro">&#123;&#123;client_name&#125;&#125;, &#123;&#123;company_name&#125;&#125;, &#123;&#123;ticket_number&#125;&#125;, &#123;&#123;total_amount&#125;&#125;, &#123;&#123;pdf_url&#125;&#125;</p>
               </div>
@@ -391,25 +391,25 @@ export const NotificationsView: React.FC = () => {
           <div className="bg-raised p-6 rounded-md border border-line shadow-e1 space-y-4">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <Mail className="w-5 h-5 text-blue-500" /> Canal de Correo Electrónico (PDF Adjunto)
+                <Mail className="w-5 h-5 text-accent" /> Canal de Correo Electrónico (PDF Adjunto)
               </h3>
               <label className="flex items-center gap-2 cursor-pointer font-bold text-body">
                 <input
  type="checkbox"
  checked={emailEnabled}
  onChange={(e) => setEmailEnabled(e.target.checked)}
- className="w-4 h-4 text-blue-600 rounded"
+ className="w-4 h-4 text-accent rounded"
                 />
                 <span>Habilitar</span>
               </label>
             </div>
 
             <div className="space-y-3 text-body">
-              <p className="text-gray-500">
+              <p className="text-ink-3">
                 Envío automático de comprobantes fiscales en formato PDF adjunto al correo electrónico registrado del cliente al finalizar el pago en el POS.
               </p>
 
-              <div className="p-3 bg-accent-soft border border-blue-200 rounded-md text-accent-ink">
+              <div className="p-3 bg-accent-soft border border-accent/30 rounded-md text-accent-ink">
                 <span className="font-bold block">Integración SMTP / Transaccional Activa</span>
                 <span className="text-micro">Motor listo para despacho de correos en tiempo real.</span>
               </div>

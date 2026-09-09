@@ -8,236 +8,237 @@ import { syncWorker } from '../services/syncWorker';
 import { Button, Input, Modal, Money, cn } from '../ui';
 
 interface CheckoutModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
+ isOpen: boolean;
+ onClose: () => void;
+ onSuccess: () => void;
 }
 
 const generateUUID = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
+ if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+ return crypto.randomUUID();
   }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
+ return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+ const r = (Math.random() * 16) | 0;
+ const v = c === 'x' ? r : (r & 0x3) | 0x8;
+ return v.toString(16);
   });
 };
 
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const {
-    items,
-    getSubtotal,
-    getTotal,
-    getDiscountAmount,
-    paymentMethod,
-    setPaymentMethod,
-    cashGiven,
-    setCashGiven,
-    cashAmount,
-    cardAmount,
-    qrAmount,
-    setMixedAmounts,
-    getTotalPaid,
-    getChange,
-    isPaymentCovered,
-    clearCart,
+ const {
+ items,
+ getSubtotal,
+ getTotal,
+ getDiscountAmount,
+ paymentMethod,
+ setPaymentMethod,
+ cashGiven,
+ setCashGiven,
+ cashAmount,
+ cardAmount,
+ qrAmount,
+ setMixedAmounts,
+ getTotalPaid,
+ getChange,
+ isPaymentCovered,
+ clearCart,
   } = useCartStore();
 
-  const { selectedCustomer, manualDiscount, resetPosCycle, setPendingSyncCount } = usePosStore();
-  const [isProcessing, setIsProcessing] = useState(false);
+ const { selectedCustomer, manualDiscount, resetPosCycle, setPendingSyncCount } = usePosStore();
+ const [isProcessing, setIsProcessing] = useState(false);
 
-  if (!isOpen) return null;
+ if (!isOpen) return null;
 
-  const customerDiscountRate = selectedCustomer?.discountPercentage || 0;
-  const subtotal = getSubtotal();
-  const discountAmount = getDiscountAmount(customerDiscountRate, manualDiscount);
-  const total = getTotal(customerDiscountRate, manualDiscount);
-  const totalPaid = getTotalPaid();
-  const change = getChange(customerDiscountRate, manualDiscount);
-  const isCovered = isPaymentCovered(customerDiscountRate, manualDiscount);
+ const customerDiscountRate = selectedCustomer?.discountPercentage || 0;
+ const subtotal = getSubtotal();
+ const discountAmount = getDiscountAmount(customerDiscountRate, manualDiscount);
+ const total = getTotal(customerDiscountRate, manualDiscount);
+ const totalPaid = getTotalPaid();
+ const change = getChange(customerDiscountRate, manualDiscount);
+ const isCovered = isPaymentCovered(customerDiscountRate, manualDiscount);
 
-  const handleProcessPayment = () => {
-    if (!isCovered) return;
-    setIsProcessing(true);
+ const handleProcessPayment = () => {
+ if (!isCovered) return;
+ setIsProcessing(true);
 
-    try {
+ try {
       // 1. Generación de UUID inmutable (Regla de Oro)
-      const transaction_id = generateUUID();
-      const timestamp = new Date().toISOString();
-      const branch_id = 'branch-01';
-      const register_id = 'caja-1';
-      const shift_id = 'shift-01';
-      const cashier_id = 'user-01';
-      const customer_id = selectedCustomer?.id && selectedCustomer.id !== 'default-public' ? String(selectedCustomer.id) : null;
+ const transaction_id = generateUUID();
+ const timestamp = new Date().toISOString();
+ const branch_id = 'branch-01';
+ const register_id = 'caja-1';
+ const shift_id = 'shift-01';
+ const cashier_id = 'user-01';
+ const customer_id = selectedCustomer?.id && selectedCustomer.id !== 'default-public' ? String(selectedCustomer.id) : null;
 
       // 2. Construcción del Desglose de Pagos (Bloque C)
-      let paymentBreakdown: BlockCPaymentItem[] = [];
+ let paymentBreakdown: BlockCPaymentItem[] = [];
 
-      if (paymentMethod === 'CASH') {
-        paymentBreakdown = [
+ if (paymentMethod === 'CASH') {
+ paymentBreakdown = [
           {
-            payment_method: 'CASH',
-            amount_received: cashGiven,
-            change_given: change,
+ payment_method: 'CASH',
+ amount_received: cashGiven,
+ change_given: change,
           },
         ];
       } else if (paymentMethod === 'CARD') {
-        paymentBreakdown = [
+ paymentBreakdown = [
           {
-            payment_method: 'CARD',
-            amount_received: total,
-            change_given: 0,
+ payment_method: 'CARD',
+ amount_received: total,
+ change_given: 0,
           },
         ];
       } else if (paymentMethod === 'QR') {
-        paymentBreakdown = [
+ paymentBreakdown = [
           {
-            payment_method: 'QR',
-            amount_received: total,
-            change_given: 0,
+ payment_method: 'QR',
+ amount_received: total,
+ change_given: 0,
           },
         ];
       } else {
-        if (cashAmount > 0) {
-          paymentBreakdown.push({
-            payment_method: 'CASH',
-            amount_received: cashAmount,
-            change_given: change,
+ if (cashAmount > 0) {
+ paymentBreakdown.push({
+ payment_method: 'CASH',
+ amount_received: cashAmount,
+ change_given: change,
           });
         }
-        if (cardAmount > 0) {
-          paymentBreakdown.push({
-            payment_method: 'CARD',
-            amount_received: cardAmount,
-            change_given: 0,
+ if (cardAmount > 0) {
+ paymentBreakdown.push({
+ payment_method: 'CARD',
+ amount_received: cardAmount,
+ change_given: 0,
           });
         }
-        if (qrAmount > 0) {
-          paymentBreakdown.push({
-            payment_method: 'QR',
-            amount_received: qrAmount,
-            change_given: 0,
+ if (qrAmount > 0) {
+ paymentBreakdown.push({
+ payment_method: 'QR',
+ amount_received: qrAmount,
+ change_given: 0,
           });
         }
       }
 
       // 3. Construcción del Arreglo de Items (Bloque D)
-      const formattedItems: BlockDItem[] = items.map((item) => {
-        const serials = item.selected_serials && item.selected_serials.length > 0
+ const formattedItems: BlockDItem[] = items.map((item) => {
+ const serials = item.selected_serials && item.selected_serials.length > 0
           ? item.selected_serials
-          : item.serial_number
+ : item.serial_number
           ? [item.serial_number]
-          : [];
+ : [];
 
-        return {
-          product_id: String(item.id),
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          line_subtotal: item.subtotal,
-          serials_used: serials,
+ return {
+ product_id: String(item.id),
+ quantity: item.quantity,
+ unit_price: item.unit_price,
+ line_subtotal: item.subtotal,
+ serials_used: serials,
         };
       });
 
       // 4. Estructura Completa de Payload de 4 Bloques
-      const block_a: BlockA = {
-        transaction_id,
-        timestamp,
-        branch_id,
-        register_id,
-        shift_id,
-        cashier_id,
-        customer_id,
+ const block_a: BlockA = {
+ transaction_id,
+ timestamp,
+ branch_id,
+ register_id,
+ shift_id,
+ cashier_id,
+ customer_id,
       };
 
-      const block_b: BlockB = {
-        subtotal,
-        total_discount: discountAmount,
-        grand_total: total,
+ const block_b: BlockB = {
+ subtotal,
+ total_discount: discountAmount,
+ grand_total: total,
       };
 
-      const block_c: BlockC = {
-        payment_breakdown: paymentBreakdown,
+ const block_c: BlockC = {
+ payment_breakdown: paymentBreakdown,
       };
 
-      const block_d: BlockD = {
-        items: formattedItems,
+ const block_d: BlockD = {
+ items: formattedItems,
       };
 
-      const salePayload: FourBlockSalePayload = {
-        transaction_id,
-        timestamp,
-        branch_id,
-        register_id,
-        shift_id,
-        cashier_id,
-        customer_id,
-        subtotal,
-        total_discount: discountAmount,
-        grand_total: total,
-        payment_breakdown: paymentBreakdown,
-        items: formattedItems,
-        block_a,
-        block_b,
-        block_c,
-        block_d,
+ const salePayload: FourBlockSalePayload = {
+ transaction_id,
+ timestamp,
+ branch_id,
+ register_id,
+ shift_id,
+ cashier_id,
+ customer_id,
+ subtotal,
+ total_discount: discountAmount,
+ grand_total: total,
+ payment_breakdown: paymentBreakdown,
+ items: formattedItems,
+ block_a,
+ block_b,
+ block_c,
+ block_d,
       };
 
       // Execute Atomic ACID transaction in local SQLite database
-      const result = localDb.processLocalSaleAtomic(salePayload);
+ const result = localDb.processLocalSaleAtomic(salePayload);
 
       // Update Zustand sync queue state
-      const pendingCount = localDb.getPendingCount();
-      useSyncStore.getState().setPendingCount(pendingCount);
-      setPendingSyncCount(pendingCount);
+ const pendingCount = localDb.getPendingCount();
+ useSyncStore.getState().setPendingCount(pendingCount);
+ setPendingSyncCount(pendingCount);
 
-      console.log('Venta completada de forma atómica. Tx UUID:', result.saleId);
+ console.log('Venta completada de forma atómica. Tx UUID:', result.saleId);
 
       // Trigger background sync worker to process FIFO queue if online
-      syncWorker.triggerManualSync();
+ syncWorker.triggerManualSync();
 
-      setTimeout(() => {
-        setIsProcessing(false);
-        clearCart();
-        resetPosCycle();
-        onSuccess();
-        onClose();
+ setTimeout(() => {
+ setIsProcessing(false);
+ clearCart();
+ resetPosCycle();
+ onSuccess();
+ onClose();
       }, 400);
-    } catch (error: any) {
-      alert('Error en la transacción local: ' + error.message);
-      setIsProcessing(false);
+    } catch (error) {
+ const reason = error instanceof Error ? error.message : String(error);
+ alert('Error en la transacción local: ' + reason);
+ setIsProcessing(false);
     }
   };
 
-  const METHODS = [
-    { id: 'CASH',  label: 'Efectivo',  icon: <DollarSign className="w-4 h-4" /> },
-    { id: 'CARD',  label: 'Tarjeta',   icon: <CreditCard className="w-4 h-4" /> },
-    { id: 'QR',    label: 'QR',        icon: <QrCode className="w-4 h-4" /> },
-    { id: 'MIXED', label: 'Mixto',     icon: <Layers className="w-4 h-4" /> },
+ const METHODS = [
+    { id: 'CASH', label: 'Efectivo', icon: <DollarSign className="w-4 h-4" /> },
+    { id: 'CARD', label: 'Tarjeta', icon: <CreditCard className="w-4 h-4" /> },
+    { id: 'QR', label: 'QR', icon: <QrCode className="w-4 h-4" /> },
+    { id: 'MIXED', label: 'Mixto', icon: <Layers className="w-4 h-4" /> },
   ] as const;
 
-  const quickCash = Array.from(
-    new Set([total, Math.ceil(total / 10) * 10, Math.ceil(total / 50) * 50, Math.ceil(total / 100) * 100]),
+ const quickCash = Array.from(
+ new Set([total, Math.ceil(total / 10) * 10, Math.ceil(total / 50) * 50, Math.ceil(total / 100) * 100]),
   );
 
-  return (
+ return (
     <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      icon={<CreditCard className="w-4 h-4" />}
-      title="Procesar cobro"
-      subtitle={`${selectedCustomer.businessName} · NIT ${selectedCustomer.taxId}`}
-      size="lg"
-      footer={
+ isOpen={isOpen}
+ onClose={onClose}
+ icon={<CreditCard className="w-4 h-4" />}
+ title="Procesar cobro"
+ subtitle={`${selectedCustomer.businessName} · NIT ${selectedCustomer.taxId}`}
+ size="lg"
+ footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button
-            variant="success"
-            size="lg"
-            loading={isProcessing}
-            disabled={!isCovered}
-            onClick={handleProcessPayment}
-            icon={!isProcessing ? <CheckCircle2 className="w-4 h-4" /> : undefined}
+ variant="success"
+ size="lg"
+ loading={isProcessing}
+ disabled={!isCovered}
+ onClick={handleProcessPayment}
+ icon={!isProcessing ? <CheckCircle2 className="w-4 h-4" /> : undefined}
           >
             {isProcessing ? 'Procesando…' : 'Finalizar venta'}
           </Button>
@@ -269,15 +270,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
           <div className="grid grid-cols-4 gap-2">
             {METHODS.map((m) => (
               <button
-                key={m.id}
-                type="button"
-                onClick={() => setPaymentMethod(m.id as any)}
-                className={cn(
+ key={m.id}
+ type="button"
+ onClick={() => setPaymentMethod(m.id)}
+ className={cn(
                   'h-16 flex flex-col items-center justify-center gap-1 rounded-md border',
                   'text-body font-semibold transition-colors duration-fast ease-ease',
-                  paymentMethod === m.id
+ paymentMethod === m.id
                     ? 'bg-accent-soft border-accent/40 text-accent-ink'
-                    : 'bg-raised border-line text-ink-2 hover:border-line-strong hover:text-ink',
+ : 'bg-raised border-line text-ink-2 hover:border-line-strong hover:text-ink',
                 )}
               >
                 {m.icon}
@@ -290,24 +291,24 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
         {paymentMethod === 'CASH' && (
           <div className="space-y-3 p-4 rounded-lg bg-sunken border border-line">
             <Input
-              label="Efectivo recibido"
-              type="number"
-              step="1"
-              autoFocus
-              value={cashGiven || ''}
-              onChange={(e) => setCashGiven(parseFloat(e.target.value) || 0)}
-              placeholder="0.00"
-              inputSize="display"
-              className="[&_input]:text-center"
+ label="Efectivo recibido"
+ type="number"
+ step="1"
+ autoFocus
+ value={cashGiven || ''}
+ onChange={(e) => setCashGiven(parseFloat(e.target.value) || 0)}
+ placeholder="0.00"
+ inputSize="display"
+ className="[&_input]:text-center"
             />
 
             <div className="grid grid-cols-4 gap-2">
               {quickCash.map((amt) => (
                 <button
-                  key={amt}
-                  type="button"
-                  onClick={() => setCashGiven(amt)}
-                  className="h-touch rounded-md bg-raised border border-line-strong font-mono tnum text-base font-bold text-ink-2 hover:border-accent hover:text-accent transition-colors duration-fast ease-ease"
+ key={amt}
+ type="button"
+ onClick={() => setCashGiven(amt)}
+ className="h-touch rounded-md bg-raised border border-line-strong font-mono tnum text-base font-bold text-ink-2 hover:border-accent hover:text-accent transition-colors duration-fast ease-ease"
                 >
                   ${amt}
                 </button>
@@ -325,31 +326,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
           <div className="space-y-3 p-4 rounded-lg bg-sunken border border-line">
             <div className="grid grid-cols-3 gap-2">
               <Input
-                label="Efectivo"
-                type="number"
-                step="0.01"
-                value={cashAmount || ''}
-                onChange={(e) => setMixedAmounts(parseFloat(e.target.value) || 0, cardAmount, qrAmount)}
-                placeholder="0.00"
-                className="[&_input]:text-center [&_input]:font-mono"
+ label="Efectivo"
+ type="number"
+ step="0.01"
+ value={cashAmount || ''}
+ onChange={(e) => setMixedAmounts(parseFloat(e.target.value) || 0, cardAmount, qrAmount)}
+ placeholder="0.00"
+ className="[&_input]:text-center [&_input]:font-mono"
               />
               <Input
-                label="Tarjeta"
-                type="number"
-                step="0.01"
-                value={cardAmount || ''}
-                onChange={(e) => setMixedAmounts(cashAmount, parseFloat(e.target.value) || 0, qrAmount)}
-                placeholder="0.00"
-                className="[&_input]:text-center [&_input]:font-mono"
+ label="Tarjeta"
+ type="number"
+ step="0.01"
+ value={cardAmount || ''}
+ onChange={(e) => setMixedAmounts(cashAmount, parseFloat(e.target.value) || 0, qrAmount)}
+ placeholder="0.00"
+ className="[&_input]:text-center [&_input]:font-mono"
               />
               <Input
-                label="QR"
-                type="number"
-                step="0.01"
-                value={qrAmount || ''}
-                onChange={(e) => setMixedAmounts(cashAmount, cardAmount, parseFloat(e.target.value) || 0)}
-                placeholder="0.00"
-                className="[&_input]:text-center [&_input]:font-mono"
+ label="QR"
+ type="number"
+ step="0.01"
+ value={qrAmount || ''}
+ onChange={(e) => setMixedAmounts(cashAmount, cardAmount, parseFloat(e.target.value) || 0)}
+ placeholder="0.00"
+ className="[&_input]:text-center [&_input]:font-mono"
               />
             </div>
 

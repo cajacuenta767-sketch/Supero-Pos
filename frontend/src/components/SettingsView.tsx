@@ -84,7 +84,7 @@ export const SettingsView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
         <div>
           <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <Settings className="w-7 h-7 text-blue-500" />
+            <Settings className="w-7 h-7 text-accent" />
             Ajustes y Configuración Global del Sistema
           </h1>
           <p className="text-body text-ink-2 mt-1">
@@ -97,7 +97,7 @@ export const SettingsView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('company')}
  className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
- activeSubTab === 'company' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'company' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Building2 className="w-4 h-4" />
@@ -106,7 +106,7 @@ export const SettingsView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('hardware')}
  className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
- activeSubTab === 'hardware' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'hardware' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Printer className="w-4 h-4" />
@@ -115,7 +115,7 @@ export const SettingsView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('security')}
  className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
- activeSubTab === 'security' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'security' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <ShieldAlert className="w-4 h-4" />
@@ -124,7 +124,7 @@ export const SettingsView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('sync')}
  className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
- activeSubTab === 'sync' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'sync' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <RefreshCw className="w-4 h-4" />
@@ -139,9 +139,9 @@ export const SettingsView: React.FC = () => {
           <form onSubmit={handleSaveSettings} className="bg-raised p-6 rounded-md border border-line shadow-e1 space-y-6">
             <div className="flex items-center justify-between border-b border-line pb-4">
               <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-blue-500" /> Identidad Corporativa y Configuración Fiscal
+                <Building2 className="w-5 h-5 text-accent" /> Identidad Corporativa y Configuración Fiscal
               </h3>
-              <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-extrabold flex items-center gap-1.5 shadow">
+              <button type="submit" className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-extrabold flex items-center gap-1.5 shadow">
                 <Save className="w-4 h-4" /> Guardar Cambios
               </button>
             </div>
@@ -152,14 +152,14 @@ export const SettingsView: React.FC = () => {
                 {logoPreview ? (
                   <img src={logoPreview} alt="Logo Oficial" className="w-full h-full object-contain" />
                 ) : (
-                  <Building2 className="w-8 h-8 text-gray-400" />
+                  <Building2 className="w-8 h-8 text-ink-3" />
                 )}
               </div>
 
               <div className="space-y-1">
                 <span className="font-extrabold text-body text-ink block">Logotipo Oficial Institucional</span>
-                <p className="text-micro text-gray-500">Se imprimirá en la cabecera de comprobantes térmicos y facturas PDF (PNG/JPG máx 2MB)</p>
-                <label className="mt-1 px-3 py-1.5 bg-blue-600 text-white rounded-md text-body font-bold flex items-center gap-1.5 w-fit cursor-pointer shadow">
+                <p className="text-micro text-ink-3">Se imprimirá en la cabecera de comprobantes térmicos y facturas PDF (PNG/JPG máx 2MB)</p>
+                <label className="mt-1 px-3 py-1.5 bg-accent text-white rounded-md text-body font-bold flex items-center gap-1.5 w-fit cursor-pointer shadow">
                   <Upload className="w-3.5 h-3.5" /> Subir Imagen Logo
                   <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
                 </label>
@@ -234,13 +234,13 @@ export const SettingsView: React.FC = () => {
           {/* Branches Directory Table */}
           <div className="bg-raised p-6 rounded-md border border-line shadow-e1 space-y-4">
             <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-emerald-500" /> Directorio de Sucursales y Almacenes Vinculados
+              <Building2 className="w-5 h-5 text-ok" /> Directorio de Sucursales y Almacenes Vinculados
             </h3>
 
             <div className="border border-line rounded-md overflow-hidden">
               <table className="w-full text-left text-body border-collapse">
                 <thead>
-                  <tr className="bg-sunken text-gray-500 font-extrabold uppercase text-micro border-b border-line">
+                  <tr className="bg-sunken text-ink-3 font-extrabold uppercase text-micro border-b border-line">
                     <th className="p-3">Código</th>
                     <th className="p-3">Nombre Sucursal</th>
                     <th className="p-3">Ubicación Física</th>
@@ -254,9 +254,9 @@ export const SettingsView: React.FC = () => {
                       <td className="p-3 font-mono font-bold text-accent">{b.code}</td>
                       <td className="p-3 font-bold text-ink">{b.name}</td>
                       <td className="p-3 font-semibold text-ink-2">{b.address}</td>
-                      <td className="p-3 font-mono text-gray-500">{b.phone}</td>
+                      <td className="p-3 font-mono text-ink-3">{b.phone}</td>
                       <td className="p-3 text-right">
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 rounded font-bold text-micro">
+                        <span className="px-2 py-0.5 bg-ok-soft text-ok-ink dark:bg-ok-soft rounded font-bold text-micro">
                           OPERATIVA
                         </span>
                       </td>
@@ -274,9 +274,9 @@ export const SettingsView: React.FC = () => {
         <div className="bg-raised p-6 rounded-md border border-line shadow-e1 space-y-6 max-w-3xl">
           <div className="flex items-center justify-between border-b border-line pb-4">
             <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-              <Printer className="w-5 h-5 text-blue-500" /> Periféricos POS: Impresora, Gaveta & Balanza Electrónica
+              <Printer className="w-5 h-5 text-accent" /> Periféricos POS: Impresora, Gaveta & Balanza Electrónica
             </h3>
-            <button onClick={() => alert('🖨️ Imprimiendo ticket de calibración hardware...')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
+            <button onClick={() => alert('🖨️ Imprimiendo ticket de calibración hardware...')} className="px-4 py-2 bg-ok hover:opacity-90 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
               Imprimir Comprobante de Prueba
             </button>
           </div>
@@ -309,7 +309,7 @@ export const SettingsView: React.FC = () => {
 
             <div>
               <label className="font-bold text-ink-2 flex items-center gap-1">
-                <Scan className="w-3.5 h-3.5 text-blue-500" /> Latencia de Lectura Pistola Láser
+                <Scan className="w-3.5 h-3.5 text-accent" /> Latencia de Lectura Pistola Láser
               </label>
               <input
  type="number"
@@ -317,12 +317,12 @@ export const SettingsView: React.FC = () => {
  onChange={(e) => setScannerLatency(parseInt(e.target.value) || 10)}
  className="w-full mt-1 p-2.5 bg-sunken border border-line rounded-md font-mono font-bold"
               />
-              <span className="text-micro text-gray-400">Tolerancia recomendada: 10ms</span>
+              <span className="text-micro text-ink-3">Tolerancia recomendada: 10ms</span>
             </div>
 
             <div>
               <label className="font-bold text-ink-2 flex items-center gap-1">
-                <Scale className="w-3.5 h-3.5 text-purple-500" /> Protocolo Balanza Electrónica
+                <Scale className="w-3.5 h-3.5 text-accent" /> Protocolo Balanza Electrónica
               </label>
               <select
  value={scaleProtocol}
@@ -341,7 +341,7 @@ export const SettingsView: React.FC = () => {
  type="checkbox"
  checked={autoCutPaper}
  onChange={(e) => setAutoCutPaper(e.target.checked)}
- className="w-4 h-4 text-blue-600 rounded"
+ className="w-4 h-4 text-accent rounded"
                 />
                 <span>Enviar comando de guillotina / auto-corte de papel tras imprimir ticket</span>
               </label>
@@ -351,7 +351,7 @@ export const SettingsView: React.FC = () => {
  type="checkbox"
  checked={cashDrawerPulse}
  onChange={(e) => setCashDrawerPulse(e.target.checked)}
- className="w-4 h-4 text-blue-600 rounded"
+ className="w-4 h-4 text-accent rounded"
                 />
                 <span>Enviar pulso eléctrico a gaveta portamonedas al liquidar venta en efectivo</span>
               </label>
@@ -365,7 +365,7 @@ export const SettingsView: React.FC = () => {
         <div className="bg-raised p-6 rounded-md border border-line shadow-e1 space-y-6 max-w-3xl">
           <div className="border-b border-line pb-4">
             <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-rose-500" /> Políticas de Seguridad Operativa & Reglas RBAC
+              <ShieldAlert className="w-5 h-5 text-danger" /> Políticas de Seguridad Operativa & Reglas RBAC
             </h3>
           </div>
 
@@ -373,7 +373,7 @@ export const SettingsView: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="font-bold text-ink-2 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-500" /> Inactividad para Bloqueo de Pantalla (Minutos)
+                  <Clock className="w-3.5 h-3.5 text-warn" /> Inactividad para Bloqueo de Pantalla (Minutos)
                 </label>
                 <input
  type="number"
@@ -385,7 +385,7 @@ export const SettingsView: React.FC = () => {
 
               <div>
                 <label className="font-bold text-ink-2 flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> Umbral General Stock Crítico
+                  <AlertTriangle className="w-3.5 h-3.5 text-danger" /> Umbral General Stock Crítico
                 </label>
                 <input
  type="number"
@@ -402,7 +402,7 @@ export const SettingsView: React.FC = () => {
  type="checkbox"
  checked={requireSupervisorPinForVoids}
  onChange={(e) => setRequireSupervisorPinForVoids(e.target.checked)}
- className="w-4 h-4 text-blue-600 rounded"
+ className="w-4 h-4 text-accent rounded"
                 />
                 <span>Exigir PIN de Supervisor para Anulación de Tickets en POS</span>
               </label>
@@ -412,7 +412,7 @@ export const SettingsView: React.FC = () => {
  type="checkbox"
  checked={requireSupervisorPinForDiscounts}
  onChange={(e) => setRequireSupervisorPinForDiscounts(e.target.checked)}
- className="w-4 h-4 text-blue-600 rounded"
+ className="w-4 h-4 text-accent rounded"
                 />
                 <span>Exigir PIN de Supervisor para Aplicar Descuentos Libres en Carrito</span>
               </label>
@@ -426,15 +426,15 @@ export const SettingsView: React.FC = () => {
         <div className="bg-raised p-6 rounded-md border border-line shadow-e1 space-y-6 max-w-3xl">
           <div className="flex items-center justify-between border-b border-line pb-4">
             <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-              <RefreshCw className="w-5 h-5 text-emerald-500" /> Arquitectura Offline-First & Cola SQLite (sync_queue)
+              <RefreshCw className="w-5 h-5 text-ok" /> Arquitectura Offline-First & Cola SQLite (sync_queue)
             </h3>
-            <button onClick={() => alert('⚡ Bucle de sincronización bidireccional ejecutado en segundo plano.')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
+            <button onClick={() => alert('⚡ Bucle de sincronización bidireccional ejecutado en segundo plano.')} className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
               Forzar Sincronización Ahora
             </button>
           </div>
 
           <div className="space-y-4 text-body">
-            <div className="p-4 bg-ok-soft border border-emerald-200 rounded-md space-y-1">
+            <div className="p-4 bg-ok-soft border border-ok/30 rounded-md space-y-1">
               <span className="font-extrabold text-ok-ink flex items-center gap-1">
                 <CheckCircle2 className="w-4 h-4" /> Persistencia Local Autónoma SQLite (better-sqlite3)
               </span>
@@ -466,11 +466,11 @@ export const SettingsView: React.FC = () => {
             <div className="p-4 bg-sunken rounded-md border border-line flex items-center justify-between">
               <div>
                 <span className="font-bold text-ink block">Tema de Interfaz de Usuario</span>
-                <span className="text-gray-500 text-micro">Alternar entre Light Mode (#FFFFFF) y Dark Mode (#000000)</span>
+                <span className="text-ink-3 text-micro">Alternar entre Light Mode (#FFFFFF) y Dark Mode (#000000)</span>
               </div>
               <button
  onClick={toggleTheme}
- className="px-4 py-2 bg-blue-600 text-white rounded-md font-extrabold flex items-center gap-2 shadow"
+ className="px-4 py-2 bg-accent text-white rounded-md font-extrabold flex items-center gap-2 shadow"
               >
                 {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 {isDarkMode ? 'Modo Claro' : 'Modo Oscuro'}

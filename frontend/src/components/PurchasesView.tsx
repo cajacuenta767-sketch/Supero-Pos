@@ -122,7 +122,7 @@ export const PurchasesView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
         <div>
           <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <ShoppingCart className="w-7 h-7 text-blue-500" />
+            <ShoppingCart className="w-7 h-7 text-accent" />
             Compras y Abastecimiento ERP
           </h1>
           <p className="text-body text-ink-2 mt-1">
@@ -135,7 +135,7 @@ export const PurchasesView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('orders')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeSubTab === 'orders' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'orders' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <ShoppingCart className="w-4 h-4" />
@@ -144,7 +144,7 @@ export const PurchasesView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('receivings')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeSubTab === 'receivings' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'receivings' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Truck className="w-4 h-4" />
@@ -153,7 +153,7 @@ export const PurchasesView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('returns')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeSubTab === 'returns' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'returns' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <ArrowDownRight className="w-4 h-4" />
@@ -167,13 +167,13 @@ export const PurchasesView: React.FC = () => {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-raised p-4 rounded-md border border-line shadow-e1">
             <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
               <input
  type="text"
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
  placeholder="Buscar por # Orden o Proveedor..."
- className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink placeholder-gray-400 focus:border-accent"
+ className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent"
               />
             </div>
 
@@ -191,7 +191,7 @@ export const PurchasesView: React.FC = () => {
 
               <button
  onClick={() => setIsPOModalOpen(true)}
- className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
+ className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
               >
                 <Plus className="w-4 h-4" />
                 Nueva Orden de Compra
@@ -215,21 +215,21 @@ export const PurchasesView: React.FC = () => {
               <tbody className="divide-y divide-line text-body">
                 {filteredOrders.map((po) => {
  const statusBadge = {
-                    PENDING: { label: 'PENDIENTE RECEPCIÓN', color: 'bg-amber-100 text-amber-800 dark:bg-amber-950 border-amber-200' },
-                    PARTIAL_RECEIVED: { label: 'PARCIALMENTE RECIBIDO', color: 'bg-blue-100 text-blue-800 dark:bg-blue-950 border-blue-200' },
-                    COMPLETED: { label: 'RECIBIDO (COMPLETADO)', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 border-emerald-200' },
-                    CANCELLED: { label: 'ANULADA', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 border-rose-200' },
+                    PENDING: { label: 'PENDIENTE RECEPCIÓN', color: 'bg-warn-soft text-warn-ink dark:bg-warn-soft border-warn/30' },
+                    PARTIAL_RECEIVED: { label: 'PARCIALMENTE RECIBIDO', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30' },
+                    COMPLETED: { label: 'RECIBIDO (COMPLETADO)', color: 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30' },
+                    CANCELLED: { label: 'ANULADA', color: 'bg-danger-soft text-danger-ink dark:bg-danger-soft border-danger/30' },
                   }[po.status];
 
  return (
                     <tr key={po.id} className="hover:bg-sunken">
                       <td className="p-4 font-mono font-extrabold text-accent">
                         {po.id}
-                        <span className="block text-micro text-gray-400 font-normal">{po.date}</span>
+                        <span className="block text-micro text-ink-3 font-normal">{po.date}</span>
                       </td>
                       <td className="p-4 font-bold text-ink">
                         {po.supplier_name}
-                        <span className="block text-micro text-gray-400 font-mono font-normal">NIT: {po.supplier_tax_id}</span>
+                        <span className="block text-micro text-ink-3 font-mono font-normal">NIT: {po.supplier_tax_id}</span>
                       </td>
                       <td className="p-4 font-semibold text-ink-2">
                         {po.branch}
@@ -252,13 +252,13 @@ export const PurchasesView: React.FC = () => {
  setSelectedPO(po);
  setIsReceivingModalOpen(true);
                             }}
- className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md font-bold flex items-center gap-1 inline-flex"
+ className="p-1.5 text-ok hover:bg-ok-soft rounded-md font-bold flex items-center gap-1 inline-flex"
  title="Registrar Recepción Física"
                           >
                             <Truck className="w-4 h-4" /> Recibir
                           </button>
                         )}
-                        <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md" title="Imprimir OC">
+                        <button className="p-1.5 text-accent hover:bg-accent-soft rounded-md" title="Imprimir OC">
                           <Printer className="w-4 h-4" />
                         </button>
                       </td>
@@ -275,9 +275,9 @@ export const PurchasesView: React.FC = () => {
       {activeSubTab === 'receivings' && (
         <div className="bg-raised rounded-md border border-line p-6 shadow-e1 space-y-4">
           <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-            <Truck className="w-5 h-5 text-emerald-500" /> Control de Descarga y Verificación Física en Depósito
+            <Truck className="w-5 h-5 text-ok" /> Control de Descarga y Verificación Física en Depósito
           </h3>
-          <p className="text-body text-gray-500">Contraste de guías de remisión del proveedor frente al pedido original</p>
+          <p className="text-body text-ink-3">Contraste de guías de remisión del proveedor frente al pedido original</p>
 
           <div className="p-4 bg-sunken rounded-md border border-line text-body space-y-2">
             <span className="font-bold text-ink">Procedimiento Estándar de Recepción:</span>
@@ -297,17 +297,17 @@ export const PurchasesView: React.FC = () => {
             <div className="p-5 border-b border-line flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                  Recepción Física de Mercadería: <span className="font-mono text-blue-600">{selectedPO.id}</span>
+                  Recepción Física de Mercadería: <span className="font-mono text-accent">{selectedPO.id}</span>
                 </h3>
-                <p className="text-body text-gray-500">Proveedor: {selectedPO.supplier_name}</p>
+                <p className="text-body text-ink-3">Proveedor: {selectedPO.supplier_name}</p>
               </div>
-              <button onClick={() => setIsReceivingModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsReceivingModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
 
             <div className="p-5 space-y-4 text-body">
               <div className="border border-line rounded-md overflow-hidden">
                 <table className="w-full text-left">
-                  <thead className="bg-sunken text-micro font-bold uppercase text-gray-500">
+                  <thead className="bg-sunken text-micro font-bold uppercase text-ink-3">
                     <tr>
                       <th className="p-3">Producto / SKU</th>
                       <th className="p-3 text-center">Cant. Pedida</th>
@@ -320,11 +320,11 @@ export const PurchasesView: React.FC = () => {
                       <tr key={item.id}>
                         <td className="p-3 font-sans font-bold text-ink">
                           {item.name}
-                          <span className="block text-micro text-gray-400 font-mono">SKU: {item.sku}</span>
+                          <span className="block text-micro text-ink-3 font-mono">SKU: {item.sku}</span>
                         </td>
                         <td className="p-3 text-center font-bold">{item.ordered_qty}</td>
                         <td className="p-3 text-center">
-                          <input type="number" defaultValue={item.ordered_qty} className="w-16 p-1 bg-gray-100 text-center font-bold rounded" />
+                          <input type="number" defaultValue={item.ordered_qty} className="w-16 p-1 bg-sunken text-center font-bold rounded" />
                         </td>
                         <td className="p-3 text-right font-bold">${item.cost_price.toFixed(2)}</td>
                       </tr>
@@ -335,7 +335,7 @@ export const PurchasesView: React.FC = () => {
 
               {/* Mass IMEI Scanning Field if Serialized */}
               {selectedPO.items.some(i => i.unit_type === 'SERIALIZED') && (
-                <div className="p-4 bg-accent-soft border border-purple-200 dark:border-purple-800 rounded-md space-y-2">
+                <div className="p-4 bg-accent-soft border border-accent/30 dark:border-accent/30 rounded-md space-y-2">
                   <div className="flex items-center justify-between font-extrabold text-accent-ink">
                     <span className="flex items-center gap-1.5">
                       <Cpu className="w-4 h-4" /> Escaneo Masivo Obligatorio de IMEIs / Seriales
@@ -349,14 +349,14 @@ export const PurchasesView: React.FC = () => {
  value={imeiInput}
  onChange={(e) => setImeiInput(e.target.value)}
  placeholder="Escanear número de serie con pistola láser..."
- className="flex-1 p-2 bg-raised border border-purple-200 rounded-md font-mono text-body"
+ className="flex-1 p-2 bg-raised border border-accent/30 rounded-md font-mono text-body"
                     />
                     <button type="submit" className="px-3 bg-purple-600 text-white rounded-md font-bold">Agregar</button>
                   </form>
 
                   <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
                     {scannedImeis.map(imei => (
-                      <span key={imei} className="px-2 py-0.5 bg-purple-200 text-purple-900 rounded font-mono text-micro font-bold">
+                      <span key={imei} className="px-2 py-0.5 bg-purple-200 text-accent-ink rounded font-mono text-micro font-bold">
                         {imei}
                       </span>
                     ))}
@@ -364,7 +364,7 @@ export const PurchasesView: React.FC = () => {
                 </div>
               )}
 
-              <div className="p-4 bg-ok-soft border border-emerald-200 rounded-md space-y-1">
+              <div className="p-4 bg-ok-soft border border-ok/30 rounded-md space-y-1">
                 <span className="font-extrabold text-ok-ink flex items-center gap-1">
                   <TrendingUp className="w-4 h-4" /> Recálculo Automático de Costo Promedio Ponderado (CPP)
                 </span>
@@ -374,8 +374,8 @@ export const PurchasesView: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsReceivingModalOpen(false)} className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
-                <button onClick={handleConfirmReceiving} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-extrabold shadow">
+                <button type="button" onClick={() => setIsReceivingModalOpen(false)} className="px-4 py-2 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
+                <button onClick={handleConfirmReceiving} className="px-4 py-2 bg-ok hover:opacity-90 text-white rounded-md font-extrabold shadow">
                   Confirmar Ingreso & Actualizar Stock
                 </button>
               </div>
@@ -390,7 +390,7 @@ export const PurchasesView: React.FC = () => {
           <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-lg overflow-hidden space-y-4">
             <div className="p-5 border-b border-line flex items-center justify-between">
               <h3 className="font-extrabold text-base text-ink">Nueva Orden de Compra</h3>
-              <button onClick={() => setIsPOModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsPOModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
 
             <form onSubmit={(e) => { e.preventDefault(); setIsPOModalOpen(false); }} className="p-5 space-y-4 text-body">
@@ -420,8 +420,8 @@ export const PurchasesView: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsPOModalOpen(false)} className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-extrabold shadow">Emitir Orden Compra</button>
+                <button type="button" onClick={() => setIsPOModalOpen(false)} className="px-4 py-2 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md font-extrabold shadow">Emitir Orden Compra</button>
               </div>
             </form>
           </div>

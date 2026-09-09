@@ -104,7 +104,7 @@ export const TransfersView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
         <div>
           <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <ArrowLeftRight className="w-7 h-7 text-blue-500" />
+            <ArrowLeftRight className="w-7 h-7 text-accent" />
             Transferencias de Existencias y Traspasos
           </h1>
           <p className="text-body text-ink-2 mt-1">
@@ -117,7 +117,7 @@ export const TransfersView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('catalog')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeSubTab === 'catalog' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'catalog' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <ArrowLeftRight className="w-4 h-4" />
@@ -126,7 +126,7 @@ export const TransfersView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('reception')}
  className={`px-4 py-2 rounded-md text-body font-bold flex items-center gap-2 transition-all ${
- activeSubTab === 'reception' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'reception' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Truck className="w-4 h-4" />
@@ -140,13 +140,13 @@ export const TransfersView: React.FC = () => {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-raised p-4 rounded-md border border-line shadow-e1">
             <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
               <input
  type="text"
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
  placeholder="Buscar por # Guía, Origen o Destino..."
- className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink placeholder-gray-400 focus:border-accent"
+ className="w-full pl-9 pr-4 py-2 bg-sunken border border-line rounded-md text-body text-ink focus:border-accent"
               />
             </div>
 
@@ -164,7 +164,7 @@ export const TransfersView: React.FC = () => {
 
               <button
  onClick={() => setIsNewTransferModalOpen(true)}
- className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
+ className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-extrabold flex items-center gap-2 shadow-e1 transition-all"
               >
                 <Plus className="w-4 h-4" />
                 Nueva Transferencia
@@ -187,10 +187,10 @@ export const TransfersView: React.FC = () => {
               <tbody className="divide-y divide-line text-body">
                 {filteredTransfers.map((tr) => {
  const statusBadge = {
-                    PENDING: { label: 'PENDIENTE SALIDA', color: 'bg-amber-100 text-amber-800 dark:bg-amber-950 border-amber-200' },
-                    IN_TRANSIT: { label: 'EN TRÁNSITO (EN RUTA)', color: 'bg-blue-100 text-blue-800 dark:bg-blue-950 border-blue-200' },
-                    COMPLETED: { label: 'RECIBIDO (COMPLETADO)', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 border-emerald-200' },
-                    CANCELLED: { label: 'ANULADA', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 border-rose-200' },
+                    PENDING: { label: 'PENDIENTE SALIDA', color: 'bg-warn-soft text-warn-ink dark:bg-warn-soft border-warn/30' },
+                    IN_TRANSIT: { label: 'EN TRÁNSITO (EN RUTA)', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30' },
+                    COMPLETED: { label: 'RECIBIDO (COMPLETADO)', color: 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30' },
+                    CANCELLED: { label: 'ANULADA', color: 'bg-danger-soft text-danger-ink dark:bg-danger-soft border-danger/30' },
                   }[tr.status];
 
  return (
@@ -202,8 +202,8 @@ export const TransfersView: React.FC = () => {
                         {tr.date}
                       </td>
                       <td className="p-4 font-bold text-ink">
-                        <span className="text-gray-500 font-normal">{tr.source_branch}</span>
-                        <span className="mx-2 text-blue-500">→</span>
+                        <span className="text-ink-3 font-normal">{tr.source_branch}</span>
+                        <span className="mx-2 text-accent">→</span>
                         <span className="text-accent font-extrabold">{tr.destination_branch}</span>
                       </td>
                       <td className="p-4 font-mono font-bold">
@@ -220,11 +220,11 @@ export const TransfersView: React.FC = () => {
  setSelectedTransfer(tr);
  setIsDetailModalOpen(true);
                           }}
- className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md" title="Ver Guía de Remisión"
+ className="p-1.5 text-accent hover:bg-accent-soft rounded-md" title="Ver Guía de Remisión"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md" title="Imprimir Comprobante">
+                        <button className="p-1.5 text-ok hover:bg-ok-soft rounded-md" title="Imprimir Comprobante">
                           <Printer className="w-4 h-4" />
                         </button>
                         {tr.status === 'IN_TRANSIT' && (
@@ -233,7 +233,7 @@ export const TransfersView: React.FC = () => {
  setSelectedTransfer(tr);
  setIsReceptionModalOpen(true);
                             }}
- className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md font-bold flex items-center gap-1 inline-flex" title="Confirmar Recepción"
+ className="p-1.5 text-accent hover:bg-accent-soft rounded-md font-bold flex items-center gap-1 inline-flex" title="Confirmar Recepción"
                           >
                             <Truck className="w-4 h-4" /> Recibir
                           </button>
@@ -254,7 +254,7 @@ export const TransfersView: React.FC = () => {
           <div className="bg-raised rounded-md border border-line shadow-e3 w-full max-w-xl overflow-hidden space-y-4">
             <div className="p-5 border-b border-line flex items-center justify-between">
               <h3 className="font-extrabold text-base text-ink">Emisión de Nueva Transferencia de Stock</h3>
-              <button onClick={() => setIsNewTransferModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsNewTransferModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
 
             <form onSubmit={(e) => {
@@ -315,8 +315,8 @@ export const TransfersView: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsNewTransferModalOpen(false)} className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-extrabold shadow">
+                <button type="button" onClick={() => setIsNewTransferModalOpen(false)} className="px-4 py-2 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md font-extrabold shadow">
                   Emitir Guía de Remisión & Descontar Stock Origen
                 </button>
               </div>
@@ -332,15 +332,15 @@ export const TransfersView: React.FC = () => {
             <div className="p-5 border-b border-line flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-base text-ink">Auditoría Física de Entrada: {selectedTransfer.id}</h3>
-                <p className="text-body text-gray-500">Destino: {selectedTransfer.destination_branch}</p>
+                <p className="text-body text-ink-3">Destino: {selectedTransfer.destination_branch}</p>
               </div>
-              <button onClick={() => setIsReceptionModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setIsReceptionModalOpen(false)} className="text-ink-3 hover:text-ink-2">✕</button>
             </div>
 
             <div className="p-5 space-y-4 text-body">
               <div className="border border-line rounded-md overflow-hidden">
                 <table className="w-full text-left">
-                  <thead className="bg-sunken text-micro font-bold uppercase text-gray-500">
+                  <thead className="bg-sunken text-micro font-bold uppercase text-ink-3">
                     <tr>
                       <th className="p-3">Producto / SKU</th>
                       <th className="p-3 text-center">Cant. Despachada</th>
@@ -352,11 +352,11 @@ export const TransfersView: React.FC = () => {
                       <tr key={item.id}>
                         <td className="p-3 font-sans font-bold text-ink">
                           {item.name}
-                          <span className="block text-micro text-gray-400 font-mono">SKU: {item.sku}</span>
+                          <span className="block text-micro text-ink-3 font-mono">SKU: {item.sku}</span>
                         </td>
                         <td className="p-3 text-center font-bold">{item.qty}</td>
                         <td className="p-3 text-center">
-                          <input type="number" defaultValue={item.qty} className="w-16 p-1 bg-gray-100 text-center font-bold rounded" />
+                          <input type="number" defaultValue={item.qty} className="w-16 p-1 bg-sunken text-center font-bold rounded" />
                         </td>
                       </tr>
                     ))}
@@ -365,8 +365,8 @@ export const TransfersView: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsReceptionModalOpen(false)} className="px-4 py-2 bg-gray-200 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
-                <button onClick={handleConfirmReception} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-extrabold shadow">
+                <button type="button" onClick={() => setIsReceptionModalOpen(false)} className="px-4 py-2 bg-sunken text-ink rounded-md font-bold">Cancelar</button>
+                <button onClick={handleConfirmReception} className="px-4 py-2 bg-ok hover:opacity-90 text-white rounded-md font-extrabold shadow">
                   Aprobar Ingreso al Stock Destino
                 </button>
               </div>

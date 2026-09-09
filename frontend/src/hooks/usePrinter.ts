@@ -25,7 +25,7 @@ export const usePrinter = () => {
 declare global {
   interface Window {
     electronAPI?: {
-      printThermalTicket: (payload: any) => void;
+      printThermalTicket: (payload: unknown) => void;
     };
   }
 }

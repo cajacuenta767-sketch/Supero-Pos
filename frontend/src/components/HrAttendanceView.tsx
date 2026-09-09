@@ -122,7 +122,7 @@ export const HrAttendanceView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-raised p-5 rounded-md border border-line shadow-e1">
         <div>
           <h1 className="text-display font-black text-ink flex items-center gap-2">
-            <UserCheck className="w-7 h-7 text-blue-500" />
+            <UserCheck className="w-7 h-7 text-accent" />
             Recursos Humanos & Control de Asistencia POS
           </h1>
           <p className="text-body text-ink-2 mt-1">
@@ -135,7 +135,7 @@ export const HrAttendanceView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('timeclock')}
  className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
- activeSubTab === 'timeclock' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'timeclock' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Clock className="w-4 h-4" />
@@ -144,7 +144,7 @@ export const HrAttendanceView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('shifts')}
  className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
- activeSubTab === 'shifts' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'shifts' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Calendar className="w-4 h-4" />
@@ -153,7 +153,7 @@ export const HrAttendanceView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('engine')}
  className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
- activeSubTab === 'engine' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'engine' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <Award className="w-4 h-4" />
@@ -162,7 +162,7 @@ export const HrAttendanceView: React.FC = () => {
           <button
  onClick={() => setActiveSubTab('exceptions')}
  className={`px-3.5 py-2 rounded-md text-body font-bold flex items-center gap-1.5 transition-all ${
- activeSubTab === 'exceptions' ? 'bg-raised text-accent shadow-e1' : 'text-gray-500'
+ activeSubTab === 'exceptions' ? 'bg-raised text-accent shadow-e1' : 'text-ink-3'
             }`}
           >
             <FileText className="w-4 h-4" />
@@ -179,7 +179,7 @@ export const HrAttendanceView: React.FC = () => {
               <Clock className="w-8 h-8" />
             </div>
             <h2 className="text-title font-black text-ink">Marcación de Asistencia en Terminal POS</h2>
-            <p className="text-body text-gray-500 mt-1">Ingrese su PIN personal de 4 a 6 dígitos para validar entrada/salida</p>
+            <p className="text-body text-ink-3 mt-1">Ingrese su PIN personal de 4 a 6 dígitos para validar entrada/salida</p>
           </div>
 
           <form onSubmit={handleClockPUNCH} className="space-y-6">
@@ -188,7 +188,7 @@ export const HrAttendanceView: React.FC = () => {
  type="button"
  onClick={() => setClockEventType('CLOCK_IN')}
  className={`p-3.5 rounded-md border flex items-center justify-center gap-2 transition-all ${
- clockEventType === 'CLOCK_IN' ? 'bg-emerald-600 text-white border-emerald-600 shadow-e2' : 'bg-sunken text-ink-2'
+ clockEventType === 'CLOCK_IN' ? 'bg-ok text-white border-emerald-600 shadow-e2' : 'bg-sunken text-ink-2'
                 }`}
               >
                 <CheckCircle2 className="w-4 h-4" /> ENTRADA (CLOCK IN)
@@ -198,7 +198,7 @@ export const HrAttendanceView: React.FC = () => {
  type="button"
  onClick={() => setClockEventType('BREAK_START')}
  className={`p-3.5 rounded-md border flex items-center justify-center gap-2 transition-all ${
- clockEventType === 'BREAK_START' ? 'bg-amber-600 text-white border-amber-600 shadow-e2' : 'bg-sunken text-ink-2'
+ clockEventType === 'BREAK_START' ? 'bg-warn text-white border-amber-600 shadow-e2' : 'bg-sunken text-ink-2'
                 }`}
               >
                 <Clock className="w-4 h-4" /> INICIO DESCANSO
@@ -208,7 +208,7 @@ export const HrAttendanceView: React.FC = () => {
  type="button"
  onClick={() => setClockEventType('BREAK_END')}
  className={`p-3.5 rounded-md border flex items-center justify-center gap-2 transition-all ${
- clockEventType === 'BREAK_END' ? 'bg-blue-600 text-white border-blue-600 shadow-e2' : 'bg-sunken text-ink-2'
+ clockEventType === 'BREAK_END' ? 'bg-accent text-white border-blue-600 shadow-e2' : 'bg-sunken text-ink-2'
                 }`}
               >
                 <Clock className="w-4 h-4" /> FIN DESCANSO
@@ -218,7 +218,7 @@ export const HrAttendanceView: React.FC = () => {
  type="button"
  onClick={() => setClockEventType('CLOCK_OUT')}
  className={`p-3.5 rounded-md border flex items-center justify-center gap-2 transition-all ${
- clockEventType === 'CLOCK_OUT' ? 'bg-rose-600 text-white border-rose-600 shadow-e2' : 'bg-sunken text-ink-2'
+ clockEventType === 'CLOCK_OUT' ? 'bg-danger text-white border-rose-600 shadow-e2' : 'bg-sunken text-ink-2'
                 }`}
               >
                 <XCircle className="w-4 h-4" /> SALIDA (CLOCK OUT)
@@ -238,13 +238,13 @@ export const HrAttendanceView: React.FC = () => {
               />
             </div>
 
-            <div className="p-3 bg-accent-soft border border-blue-200 rounded-md text-left text-micro text-accent-ink font-semibold">
+            <div className="p-3 bg-accent-soft border border-accent/30 rounded-md text-left text-micro text-accent-ink font-semibold">
               🔒 Regla de Seguridad: La terminal POS requiere registro oficial de ENTRADA para abrir la caja física.
             </div>
 
             <button
  type="submit"
- className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-black text-base shadow-e2 flex items-center justify-center gap-2"
+ className="w-full py-4 bg-accent hover:bg-accent-hover text-white rounded-md font-black text-base shadow-e2 flex items-center justify-center gap-2"
             >
               <Lock className="w-5 h-5" /> CONFIRMAR MARCA EN ATÓMICO
             </button>
@@ -257,7 +257,7 @@ export const HrAttendanceView: React.FC = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between bg-raised p-4 rounded-md border border-line shadow-e1">
             <h3 className="font-extrabold text-base text-ink">Programación de Turnos & Tolerancia de Ingreso</h3>
-            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
+            <button className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md text-body font-bold flex items-center gap-1.5 shadow">
               <Plus className="w-4 h-4" /> Crear Horario de Trabajo
             </button>
           </div>
@@ -267,9 +267,9 @@ export const HrAttendanceView: React.FC = () => {
               <div key={s.id} className="bg-raised p-6 rounded-md border border-line shadow-e1 space-y-3">
                 <div className="flex items-center justify-between border-b border-line pb-3">
                   <h4 className="font-extrabold text-base text-ink flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-blue-500" /> {s.name}
+                    <Calendar className="w-5 h-5 text-accent" /> {s.name}
                   </h4>
-                  <span className="px-2.5 py-1 bg-blue-100 text-blue-800 dark:bg-blue-950 border border-blue-200 rounded-md text-body font-mono font-bold">
+                  <span className="px-2.5 py-1 bg-accent-soft text-accent-ink dark:bg-accent-soft border border-accent/30 rounded-md text-body font-mono font-bold">
                     {s.start_time} - {s.end_time}
                   </span>
                 </div>
@@ -289,7 +289,7 @@ export const HrAttendanceView: React.FC = () => {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-raised p-4 rounded-md border border-line shadow-e1">
             <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
               <input
  type="text"
  value={searchQuery}
@@ -315,10 +315,10 @@ export const HrAttendanceView: React.FC = () => {
               <tbody className="divide-y divide-line text-body">
                 {filteredLogs.map((log) => {
  const statusBadge = {
-                    ON_TIME: { label: 'A TIEMPO (PUNTUAL)', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 border-emerald-200' },
-                    LATE: { label: `RETRASO (${log.lateness_minutes} min)`, color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 border-rose-200' },
-                    OVERTIME: { label: 'HORAS EXTRAS', color: 'bg-purple-100 text-purple-800 dark:bg-purple-950 border-purple-200' },
-                    JUSTIFIED: { label: 'JUSTIFICADO', color: 'bg-blue-100 text-blue-800 dark:bg-blue-950 border-blue-200' },
+                    ON_TIME: { label: 'A TIEMPO (PUNTUAL)', color: 'bg-ok-soft text-ok-ink dark:bg-ok-soft border-ok/30' },
+                    LATE: { label: `RETRASO (${log.lateness_minutes} min)`, color: 'bg-danger-soft text-danger-ink dark:bg-danger-soft border-danger/30' },
+                    OVERTIME: { label: 'HORAS EXTRAS', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30' },
+                    JUSTIFIED: { label: 'JUSTIFICADO', color: 'bg-accent-soft text-accent-ink dark:bg-accent-soft border-accent/30' },
                   }[log.status];
 
  return (
@@ -327,7 +327,7 @@ export const HrAttendanceView: React.FC = () => {
                       <td className="p-4 font-mono text-ink-2">{log.timestamp}</td>
                       <td className="p-4 font-bold text-ink">{log.employee_name} ({log.role})</td>
                       <td className="p-4 font-bold">
-                        <span className="px-2 py-0.5 bg-gray-100 bg-sunken rounded font-mono text-micro">
+                        <span className="px-2 py-0.5 bg-sunken rounded font-mono text-micro">
                           {log.event_type}
                         </span>
                       </td>
@@ -354,13 +354,13 @@ export const HrAttendanceView: React.FC = () => {
           <div className="flex items-center justify-between border-b border-line pb-4">
             <div>
               <h3 className="font-extrabold text-base text-ink flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-500" /> Licencias Médicas, Permisos & Justificación de Faltas
+                <FileText className="w-5 h-5 text-accent" /> Licencias Médicas, Permisos & Justificación de Faltas
               </h3>
-              <p className="text-body text-gray-500">Registro de excepciones con o sin goce de haber</p>
+              <p className="text-body text-ink-3">Registro de excepciones con o sin goce de haber</p>
             </div>
             <button
  onClick={() => setIsExceptionModalOpen(true)}
- className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-bold text-body flex items-center gap-2 shadow"
+ className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-md font-bold text-body flex items-center gap-2 shadow"
             >
               <Plus className="w-4 h-4" /> Registrar Permiso / Licencia
             </button>
@@ -368,7 +368,7 @@ export const HrAttendanceView: React.FC = () => {
 
           <table className="w-full text-left border-collapse text-body">
             <thead>
-              <tr className="bg-sunken text-gray-500 uppercase text-micro font-bold border-b border-line">
+              <tr className="bg-sunken text-ink-3 uppercase text-micro font-bold border-b border-line">
                 <th className="p-4">Empleado</th>
                 <th className="p-4">Tipo de Excepción</th>
                 <th className="p-4">Rango de Fechas</th>
@@ -384,7 +384,7 @@ export const HrAttendanceView: React.FC = () => {
                   <td className="p-4 font-mono text-ink-2">{exc.date_range}</td>
                   <td className="p-4 font-semibold text-ink-2">{exc.notes}</td>
                   <td className="p-4 text-right">
-                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 border border-emerald-200 rounded-md text-micro font-bold">
+                    <span className="px-2.5 py-1 bg-ok-soft text-ok-ink dark:bg-ok-soft border border-ok/30 rounded-md text-micro font-bold">
                       APROBADO
                     </span>
                   </td>

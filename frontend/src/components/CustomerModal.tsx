@@ -66,7 +66,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ isOpen, onClose })
             <UserCheck className="w-5 h-5" />
             <h3 className="font-bold text-title text-ink">Selección / Alta Rápida de Cliente</h3>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+          <button onClick={onClose} className="text-ink-3 hover:text-ink-2 dark:hover:text-white">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -75,7 +75,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ isOpen, onClose })
           <>
             {/* Search Input */}
             <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
               <input
  type="text"
  autoFocus
@@ -89,7 +89,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ isOpen, onClose })
             {/* Quick Add Button */}
             <button
  onClick={() => setIsCreating(true)}
- className="w-full py-2 bg-accent-soft border border-blue-200 dark:border-blue-800 text-accent rounded-md text-body font-bold flex items-center justify-center space-x-1 hover:bg-blue-100 transition-colors"
+ className="w-full py-2 bg-accent-soft border border-accent/30 dark:border-accent/30 text-accent rounded-md text-body font-bold flex items-center justify-center space-x-1 hover:bg-accent-soft transition-colors"
             >
               <Plus className="w-4 h-4" />
               <span>Registrar Nuevo Cliente Rápido</span>
@@ -103,7 +103,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ isOpen, onClose })
  onClick={() => handleSelect(c)}
  className={`p-3 rounded-md border cursor-pointer flex items-center justify-between transition-all ${
  selectedCustomer.id === c.id
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-e1'
+                      ? 'bg-accent text-white border-blue-600 shadow-e1'
  : 'bg-sunken border-line text-ink hover:border-blue-400'
                   }`}
                 >
@@ -119,7 +119,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ isOpen, onClose })
                       </span>
                     )}
                     {c.group === 'MAYORISTA' && (
-                      <span className="px-2 py-0.5 rounded text-micro font-bold bg-purple-200 text-purple-900">
+                      <span className="px-2 py-0.5 rounded text-micro font-bold bg-purple-200 text-accent-ink">
                         MAYORISTA
                       </span>
                     )}
@@ -167,7 +167,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ isOpen, onClose })
               </label>
               <select
  value={newCustomer.group}
- onChange={(e) => setNewCustomer({ ...newCustomer, group: e.target.value as any })}
+ onChange={(e) => setNewCustomer({ ...newCustomer, group: e.target.value as typeof newCustomer.group })}
  className="w-full p-2 bg-sunken border border-line-strong rounded-md text-body text-ink focus:border-accent"
               >
                 <option value="GENERAL">General (Sin descuento)</option>
@@ -186,7 +186,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ isOpen, onClose })
               </button>
               <button
  type="submit"
- className="w-1/2 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-body font-bold"
+ className="w-1/2 py-2 rounded-md bg-accent hover:bg-accent-hover text-white text-body font-bold"
               >
                 Guardar Cliente
               </button>

@@ -7,7 +7,7 @@ const SERVER_HEALTH_URL = 'http://localhost:3000/api/v1/health';
 const BATCH_SYNC_URL = 'http://localhost:3000/api/v1/sync/batch';
 
 export class SyncWorkerService {
-  private timerId: any = null;
+  private timerId: ReturnType<typeof setInterval> | null = null;
   private isProcessing = false;
 
   public startWorker(intervalMs = 30000) {
@@ -84,8 +84,9 @@ export class SyncWorkerService {
               console.warn(`Respuesta no confirmada para ticket ${item.local_id}. Deteniendo flujo FIFO.`);
               break;
             }
-          } catch (err: any) {
-            console.warn(`Error en envío FIFO para ticket ${item.local_id}: ${err?.message}. Congelando transmisión.`);
+          } catch (err) {
+            const reason = err instanceof Error ? err.message : String(err);
+            console.warn(`Error en envío FIFO para ticket ${item.local_id}: ${reason}. Congelando transmisión.`);
             if (item.id !== undefined) {
               localDb.incrementAttempts(item.id);
             }
