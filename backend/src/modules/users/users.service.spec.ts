@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -31,6 +31,7 @@ describe('UsersService', () => {
         findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue(mockUser),
         update: jest.fn().mockResolvedValue({ ...mockUser, isActive: false }),
+        count: jest.fn().mockResolvedValue(1),
       },
       role: {
         findUnique: jest.fn().mockResolvedValue({ id: 'role-uuid-cajero', name: 'CAJERO' }),
@@ -134,6 +135,89 @@ describe('UsersService', () => {
           data: { isActive: false },
         }),
       );
+    });
+  });
+
+  /**
+   * Quedarse sin administrador no se puede deshacer desde la aplicación: hay
+   * que entrar a la base de datos. Estas guardas vivían solo en el navegador.
+   */
+  describe('no dejar el sistema sin administrador', () => {
+    const admin = {
+      ...mockUser,
+      id: 'user-uuid-admin',
+      username: 'admin',
+      roleId: 'role-uuid-admin',
+      role: { id: 'role-uuid-admin', name: 'ADMIN', permissions: {} },
+    };
+
+    const comoAdmin = () => {
+      prismaMock.user.findUnique.mockResolvedValue(admin);
+      prismaMock.role.findUnique.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          where.id === 'role-uuid-admin'
+            ? { id: 'role-uuid-admin', name: 'ADMIN' }
+            : { id: 'role-uuid-cajero', name: 'CAJERO' },
+        ),
+      );
+    };
+
+    it('rechaza que alguien se desactive a sí mismo', async () => {
+      comoAdmin();
+      prismaMock.user.count.mockResolvedValue(5);
+
+      await expect(service.toggleActive(admin.id, false, admin.id)).rejects.toThrow(ForbiddenException);
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('rechaza desactivar al último administrador activo', async () => {
+      comoAdmin();
+      prismaMock.user.count.mockResolvedValue(0);
+
+      await expect(service.toggleActive(admin.id, false, 'user-uuid-otro-admin')).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('permite desactivar a un administrador si queda otro activo', async () => {
+      comoAdmin();
+      prismaMock.user.count.mockResolvedValue(1);
+
+      await expect(
+        service.toggleActive(admin.id, false, 'user-uuid-otro-admin'),
+      ).resolves.toMatchObject({ success: true });
+      expect(prismaMock.user.update).toHaveBeenCalled();
+    });
+
+    it('rechaza quitarle el rol al último administrador desde la edición', async () => {
+      comoAdmin();
+      prismaMock.user.count.mockResolvedValue(0);
+      prismaMock.role.findFirst.mockResolvedValue({ id: 'role-uuid-cajero', name: 'CAJERO' });
+
+      await expect(
+        service.update(admin.id, { roleId: 'CAJERO' }, 'user-uuid-otro-admin'),
+      ).rejects.toThrow(ConflictException);
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('rechaza la baja del último administrador también desde la edición', async () => {
+      comoAdmin();
+      prismaMock.user.count.mockResolvedValue(0);
+
+      await expect(
+        service.update(admin.id, { isActive: false }, 'user-uuid-otro-admin'),
+      ).rejects.toThrow(ConflictException);
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('no estorba al desactivar a un cajero', async () => {
+      prismaMock.user.count.mockResolvedValue(0);
+
+      await expect(
+        service.toggleActive(mockUser.id, false, 'user-uuid-admin'),
+      ).resolves.toMatchObject({ success: true });
+      expect(prismaMock.user.count).not.toHaveBeenCalled();
     });
   });
 });

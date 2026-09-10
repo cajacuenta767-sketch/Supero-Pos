@@ -12,6 +12,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser, UserContext } from '../../common/decorators/current-user.decorator';
 
 @Controller('users')
 export class UsersController {
@@ -57,16 +58,18 @@ export class UsersController {
   async update(
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
+    @CurrentUser() solicitante: UserContext,
   ) {
-    return this.usersService.update(id, updateUserDto);
+    return this.usersService.update(id, updateUserDto, solicitante.id);
   }
 
   @Patch(':id/toggle-active')
   @Roles('ADMIN')
   async toggleActive(
     @Param('id') id: string,
+    @CurrentUser() solicitante: UserContext,
     @Body('isActive') isActive?: boolean,
   ) {
-    return this.usersService.toggleActive(id, isActive);
+    return this.usersService.toggleActive(id, isActive, solicitante.id);
   }
 }

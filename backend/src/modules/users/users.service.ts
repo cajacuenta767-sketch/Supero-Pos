@@ -2,7 +2,8 @@ import {
   Injectable, 
   NotFoundException, 
   ConflictException, 
-  BadRequestException 
+  BadRequestException,
+  ForbiddenException 
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -31,7 +32,83 @@ export class UsersService {
   }
 
   /**
-   * Helper to resolve Role ID by UUID or Role Name
+   * Impide que una baja o un cambio de rol deje el sistema sin administrador.
+   *
+   * Las dos comprobaciones vivían solo en `UsersView.tsx`, es decir, en el
+   * navegador: bastaba una llamada directa al endpoint para saltárselas. Con
+   * el último administrador desactivado —o degradado a cajero— nadie puede
+   * volver a entrar a gestionar usuarios, y la única salida es tocar la base
+   * de datos a mano.
+   *
+   * Se comprueban dos cosas distintas:
+   *
+   * 1. Nadie se da de baja a sí mismo. Es casi siempre un descuido, y el
+   *    afectado es justo quien no podría deshacerlo.
+   * 2. Queda al menos un administrador activo después del cambio. Cuenta
+   *    tanto desactivar como quitarle el rol de administrador al último.
+   */
+  private async assertNoDejaSinAdministrador(params: {
+    objetivo: { id: string; isActive: boolean; roleId: string };
+    solicitanteId?: string;
+    nuevoIsActive?: boolean;
+    nuevoRoleId?: string;
+  }) {
+    const { objetivo, solicitanteId, nuevoIsActive, nuevoRoleId } = params;
+
+    const quedaraInactivo = nuevoIsActive === false;
+
+    if (quedaraInactivo && solicitanteId && solicitanteId === objetivo.id) {
+      throw new ForbiddenException({
+        success: false,
+        status_code: 403,
+        message:
+          'No puede desactivar su propia cuenta: nadie podría reactivarla en su nombre. Pídaselo a otro administrador.',
+      });
+    }
+
+    // Solo hay riesgo si el usuario es hoy un administrador activo.
+    const rolActual = await this.prisma.role.findUnique({ where: { id: objetivo.roleId } });
+    const esAdminActivo = objetivo.isActive && rolActual?.name?.toUpperCase() === 'ADMIN';
+    if (!esAdminActivo) return;
+
+    const pierdeElRol =
+      nuevoRoleId !== undefined && nuevoRoleId !== objetivo.roleId;
+    const seguiraSiendoAdmin = pierdeElRol
+      ? (await this.prisma.role.findUnique({ where: { id: nuevoRoleId } }))?.name?.toUpperCase() === 'ADMIN'
+      : true;
+
+    if (!quedaraInactivo && seguiraSiendoAdmin) return;
+
+    const otrosAdmins = await this.prisma.user.count({
+      where: {
+        id: { not: objetivo.id },
+        isActive: true,
+        role: { name: { equals: 'ADMIN', mode: 'insensitive' } },
+      },
+    });
+
+    if (otrosAdmins === 0) {
+      throw new ConflictException({
+        success: false,
+        status_code: 409,
+        message: quedaraInactivo
+          ? 'Es el último administrador activo: desactivarlo dejaría el sistema sin quien lo gestione. Nombre antes a otro administrador.'
+          : 'Es el último administrador activo: cambiarle el rol dejaría el sistema sin quien lo gestione. Nombre antes a otro administrador.',
+      });
+    }
+  }
+
+  /**
+   * Traduce a identificador el rol que llega, sea un UUID o un nombre.
+   *
+   * Antes, si no encontraba nada, inventaba el rol: escribir «CAJEROO» en el
+   * alta creaba un rol nuevo con ese nombre y permisos mínimos, sin avisar. El
+   * usuario quedaba dado de alta con un rol que nadie definió, el rol falso
+   * aparecía desde entonces en todos los selectores, y no hay forma de
+   * borrarlo desde la aplicación.
+   *
+   * Los roles son parte del diseño del sistema, no un campo de texto libre: se
+   * crean en la semilla. Aquí se rechaza lo que no exista, diciendo cuáles hay.
    */
   private async resolveRoleId(roleIdOrName: string): Promise<string> {
     if (!roleIdOrName) {
@@ -51,16 +128,16 @@ export class UsersService {
     }
 
     if (!role) {
-      // If role does not exist, auto-create it with standard defaults
-      role = await this.prisma.role.create({
-        data: {
-          name: roleIdOrName.toUpperCase(),
-          permissions: {
-            'pos.create': true,
-            'pos.discount': roleIdOrName.toUpperCase() === 'ADMIN' || roleIdOrName.toUpperCase() === 'SUPERVISOR',
-            'pos.void': roleIdOrName.toUpperCase() === 'ADMIN' || roleIdOrName.toUpperCase() === 'SUPERVISOR',
-          },
-        },
+      const disponibles = await this.prisma.role.findMany({
+        select: { name: true },
+        orderBy: { name: 'asc' },
+      });
+      throw new BadRequestException({
+        success: false,
+        status_code: 400,
+        message: `El rol '${roleIdOrName}' no existe. Roles disponibles: ${disponibles
+          .map((r) => r.name)
+          .join(', ')}.`,
       });
     }
 
@@ -68,7 +145,13 @@ export class UsersService {
   }
 
   /**
-   * Helper to resolve Branch ID by UUID or Branch Name
+   * Traduce a identificador la sucursal que llega, sea un UUID o un nombre.
+   *
+   * Mismo problema que con los roles, y peor: la sucursal inventada se
+   * guardaba con una dirección y un teléfono fabricados —«Av. Principal #100»—
+   * que parecen datos de verdad. A partir de ahí figura en los informes, en
+   * los filtros de existencias y en el selector de sucursal del alta, sin que
+   * exista ninguna tienda detrás.
    */
   private async resolveBranchId(branchIdOrName: string): Promise<string> {
     if (!branchIdOrName) {
@@ -88,13 +171,16 @@ export class UsersService {
     }
 
     if (!branch) {
-      // Auto-create branch if missing
-      branch = await this.prisma.branch.create({
-        data: {
-          name: branchIdOrName,
-          address: 'Av. Principal #100',
-          phone: '+591 4-4000000',
-        },
+      const disponibles = await this.prisma.branch.findMany({
+        select: { name: true },
+        orderBy: { name: 'asc' },
+      });
+      throw new BadRequestException({
+        success: false,
+        status_code: 400,
+        message: `La sucursal '${branchIdOrName}' no existe. Sucursales disponibles: ${disponibles
+          .map((b) => b.name)
+          .join(', ')}.`,
       });
     }
 
@@ -248,7 +334,7 @@ export class UsersService {
   /**
    * Update User
    */
-  async update(id: string, dto: UpdateUserDto) {
+  async update(id: string, dto: UpdateUserDto, solicitanteId?: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException({
@@ -318,6 +404,15 @@ export class UsersService {
       updateData.isActive = dto.isActive;
     }
 
+    /* Editar también da de baja y también cambia el rol: la misma guarda que
+       en `toggleActive`, o el agujero se abre por la otra puerta. */
+    await this.assertNoDejaSinAdministrador({
+      objetivo: { id: user.id, isActive: user.isActive, roleId: user.roleId },
+      solicitanteId,
+      nuevoIsActive: updateData.isActive,
+      nuevoRoleId: updateData.roleId,
+    });
+
     const updatedUser = await this.prisma.user.update({
       where: { id },
       data: updateData,
@@ -338,7 +433,7 @@ export class UsersService {
   /**
    * Toggle Active / Soft Delete (Baja Lógica / Reactivación)
    */
-  async toggleActive(id: string, targetState?: boolean) {
+  async toggleActive(id: string, targetState?: boolean, solicitanteId?: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException({
@@ -349,6 +444,12 @@ export class UsersService {
     }
 
     const newActiveState = targetState !== undefined ? targetState : !user.isActive;
+
+    await this.assertNoDejaSinAdministrador({
+      objetivo: { id: user.id, isActive: user.isActive, roleId: user.roleId },
+      solicitanteId,
+      nuevoIsActive: newActiveState,
+    });
 
     const updatedUser = await this.prisma.user.update({
       where: { id },
