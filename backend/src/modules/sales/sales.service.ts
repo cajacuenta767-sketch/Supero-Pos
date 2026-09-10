@@ -311,12 +311,18 @@ export class SalesService {
 
       // Create Audit Log
       if (this.auditService) {
-        await this.auditService.log({
-          userId: adminUserId,
-          branchId: sale.branchId,
-          action: 'VOID_SALE',
-          details: { saleId: ticketId, ticketNumber: sale.ticketNumber, reason },
-        });
+        /* Con el cliente de la transacción: una anulación sin rastro, o un
+           rastro de una anulación que se deshizo, son las dos formas de que
+           este registro no sirva para nada. */
+        await this.auditService.log(
+          {
+            userId: adminUserId,
+            branchId: sale.branchId,
+            action: 'VOID_SALE',
+            details: { saleId: ticketId, ticketNumber: sale.ticketNumber, reason },
+          },
+          tx,
+        );
       }
 
       return {

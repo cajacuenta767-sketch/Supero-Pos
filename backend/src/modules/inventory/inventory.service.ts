@@ -104,7 +104,7 @@ export class InventoryService {
             reason: dto.reason,
             product_id: dto.product_id,
           },
-        });
+        }, tx);
       }
 
       return {
