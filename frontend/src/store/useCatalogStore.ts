@@ -15,7 +15,19 @@ import { localId } from '../utils/ids';
 export type UnitType = 'UNIT' | 'FRACTION' | 'SERIALIZED';
 
 export interface Product {
+  /** Identificador local. Es el que usan las vistas y el kardex. */
   id: number;
+  /**
+   * Identificador del mismo producto en el servidor.
+   *
+   * La terminal y la central llevaban catálogos separados que solo coincidían
+   * porque la siembra los arrancaba de la misma lista. Una venta de un producto
+   * que el servidor no conoce se rechaza al sincronizar y se queda en la cola,
+   * así que la venta viaja con este identificador cuando existe. Un producto
+   * dado de alta solo en la caja no lo tiene todavía: se le asigna en cuanto
+   * la caja se pone al día con la central.
+   */
+  serverId?: string;
   sku: string;
   barcode: string;
   name: string;
@@ -294,6 +306,19 @@ interface CatalogState {
   ) => { product: Product; field: 'sku' | 'barcode' } | undefined;
   /** Vuelve a leer lo guardado: otra ventana de la misma caja pudo vender. */
   hydrate: () => void;
+  /**
+   * Pone la caja al día con el catálogo de la central.
+   *
+   * Empareja por SKU, que es único a los dos lados: al producto que ya está se
+   * le anota el identificador del servidor —sin tocar sus existencias, que las
+   * lleva el kardex local mientras no hay red— y el que solo existe en la
+   * central se añade con las suyas.
+   *
+   * Lo que hay solo en la caja no se toca ni se borra: puede ser un alta
+   * reciente que aún no ha subido, y perderla sería peor que tenerla
+   * descuadrada.
+   */
+  syncWithServer: () => Promise<{ vinculados: number; nuevos: number } | null>;
 }
 
 const persist = (products: Product[]) => {
@@ -327,6 +352,49 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         state.products.map((p) => (p.id === id ? { ...p, is_active: !p.is_active } : p)),
       ),
     })),
+
+  syncWithServer: async () => {
+    let remotos: Array<Omit<Product, 'id'> & { id: string }>;
+    try {
+      const { apiClient } = await import('../services/api.client');
+      const { data } = await apiClient.get('/products/catalog');
+      remotos = data?.data ?? [];
+    } catch {
+      /* Sin red la caja sigue con lo que tiene: es el modo normal de trabajo,
+         no un error que haya que anunciar. */
+      return null;
+    }
+
+    let vinculados = 0;
+    let nuevos = 0;
+
+    set((state) => {
+      const porSku = new Map(state.products.map((p) => [p.sku.trim().toLowerCase(), p]));
+      let siguienteId = Math.max(0, ...state.products.map((p) => p.id)) + 1;
+      const products = [...state.products];
+
+      for (const remoto of remotos) {
+        const local = porSku.get(remoto.sku.trim().toLowerCase());
+
+        if (local) {
+          if (local.serverId !== remoto.id) {
+            const i = products.findIndex((p) => p.id === local.id);
+            products[i] = { ...local, serverId: remoto.id };
+            vinculados += 1;
+          }
+          continue;
+        }
+
+        products.push({ ...remoto, id: siguienteId++, serverId: remoto.id, is_active: true });
+        nuevos += 1;
+      }
+
+      if (vinculados === 0 && nuevos === 0) return state;
+      return { products: persist(products) };
+    });
+
+    return { vinculados, nuevos };
+  },
 
   hydrate: () => {
     const products = readPersisted<Product[]>(STORAGE_KEY);

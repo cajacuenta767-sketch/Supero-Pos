@@ -6,7 +6,7 @@ export class ProductsService {
   constructor(private prisma: PrismaService) {}
 
   // High-performance POS Lookup (<200ms) by barcode, SKU, or name
-  async posLookup(query: string, branchId = 'default-branch') {
+  async posLookup(query: string, branchId: string) {
     const products = await this.prisma.product.findMany({
       where: {
         isActive: true,
@@ -44,6 +44,45 @@ export class ProductsService {
           stock_available: stock,
         };
       }),
+    };
+  }
+
+  /**
+   * Catálogo vendible de una sucursal, con sus existencias.
+   *
+   * La terminal traía su propio catálogo y el servidor el suyo, y solo
+   * coincidían porque la siembra los arrancaba de la misma lista. Un producto
+   * dado de alta en la central no llegaba nunca a la caja, y una venta de un
+   * producto que el servidor no conoce se rechaza al sincronizar y se queda en
+   * la cola. Con esto la caja puede ponerse al día cuando hay red.
+   */
+  async catalogForBranch(branchId: string) {
+    const products = await this.prisma.product.findMany({
+      where: { isActive: true },
+      include: { category: true, brand: true, stocks: { where: { branchId } } },
+      orderBy: { name: 'asc' },
+    });
+
+    return {
+      success: true,
+      status_code: 200,
+      data: products.map((p) => ({
+        id: p.id,
+        sku: p.sku,
+        barcode: p.barcode ?? '',
+        name: p.name,
+        category: p.category.name,
+        brand: p.brand?.name ?? undefined,
+        unit_type: p.unitType,
+        cost_price: Number(p.costPrice),
+        sale_price: Number(p.retailPrice),
+        wholesale_price: Number(p.wholesalePrice),
+        wholesale_min_qty: Number(p.wholesaleMinQty),
+        min_stock: Number(p.minStock),
+        /* Existencias de esta sucursal. Sin fila de stock son cero: el producto
+           existe en el catálogo pero no hay nada en esta tienda. */
+        stock: p.stocks[0] ? Number(p.stocks[0].quantity) : 0,
+      })),
     };
   }
 

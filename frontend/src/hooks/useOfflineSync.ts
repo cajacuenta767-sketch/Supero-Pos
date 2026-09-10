@@ -3,6 +3,8 @@ import { useSyncStore } from '../store/useSyncStore';
 import { syncWorker } from '../services/syncWorker';
 import { localDb } from '../db/sqlite';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { useCatalogStore } from '../store/useCatalogStore';
+import { useAuthStore } from '../store/useAuthStore';
 
 export const useOfflineSync = () => {
   const isOnline = useSyncStore((state) => state.isOnline);
@@ -12,6 +14,20 @@ export const useOfflineSync = () => {
   /* El intervalo sale de los ajustes. Estaba fijo en 30 s y el campo de
      «Sincronización» era decorativo. */
   const syncIntervalSec = useSettingsStore((state) => state.syncIntervalSec);
+
+  /* La caja se pone al día con el catálogo de la central en cuanto hay sesión.
+     Sin esto, un producto dado de alta en la central no llegaba nunca a la
+     caja, y las ventas de lo que la caja no comparte con el servidor se
+     rechazan al sincronizar y se quedan en la cola.
+
+     Va atado al token y no al montaje: el catálogo exige sesión iniciada, así
+     que pedirlo al arrancar solo conseguía un 401 por cada intento. */
+  const token = useAuthStore((state) => state.token);
+
+  useEffect(() => {
+    if (!token) return;
+    void useCatalogStore.getState().syncWithServer();
+  }, [token]);
 
   useEffect(() => {
     // Cargar conteo inicial de la cola local SQLite
@@ -25,6 +41,7 @@ export const useOfflineSync = () => {
     const handleOnline = () => {
       useSyncStore.getState().setIsOnline(true);
       console.log('Detección pasiva: Red ONLINE restablecida. Disparando reconciliación FIFO...');
+      void useCatalogStore.getState().syncWithServer();
       syncWorker.triggerManualSync();
     };
 

@@ -70,6 +70,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
     usePosStore();
   const toast = useToast();
   const applyMovements = useCatalogStore((state) => state.applyMovements);
+  const catalog = useCatalogStore((state) => state.products);
   const markSerialsSold = useCatalogStore((state) => state.markSerialsSold);
   const recordSale = useSalesStore((state) => state.recordSale);
   const cashier = useAuthStore((state) => state.user);
@@ -205,7 +206,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
               : [];
 
         return {
-          product_id: String(item.id),
+          /* El identificador que conoce el servidor, si la caja ya se puso al
+             día con la central. Con el local, la venta se rechaza al
+             sincronizar porque ese producto no existe allí. */
+          product_id: catalog.find((p) => p.id === item.id)?.serverId ?? String(item.id),
           quantity: item.quantity,
           unit_price: item.unit_price,
           line_subtotal: item.subtotal,

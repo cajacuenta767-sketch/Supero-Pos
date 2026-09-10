@@ -115,11 +115,29 @@ export const usePosStore = create<PosState>((set, get) => ({
       }
 
       if (caja) {
-        const { data } = await apiClient.post('/cash-registers/open', {
-          registerId: caja,
-          initialFloat: float,
-        });
-        const shiftId = data?.data?.id ?? data?.id;
+        let shiftId: string | undefined;
+
+        try {
+          const { data } = await apiClient.post('/cash-registers/open', {
+            registerId: caja,
+            initialFloat: float,
+          });
+          shiftId = data?.data?.id ?? data?.id;
+        } catch (error) {
+          /* Ya había un turno abierto en esa caja —la terminal se reinició, o
+             se recargó la página— y el servidor hace bien en no abrir otro. Se
+             adopta el que hay: antes la caja se conformaba con uno local, y
+             cada venta hecha bajo él se rechazaba al sincronizar por «turno
+             inexistente». */
+          const yaAbierto = (error as { response?: { status?: number } }).response?.status === 400;
+          if (!yaAbierto) throw error;
+
+          const { data } = await apiClient.get('/cash-registers/active-shift', {
+            params: { registerId: caja },
+          });
+          shiftId = data?.data?.id;
+        }
+
         if (shiftId) {
           remote = { shiftId, registerId: caja, registerName: nombre ?? 'Caja' };
         }
