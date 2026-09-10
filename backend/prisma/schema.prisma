@@ -13,40 +13,41 @@ datasource db {
 // 1. Módulo de Usuarios, Roles y Seguridad (RBAC)
 // ----------------------------------------------------
 model Role {
-  id          String   @id @default(uuid())
-  name        String   @unique // Admin, Cajero, Almacenero, Supervisor
-  permissions Json     // Matriz de permisos por módulo
+  id          String @id @default(uuid())
+  name        String @unique // Admin, Cajero, Almacenero, Supervisor
+  permissions Json // Matriz de permisos por módulo
 
-  users       User[]
+  users User[]
 
   @@map("roles")
 }
 
 model User {
-  id           String    @id @default(uuid())
-  username     String    @unique
-  fullName     String
-  email        String    @unique
-  phone        String?
-  passwordHash String
+  id                String    @id @default(uuid())
+  username          String    @unique
+  fullName          String
+  email             String    @unique
+  phone             String?
+  passwordHash      String
   // PIN de supervisor, con el mismo tratamiento que la contraseña: se guarda el
   // hash, nunca el número. Antes la autorización se comparaba en el cliente
   // contra un valor del bundle, así que un cajero con las herramientas del
   // navegador se autorizaba sus propios descuentos y anulaciones.
   supervisorPinHash String?
-  roleId       String
-  branchId     String
-  isActive     Boolean   @default(true)
-  lastLogin    DateTime?
-  createdAt    DateTime  @default(now())
+  roleId            String
+  branchId          String
+  isActive          Boolean   @default(true)
+  lastLogin         DateTime?
+  createdAt         DateTime  @default(now())
 
-  role             Role               @relation(fields: [roleId], references: [id])
-  branch           Branch             @relation(fields: [branchId], references: [id])
+  role             Role              @relation(fields: [roleId], references: [id])
+  branch           Branch            @relation(fields: [branchId], references: [id])
   cashShifts       CashShift[]
   sales            Sale[]
   stockAdjustments StockAdjustment[]
   attendanceLogs   AttendanceLog[]
   auditLogs        AuditLog[]
+  expenses         Expense[]
 
   @@map("users")
 }
@@ -85,7 +86,7 @@ enum CashRegisterStatus {
 model CashRegister {
   id             String             @id @default(uuid())
   branchId       String
-  name           String             // Caja 1 Principal
+  name           String // Caja 1 Principal
   status         CashRegisterStatus @default(OPEN)
   currentBalance Decimal            @default(0) @db.Decimal(12, 4)
 
@@ -227,7 +228,7 @@ model Stock {
 // ----------------------------------------------------
 model CustomerGroup {
   id                 String  @id @default(uuid())
-  name               String  // Minorista, Mayorista, VIP
+  name               String // Minorista, Mayorista, VIP
   discountPercentage Decimal @db.Decimal(5, 2)
 
   customers Customer[]
@@ -249,7 +250,7 @@ model Customer {
   branchId     String?
 
   group  CustomerGroup @relation(fields: [groupId], references: [id])
-  branch Branch?        @relation(fields: [branchId], references: [id])
+  branch Branch?       @relation(fields: [branchId], references: [id])
   sales  Sale[]
 
   @@map("customers")
@@ -292,7 +293,7 @@ model Sale {
   branchId           String
   registerId         String
   shiftId            String
-  userId             String        // Cajero
+  userId             String // Cajero
   customerId         String?
   subtotal           Decimal       @db.Decimal(12, 4)
   tax                Decimal       @default(0) @db.Decimal(12, 4)
@@ -306,13 +307,13 @@ model Sale {
   customerSignature  String?
   createdAt          DateTime      @default(now())
 
-  branch       Branch       @relation(fields: [branchId], references: [id])
-  register     CashRegister @relation(fields: [registerId], references: [id])
-  shift        CashShift    @relation(fields: [shiftId], references: [id])
-  user         User         @relation(fields: [userId], references: [id])
-  customer     Customer?    @relation(fields: [customerId], references: [id])
-  items        SaleItem[]
-  payments     SalePayment[]
+  branch   Branch        @relation(fields: [branchId], references: [id])
+  register CashRegister  @relation(fields: [registerId], references: [id])
+  shift    CashShift     @relation(fields: [shiftId], references: [id])
+  user     User          @relation(fields: [userId], references: [id])
+  customer Customer?     @relation(fields: [customerId], references: [id])
+  items    SaleItem[]
+  payments SalePayment[]
 
   @@index([shiftId])
   @@index([branchId, createdAt])
@@ -326,11 +327,11 @@ model Sale {
 /// descuadrado. Aquí vive el reparto real, que es lo que hay que sumar para
 /// saber cuánto efectivo debería haber en la gaveta.
 model SalePayment {
-  id            String        @id @default(uuid())
-  saleId        String
-  paymentMethod PaymentMethod
-  amountReceived Decimal      @db.Decimal(12, 4)
-  changeGiven   Decimal       @db.Decimal(12, 4)
+  id             String        @id @default(uuid())
+  saleId         String
+  paymentMethod  PaymentMethod
+  amountReceived Decimal       @db.Decimal(12, 4)
+  changeGiven    Decimal       @db.Decimal(12, 4)
 
   sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
@@ -345,7 +346,7 @@ model SaleItem {
   quantity    Decimal @db.Decimal(12, 4)
   unitPrice   Decimal @db.Decimal(12, 4)
   subtotal    Decimal @db.Decimal(12, 4)
-  serialsUsed Json?   // Arreglo de IMEIs vendidos en esta línea
+  serialsUsed Json? // Arreglo de IMEIs vendidos en esta línea
 
   sale    Sale    @relation(fields: [saleId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -380,12 +381,12 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderItem {
-  id         String  @id @default(uuid())
-  purchaseId String
-  productId  String
-  orderedQty Decimal @db.Decimal(12, 4)
+  id          String  @id @default(uuid())
+  purchaseId  String
+  productId   String
+  orderedQty  Decimal @db.Decimal(12, 4)
   receivedQty Decimal @db.Decimal(12, 4)
-  unitCost   Decimal @db.Decimal(12, 4) // Costo de adquisición
+  unitCost    Decimal @db.Decimal(12, 4) // Costo de adquisición
 
   purchase PurchaseOrder @relation(fields: [purchaseId], references: [id])
   product  Product       @relation(fields: [productId], references: [id])
@@ -450,7 +451,7 @@ model KardexMovement {
   productId      String
   branchId       String
   movementType   MovementType
-  referenceId    String       // ID de la venta, compra o transferencia
+  referenceId    String // ID de la venta, compra o transferencia
   quantityChange Decimal      @db.Decimal(12, 4) // Positivo (entrada) o negativo (salida)
   stockBefore    Decimal      @db.Decimal(12, 4)
   stockAfter     Decimal      @db.Decimal(12, 4)
@@ -474,7 +475,10 @@ enum PaymentSource {
 model Expense {
   id              String        @id @default(uuid())
   branchId        String
-  category        String        // Servicios, Alquiler, Suministros
+  // Quién sacó el dinero. No se guardaba: un gasto de caja chica quedaba
+  // registrado sin responsable, que es la mitad de para qué se registra.
+  userId          String?
+  category        String // Servicios, Alquiler, Suministros
   amount          Decimal       @db.Decimal(12, 4)
   paymentSource   PaymentSource
   referenceNumber String?
@@ -482,6 +486,7 @@ model Expense {
   createdAt       DateTime      @default(now())
 
   branch Branch @relation(fields: [branchId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
 
   @@map("expenses")
 }
@@ -513,8 +518,8 @@ model AuditLog {
   id        String   @id @default(uuid())
   userId    String
   branchId  String?
-  action    String   // VOID_SALE, MANUAL_STOCK_ADJUSTMENT, PRICE_OVERRIDE, CASH_SHIFT_OPEN, CASH_SHIFT_CLOSE, LOGOUT
-  details   Json     // Forensic diff / payload JSONB
+  action    String // VOID_SALE, MANUAL_STOCK_ADJUSTMENT, PRICE_OVERRIDE, CASH_SHIFT_OPEN, CASH_SHIFT_CLOSE, LOGOUT
+  details   Json // Forensic diff / payload JSONB
   createdAt DateTime @default(now())
 
   user   User    @relation(fields: [userId], references: [id])
@@ -522,4 +527,3 @@ model AuditLog {
 
   @@map("audit_logs")
 }
-
