@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BatchSyncDto, TransactionDto } from './dto/batch-sync.dto';
+import { comprobarQueLosImportesCuadran } from '../../common/importes';
 
 /**
  * Tasa de IVA aplicada al desglose del ticket.
@@ -77,39 +78,19 @@ export class SyncService {
    * en la cola de la terminal, que es donde se puede investigar.
    */
   private assertAmountsAddUp(tx: TransactionDto): void {
-    /* Los importes llegan con hasta cuatro decimales y el dinero tiene dos:
-       un céntimo de holgura por línea absorbe el redondeo sin dejar pasar una
-       diferencia real. */
-    const holgura = Math.max(0.01, tx.items.length * 0.01);
-
-    const sumaLineas = tx.items.reduce((sum, item) => sum + item.line_subtotal, 0);
-    if (Math.abs(sumaLineas - tx.subtotal) > holgura) {
-      throw new BadRequestException(
-        `Las líneas suman ${sumaLineas.toFixed(2)} y el subtotal declarado es ` +
-          `${tx.subtotal.toFixed(2)}.`,
-      );
-    }
-
-    const esperado = tx.subtotal - tx.total_discount;
-    if (Math.abs(esperado - tx.grand_total) > holgura) {
-      throw new BadRequestException(
-        `El total declarado (${tx.grand_total.toFixed(2)}) no es el subtotal menos ` +
-          `el descuento (${esperado.toFixed(2)}).`,
-      );
-    }
-
-    /* Lo cobrado, descontado el cambio, tiene que cubrir el total. Por debajo
-       es una venta regalada; muy por encima, un error de captura. */
-    const cobradoNeto = tx.payment_breakdown.reduce(
-      (sum, p) => sum + p.amount_received - p.change_given,
-      0,
-    );
-    if (cobradoNeto - tx.grand_total < -holgura) {
-      throw new BadRequestException(
-        `Lo cobrado (${cobradoNeto.toFixed(2)}) no cubre el total ` +
-          `(${tx.grand_total.toFixed(2)}).`,
-      );
-    }
+    /* La comprobación es común con `POST /sales/checkout`, la otra puerta a la
+       misma tabla, que no comprobaba nada. Vive en un solo sitio para que no
+       vuelvan a divergir. */
+    comprobarQueLosImportesCuadran({
+      lineas: tx.items.map((item) => item.line_subtotal),
+      subtotal: tx.subtotal,
+      descuento: tx.total_discount,
+      total: tx.grand_total,
+      cobradoNeto: tx.payment_breakdown.reduce(
+        (sum, p) => sum + p.amount_received - p.change_given,
+        0,
+      ),
+    });
   }
 
   private async persistTransaction(tx: TransactionDto): Promise<void> {

@@ -1,28 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  Optional,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { comprobarQueLosImportesCuadran } from '../../common/importes';
+import { CheckoutPayload } from './dto/checkout.dto';
 
-export interface CheckoutPayload {
-  ticketNumber: string;
-  branchId: string;
-  registerId: string;
-  shiftId: string;
-  userId: string;
-  customerId?: string;
-  subtotal: number;
-  tax?: number;
-  totalAmount: number;
-  paymentMethod: 'CASH' | 'CARD' | 'QR' | 'MIXED';
-  receivedAmount: number;
-  changeAmount: number;
-  items: Array<{
-    productId: string;
-    quantity: number;
-    unitPrice: number;
-    subtotal: number;
-    serialsUsed?: string[];
-  }>;
-}
+export { CheckoutPayload };
+
 
 @Injectable()
 export class SalesService {
@@ -31,11 +20,118 @@ export class SalesService {
     @Optional() private auditService?: AuditService,
   ) {}
 
+  /**
+   * Comprueba que el turno declarado sea uno en el que esta persona pueda
+   * vender, y que la caja sea la de ese turno.
+   *
+   * Antes no se miraba: bastaba mandar el identificador del turno de otro
+   * compañero para que la venta —y el efectivo que debía haber en la gaveta—
+   * quedara colgada de su arqueo. Es la misma estafa que ya se cerró al cerrar
+   * turno, por la puerta de al lado.
+   */
+  private async assertTurnoUtilizable(payload: CheckoutPayload) {
+    const shift = await this.prisma.cashShift.findUnique({
+      where: { id: payload.shiftId },
+      include: { register: true },
+    });
+
+    if (!shift) {
+      throw new NotFoundException(`El turno de caja #${payload.shiftId} no existe.`);
+    }
+
+    if (shift.status !== 'ACTIVE') {
+      throw new BadRequestException(
+        'El turno de caja ya está cerrado: no se pueden registrar ventas en él.',
+      );
+    }
+
+    if (shift.registerId !== payload.registerId) {
+      throw new BadRequestException('La caja indicada no es la del turno abierto.');
+    }
+
+    if (shift.register.branchId !== payload.branchId) {
+      throw new ForbiddenException('Esa caja pertenece a otra sucursal.');
+    }
+
+    const esSuyo = shift.userId === payload.userId;
+    const esResponsableDeLaSucursal =
+      (payload.role === 'ADMIN' || payload.role === 'SUPERVISOR') &&
+      shift.register.branchId === payload.branchId;
+
+    if (!esSuyo && !esResponsableDeLaSucursal) {
+      throw new ForbiddenException('Ese turno de caja no es suyo.');
+    }
+  }
+
+  /**
+   * Comprueba que cada línea se cobre al precio del catálogo.
+   *
+   * Este contrato no tiene campo de descuento: no hay forma legítima de que el
+   * precio venga de otro sitio. Sin la comprobación, el cliente elegía el
+   * precio —tres auriculares de 35 Bs por un céntimo, verificado contra la API
+   * real—, y como el resto de la venta cuadraba consigo misma, todo lo demás
+   * pasaba: el stock se descontaba bien y la caja cuadraba en 0,01.
+   *
+   * Se acepta el precio mayorista cuando la cantidad llega al mínimo, porque
+   * eso sí lo define el catálogo.
+   */
+  private async assertPreciosDelCatalogo(payload: CheckoutPayload) {
+    for (const item of payload.items) {
+      const producto = await this.prisma.product.findUnique({
+        where: { id: item.productId },
+        select: {
+          name: true,
+          retailPrice: true,
+          wholesalePrice: true,
+          wholesaleMinQty: true,
+        },
+      });
+
+      if (!producto) {
+        throw new BadRequestException(`El producto ${item.productId} no existe en el catálogo.`);
+      }
+
+      const retail = Number(producto.retailPrice);
+      const mayorista = producto.wholesalePrice === null ? retail : Number(producto.wholesalePrice);
+      const minimoMayorista = Number(producto.wholesaleMinQty ?? 0);
+      const aplicaMayorista = minimoMayorista > 0 && item.quantity >= minimoMayorista;
+
+      const minimoAceptable = aplicaMayorista ? Math.min(mayorista, retail) : retail;
+
+      if (item.unitPrice < minimoAceptable - 0.01) {
+        throw new BadRequestException(
+          `El precio de '${producto.name}' (${item.unitPrice.toFixed(2)}) está por debajo ` +
+            `del de catálogo (${minimoAceptable.toFixed(2)}).`,
+        );
+      }
+
+      const esperado = item.unitPrice * item.quantity;
+      if (Math.abs(esperado - item.subtotal) > 0.01) {
+        throw new BadRequestException(
+          `La línea de '${producto.name}' declara ${item.subtotal.toFixed(2)} y ` +
+            `${item.quantity} × ${item.unitPrice.toFixed(2)} son ${esperado.toFixed(2)}.`,
+        );
+      }
+    }
+  }
+
   // 1. Transactional Checkout Endpoint with ACID Rollback & Kardex Movement Logging
   async checkout(payload: CheckoutPayload) {
     if (!payload.items || payload.items.length === 0) {
       throw new BadRequestException('El carrito de venta no contiene productos.');
     }
+
+    await this.assertTurnoUtilizable(payload);
+    await this.assertPreciosDelCatalogo(payload);
+
+    /* La misma regla que ya aplica la cola de sincronización, en la función
+       que comparten: una venta tiene que cuadrar consigo misma. */
+    comprobarQueLosImportesCuadran({
+      lineas: payload.items.map((item) => item.subtotal),
+      subtotal: payload.subtotal,
+      total: payload.totalAmount,
+      cobradoNeto: payload.receivedAmount - payload.changeAmount,
+    });
 
     return await this.prisma.$transaction(async (tx) => {
       // 1. Verify Stock & Serial availability
@@ -132,14 +228,14 @@ export class SalesService {
 
       // 4. Update CashRegister currentBalance if CASH or MIXED payment
       if (payload.paymentMethod === 'CASH' || payload.paymentMethod === 'MIXED') {
-        try {
-          await tx.cashRegister.update({
-            where: { id: payload.registerId },
-            data: { currentBalance: { increment: payload.totalAmount } },
-          });
-        } catch {
-          // Ignore if cash register ID is virtual/mock
-        }
+        /* Antes iba envuelto en un `catch` mudo «por si la caja es de
+           mentira». Ahora la caja está verificada arriba, así que un fallo
+           aquí significa que el saldo de la gaveta no se actualizó: dejarlo
+           pasar es descuadrar el arqueo en silencio. */
+        await tx.cashRegister.update({
+          where: { id: payload.registerId },
+          data: { currentBalance: { increment: payload.totalAmount } },
+        });
       }
 
       return {
@@ -233,7 +329,10 @@ export class SalesService {
   }
 
   // 3. Z-Cut Report Generation for Cash Shift Closing
-  async getZCutReport(shiftId: string) {
+  async getZCutReport(
+    shiftId: string,
+    solicitante?: { id: string; role: string; branchId: string },
+  ) {
     const shift = await this.prisma.cashShift.findUnique({
       where: { id: shiftId },
       include: { register: true, user: true, sales: true },
@@ -241,6 +340,19 @@ export class SalesService {
 
     if (!shift) {
       throw new NotFoundException(`El turno de caja #${shiftId} no existe.`);
+    }
+
+    /* Un corte Z es el efectivo que debería haber en una gaveta concreta. Cada
+       cual ve el suyo; el responsable de la sucursal, los de su sucursal. */
+    if (solicitante) {
+      const esSuyo = shift.userId === solicitante.id;
+      const esResponsableDeLaSucursal =
+        (solicitante.role === 'ADMIN' || solicitante.role === 'SUPERVISOR') &&
+        shift.register.branchId === solicitante.branchId;
+
+      if (!esSuyo && !esResponsableDeLaSucursal) {
+        throw new ForbiddenException('Ese corte de caja no es suyo.');
+      }
     }
 
     const totalCashSales = shift.sales

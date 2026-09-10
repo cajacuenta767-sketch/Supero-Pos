@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
-import { SalesService, CheckoutPayload } from './sales.service';
+import { SalesService } from './sales.service';
+import { CheckoutDto } from './dto/checkout.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser, UserContext } from '../../common/decorators/current-user.decorator';
 
@@ -10,7 +11,7 @@ export class SalesController {
   @Post('checkout')
   @HttpCode(HttpStatus.CREATED)
   @Roles('ADMIN', 'SUPERVISOR', 'CAJERO')
-  async checkout(@Body() payload: CheckoutPayload, @CurrentUser() userCtx: UserContext) {
+  async checkout(@Body() payload: CheckoutDto, @CurrentUser() userCtx: UserContext) {
     /* Quién vende y desde qué sucursal lo dice la sesión, no el cuerpo de la
        petición. Antes era `payload.userId || userCtx.id`: mandando el
        identificador de otro empleado, la venta quedaba a su nombre. */
@@ -18,6 +19,7 @@ export class SalesController {
       ...payload,
       userId: userCtx.id,
       branchId: userCtx.branchId,
+      role: userCtx.role,
     });
   }
 
@@ -42,7 +44,9 @@ export class ReportsController {
 
   @Get('z-cut')
   @Roles('ADMIN', 'SUPERVISOR', 'CAJERO')
-  async getZCutReport(@Query('shiftId') shiftId: string) {
-    return this.salesService.getZCutReport(shiftId);
+  async getZCutReport(@Query('shiftId') shiftId: string, @CurrentUser() userCtx: UserContext) {
+    /* El corte Z dice cuánto efectivo debería haber en una gaveta. Sin acotar,
+       un cajero leía el de cualquier turno, incluido el de otra sucursal. */
+    return this.salesService.getZCutReport(shiftId, userCtx);
   }
 }
