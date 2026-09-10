@@ -14,9 +14,12 @@ import { AuditService } from '../audit/audit.service';
 describe('CashRegistersService · a quién se atribuye un turno', () => {
   let service: CashRegistersService;
 
-  const prisma = {
+  /* `$transaction` ejecuta el callback con el propio mock: el turno y su sello
+     de auditoría se escriben juntos o no se escribe ninguno. */
+  const prisma: Record<string, any> = {
     cashRegister: { findUnique: jest.fn() },
     cashShift: { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+    $transaction: jest.fn((fn: (tx: unknown) => unknown) => fn(prisma)),
   };
   const audit = { log: jest.fn() };
 

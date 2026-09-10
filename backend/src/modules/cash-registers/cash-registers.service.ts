@@ -73,22 +73,36 @@ export class CashRegistersService {
       throw new BadRequestException('El usuario ya cuenta con un turno de caja activo en esta caja.');
     }
 
-    const shift = await this.prisma.cashShift.create({
-      data: {
-        registerId: dto.registerId,
-        userId: dto.userId,
-        initialFloat: dto.initialFloat,
-        expectedCash: dto.initialFloat,
-        status: 'ACTIVE',
-      },
-    });
+    /* El turno y su sello, o ninguno de los dos. Cuando el sello se escribía
+       aparte, un fallo suyo dejaba el turno abierto y devolvía error: quien
+       reintentaba se topaba con «ya cuenta con un turno activo» y no podía ni
+       abrir ni cerrar. */
+    const shift = await this.prisma.$transaction(async (tx) => {
+      const creado = await tx.cashShift.create({
+        data: {
+          registerId: dto.registerId,
+          userId: dto.userId,
+          initialFloat: dto.initialFloat,
+          expectedCash: dto.initialFloat,
+          status: 'ACTIVE',
+        },
+      });
 
-    // Create Audit Log
-    await this.auditService.log({
-      userId: dto.userId,
-      branchId: dto.branchId,
-      action: 'CASH_SHIFT_OPEN',
-      details: { shiftId: shift.id, registerId: dto.registerId, initialFloat: dto.initialFloat },
+      await this.auditService.log(
+        {
+          userId: dto.userId,
+          branchId: dto.branchId,
+          action: 'CASH_SHIFT_OPEN',
+          details: {
+            shiftId: creado.id,
+            registerId: dto.registerId,
+            initialFloat: dto.initialFloat,
+          },
+        },
+        tx,
+      );
+
+      return creado;
     });
 
     return {
@@ -128,29 +142,37 @@ export class CashRegistersService {
     const expectedCash = Number(shift.initialFloat) + cashSalesTotal;
     const difference = dto.countedCash - expectedCash;
 
-    const updatedShift = await this.prisma.cashShift.update({
-      where: { id: dto.shiftId },
-      data: {
-        closedAt: new Date(),
-        expectedCash,
-        countedCash: dto.countedCash,
-        difference,
-        status: 'CLOSED',
-      },
-    });
+    /* El arqueo y su sello van juntos: un cierre sin constancia del descuadre
+       es exactamente el registro que hace falta cuando falta dinero. */
+    const updatedShift = await this.prisma.$transaction(async (tx) => {
+      const cerrado = await tx.cashShift.update({
+        where: { id: dto.shiftId },
+        data: {
+          closedAt: new Date(),
+          expectedCash,
+          countedCash: dto.countedCash,
+          difference,
+          status: 'CLOSED',
+        },
+      });
 
-    // Create Audit Log
-    await this.auditService.log({
-      userId: dto.userId,
-      branchId: dto.branchId,
-      action: 'CASH_SHIFT_CLOSE',
-      details: {
-        shiftId: shift.id,
-        expectedCash,
-        countedCash: dto.countedCash,
-        difference,
-        notes: dto.notes,
-      },
+      await this.auditService.log(
+        {
+          userId: dto.userId,
+          branchId: dto.branchId,
+          action: 'CASH_SHIFT_CLOSE',
+          details: {
+            shiftId: shift.id,
+            expectedCash,
+            countedCash: dto.countedCash,
+            difference,
+            notes: dto.notes,
+          },
+        },
+        tx,
+      );
+
+      return cerrado;
     });
 
     return {
