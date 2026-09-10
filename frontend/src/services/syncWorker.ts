@@ -1,6 +1,7 @@
 // Worker de sincronización: evalúa la conectividad y drena la cola local.
 import axios, { AxiosError } from 'axios';
 import { localDb } from '../db/sqlite';
+import type { FourBlockSalePayload } from '../db/sqlite';
 import { useSyncStore } from '../store/useSyncStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { API_BASE_URL } from '../config/env';
@@ -125,7 +126,7 @@ export class SyncWorkerService {
         {
           terminal_id: 'POS-TERMINAL-01',
           sync_batch_id: `batch-${Date.now()}`,
-          transactions: transactions.map((t) => t.payload),
+          transactions: transactions.map((t) => this.toServerTransaction(t.payload)),
         },
         {
           timeout: 15_000,
@@ -170,6 +171,51 @@ export class SyncWorkerService {
       this.consecutiveFailures += 1;
       this.nextAttemptAt = Date.now() + this.backoffDelay();
     }
+  }
+
+  /**
+   * Deja el payload en lo que el servidor acepta.
+   *
+   * El registro local guarda la venta dos veces: los campos planos y los
+   * cuatro bloques —`block_a` … `block_d`— con exactamente los mismos datos.
+   * Al servidor se le mandaba entero, y su contrato rechaza lo que no
+   * reconoce, así que respondía 400 y **ninguna venta llegaba nunca**: se
+   * acumulaban en la cola local, reintento tras reintento, mientras la tienda
+   * seguía vendiendo y la central no veía un solo ticket.
+   *
+   * La proyección es explícita a propósito: si mañana se añade un campo al
+   * payload local, no viaja solo hasta que alguien decida que debe hacerlo.
+   */
+  private toServerTransaction(payload: FourBlockSalePayload) {
+    return {
+      transaction_id: payload.transaction_id,
+      timestamp: payload.timestamp,
+      branch_id: payload.branch_id,
+      register_id: payload.register_id,
+      shift_id: payload.shift_id,
+      cashier_id: payload.cashier_id,
+      customer_id: payload.customer_id,
+      subtotal: payload.subtotal,
+      total_discount: payload.total_discount,
+      grand_total: payload.grand_total,
+      payment_breakdown: payload.payment_breakdown,
+      items: payload.items.map((item) => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        line_subtotal: item.line_subtotal,
+        /* El contrato admite la lista opcional; una vacía sobra y ocupa. */
+        ...(item.serials_used && item.serials_used.length > 0
+          ? { serials_used: item.serials_used }
+          : {}),
+      })),
+      /* La firma vive dentro de `block_a`, no en el nivel plano. El contrato
+         la espera arriba, así que aunque los bloques hubieran pasado, el
+         conforme del cliente habría quedado donde el servidor no lo lee. */
+      ...(payload.block_a?.customer_signature
+        ? { customer_signature: payload.block_a.customer_signature }
+        : {}),
+    };
   }
 
   private authHeaders(): Record<string, string> {

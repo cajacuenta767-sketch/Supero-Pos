@@ -107,6 +107,9 @@ export const PosView: React.FC = () => {
 
   const handleSelectProduct = (product: Product) => {
     if (cashShift === null) {
+      /* Sin turno no se vende. Se vuelve a abrir el arqueo y se dice por qué:
+         antes el clic no hacía nada visible más que reaparecer el modal. */
+      toast('Abra el turno de caja antes de cobrar.', 'warning');
       setShiftModalDismissed(false);
       return;
     }

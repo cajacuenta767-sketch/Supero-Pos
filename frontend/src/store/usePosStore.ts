@@ -29,6 +29,8 @@ export interface CashShift {
   initialFloat: number;
   openedAt: string;
   status: 'OPEN' | 'CLOSED';
+  /** `true` si el turno existe también en el servidor. */
+  syncedWithServer?: boolean;
 }
 
 export const DEFAULT_CUSTOMER: Customer = {
@@ -46,7 +48,11 @@ interface PosState {
   pendingSyncCount: number;
 
   // Actions
-  openCashShift: (initialFloat: number, registerId?: string, registerName?: string) => void;
+  openCashShift: (
+    initialFloat: number,
+    registerId?: string,
+    registerName?: string,
+  ) => Promise<void>;
   closeCashShift: (countedCash: number, notes?: string) => void;
   setCustomer: (customer: Customer) => void;
   setManualDiscount: (
@@ -58,43 +64,19 @@ interface PosState {
 }
 
 /**
- * Turno con el que arranca una terminal nueva.
+ * Turno guardado, si lo hay.
  *
- * El sembrado no se guardaba: cada recarga creaba otro turno con `openedAt` en
- * ese instante, así que el efectivo cobrado antes de recargar desaparecía del
- * esperado y el arqueo acusaba un faltante por toda la recaudación previa. Se
- * persiste en cuanto se crea, igual que uno abierto a mano.
+ * Una terminal nueva arranca **sin turno**, y el modal de arqueo —que es
+ * bloqueante mientras no haya uno— obliga a abrirlo. Antes se sembraba uno
+ * aquí: un turno que el servidor nunca había visto, con una caja inventada
+ * («caja-1») y un usuario de relleno. Cada venta hecha bajo él se rechazaba al
+ * sincronizar por «referencias inexistentes» y se quedaba en la cola local para
+ * siempre, mientras la tienda seguía cobrando y la central no veía un ticket.
+ *
+ * `null` guardado es un turno cerrado a propósito, y se distingue de no haber
+ * nada guardado: un cierre no se deshace al recargar.
  */
-const initialShift = (): CashShift | null => {
-  const stored = readPersisted<CashShift | null>(SHIFT_KEY);
-  /* `null` guardado es un turno cerrado a propósito, no ausencia de dato. */
-  if (stored !== null) return stored;
-  /* Sin `localStorage` —ventana privada, entorno sin DOM— no hay nada guardado
-     que distinguir: se siembra en memoria y ya está. */
-  try {
-    if (
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem(`supero_pos_data_${SHIFT_KEY}`) !== null
-    ) {
-      return null;
-    }
-  } catch {
-    /* Almacenamiento bloqueado: se sigue con el turno sembrado. */
-  }
-
-  const seeded: CashShift = {
-    id: localId('shift'),
-    registerId: 'caja-1',
-    registerName: 'Caja 1 Principal',
-    userId: 'usr-1',
-    userName: 'Sin identificar',
-    initialFloat: 200.0,
-    openedAt: new Date().toISOString(),
-    status: 'OPEN',
-  };
-  writePersisted(SHIFT_KEY, seeded);
-  return seeded;
-};
+const initialShift = (): CashShift | null => readPersisted<CashShift | null>(SHIFT_KEY);
 
 export const usePosStore = create<PosState>((set, get) => ({
   /* El turno es la unidad contable de la jornada. Antes vivía en estado plano:
@@ -106,19 +88,59 @@ export const usePosStore = create<PosState>((set, get) => ({
   manualDiscount: 0,
   pendingSyncCount: 0,
 
-  openCashShift: (initialFloat, registerId = 'caja-1', registerName = 'Caja 1 Principal') => {
+  openCashShift: async (initialFloat, registerId, registerName) => {
     /* El turno es de quien lo abre. Estaba fijo en «Juan Pérez», así que el
        cierre de caja nombraba a un empleado que podía no haber trabajado. */
     const operator = useAuthStore.getState().user;
+    const float = parseFloat(initialFloat.toFixed(2));
+
+    /* Con red, el turno lo abre el servidor y la terminal se queda con sus
+       identificadores. Antes se inventaba un `caja-1` y un turno local; el
+       servidor no los reconocía y rechazaba cada venta al sincronizar con
+       «referencias inexistentes», así que los tickets se acumulaban en la cola
+       local y la central no veía uno solo. */
+    let remote: { shiftId: string; registerId: string; registerName: string } | null = null;
+    try {
+      const { apiClient } = await import('../services/api.client');
+
+      let caja = registerId;
+      let nombre = registerName;
+      if (!caja) {
+        const { data } = await apiClient.get('/cash-registers');
+        const primera = data?.data?.[0];
+        if (primera) {
+          caja = primera.id;
+          nombre = primera.name;
+        }
+      }
+
+      if (caja) {
+        const { data } = await apiClient.post('/cash-registers/open', {
+          registerId: caja,
+          initialFloat: float,
+        });
+        const shiftId = data?.data?.id ?? data?.id;
+        if (shiftId) {
+          remote = { shiftId, registerId: caja, registerName: nombre ?? 'Caja' };
+        }
+      }
+    } catch {
+      /* Sin red se abre en local: una tienda desconectada tiene que poder
+         vender. Las ventas esperan en la cola hasta que haya conexión. */
+    }
+
     const newShift: CashShift = {
-      id: localId('shift'),
-      registerId,
-      registerName,
+      id: remote?.shiftId ?? localId('shift'),
+      registerId: remote?.registerId ?? registerId ?? 'caja-1',
+      registerName: remote?.registerName ?? registerName ?? 'Caja 1 Principal',
       userId: String(operator?.id ?? 'sin-identificar'),
       userName: operator?.name ?? operator?.username ?? 'Sin identificar',
-      initialFloat: parseFloat(initialFloat.toFixed(2)),
+      initialFloat: float,
       openedAt: new Date().toISOString(),
       status: 'OPEN',
+      /* Un turno abierto solo en la terminal no puede respaldar una venta que
+         el servidor acepte: se marca para poder decirlo. */
+      syncedWithServer: remote !== null,
     };
     writePersisted(SHIFT_KEY, newShift);
     set({ cashShift: newShift });

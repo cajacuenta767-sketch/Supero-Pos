@@ -195,4 +195,34 @@ describe('AuthService (Sprint 1 QA & Auth Engine)', () => {
       );
     });
   });
+
+  describe('sucursal del token', () => {
+    beforeEach(() => {
+      mockPrismaService.user.findFirst.mockResolvedValue({
+        ...mockUser,
+        branchId: 'sucursal-propia',
+        branch: { id: 'sucursal-propia', name: 'Sucursal Central' },
+      });
+      mockPrismaService.user.update.mockResolvedValue(mockUser);
+    });
+
+    it('es la del usuario, no la que pida el cliente', async () => {
+      /* Antes se tomaba la del cuerpo de la petición, y ese valor acaba en el
+         token: un cajero que declarara otra sucursal operaba contra ella. */
+      const result = await service.login({
+        username: 'admin',
+        password: 'SuperoPOS2026',
+        branchId: 'sucursal-ajena',
+      });
+
+      expect(result.data.user.branchId).toBe('sucursal-propia');
+      const firmado = mockJwtService.sign.mock.calls.at(-1)?.[0];
+      expect(firmado.branchId).toBe('sucursal-propia');
+    });
+
+    it('sin pedir ninguna, sigue siendo la suya', async () => {
+      const result = await service.login({ username: 'admin', password: 'SuperoPOS2026' });
+      expect(result.data.user.branchId).toBe('sucursal-propia');
+    });
+  });
 });

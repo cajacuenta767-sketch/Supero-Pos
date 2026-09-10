@@ -24,6 +24,24 @@ export class CashRegistersService {
     private auditService: AuditService,
   ) {}
 
+  /**
+   * Cajas físicas de una sucursal.
+   *
+   * La terminal necesita el identificador real de su caja para abrir turno y
+   * para que sus ventas se puedan atribuir. No había forma de consultarlo, así
+   * que la terminal se inventaba un `caja-1` que el servidor no reconocía y
+   * rechazaba cada venta al sincronizar.
+   */
+  async listByBranch(branchId: string) {
+    const registers = await this.prisma.cashRegister.findMany({
+      where: { branchId },
+      select: { id: true, name: true, status: true },
+      orderBy: { name: 'asc' },
+    });
+
+    return { success: true, status_code: 200, data: registers };
+  }
+
   async openShift(dto: OpenShiftDto) {
     // Check if user already has an active shift on this register
     const activeShift = await this.prisma.cashShift.findFirst({

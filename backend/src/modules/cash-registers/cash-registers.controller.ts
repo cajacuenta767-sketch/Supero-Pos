@@ -7,6 +7,13 @@ import { CurrentUser, UserContext } from '../../common/decorators/current-user.d
 export class CashRegistersController {
   constructor(private readonly cashRegistersService: CashRegistersService) {}
 
+  /** Cajas de la sucursal de quien pregunta. */
+  @Get()
+  @Roles('ADMIN', 'SUPERVISOR', 'CAJERO')
+  async list(@CurrentUser() userCtx: UserContext) {
+    return this.cashRegistersService.listByBranch(userCtx.branchId);
+  }
+
   @Post('open')
   @HttpCode(HttpStatus.CREATED)
   @Roles('ADMIN', 'SUPERVISOR', 'CAJERO')

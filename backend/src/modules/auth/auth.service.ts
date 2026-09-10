@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import * as bcrypt from 'bcryptjs';
@@ -12,6 +12,7 @@ interface LockoutState {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private failedAttemptsMap = new Map<string, LockoutState>();
   private readonly MAX_FAILED_ATTEMPTS = 5;
   private readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutos
@@ -183,12 +184,25 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     const user = await this.validateUser(loginDto.username, loginDto.password);
 
+    /* La sucursal del token es la del usuario, no la que pida el cliente.
+       Antes se tomaba `loginDto.branchId` cuando venía, y ese valor acaba en el
+       token: un cajero que iniciara sesión declarando otra sucursal operaba
+       contra ella —veía sus cajas, abría turno allí y sus ventas se
+       contabilizaban en esa tienda—. Trabajar en varias sucursales es otra
+       cosa, y exigiría comprobar que el usuario pertenece a ella. */
     const payload = {
       sub: user.id,
       username: user.username,
       role: user.role?.name || 'CAJERO',
-      branchId: loginDto.branchId || user.branchId,
+      branchId: user.branchId,
     };
+
+    if (loginDto.branchId && loginDto.branchId !== user.branchId) {
+      this.logger.warn(
+        `«${user.username}» pidió iniciar sesión en la sucursal ${loginDto.branchId} ` +
+          `y pertenece a ${user.branchId}: se usa la suya.`,
+      );
+    }
 
     const accessToken = this.jwtService.sign(payload);
 
@@ -204,7 +218,7 @@ export class AuthService {
           username: user.username,
           name: user.fullName,
           role: user.role?.name || 'CAJERO',
-          branchId: loginDto.branchId || user.branchId,
+          branchId: user.branchId,
           branchName: user.branch?.name || 'Sucursal Principal',
         },
       },

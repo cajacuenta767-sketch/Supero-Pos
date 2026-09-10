@@ -131,7 +131,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       /* El cajero es quien tiene la sesión abierta. Estaba fijo en
          `user-01`, así que toda venta de toda terminal se atribuía al mismo
          empleado y el historial no servía para pedir cuentas a nadie. */
-      const cashier_id = cashier?.username ?? 'desconocido';
+      /* El identificador del cajero es el de la base, no su nombre de usuario:
+         es lo que el servidor puede resolver contra la tabla de usuarios. Con
+         el nombre, la venta se rechazaba al sincronizar por «referencias
+         inexistentes» y se quedaba en la cola local para siempre. */
+      const cashier_id = cashier?.id ? String(cashier.id) : 'sin-identificar';
       /* Un único número de ticket para el kardex, las series, el impreso y
          el historial: si cada uno lo deriva por su cuenta, no se cruzan. */
       const ticketNumber = `TK-${transaction_id.slice(0, 8).toUpperCase()}`;

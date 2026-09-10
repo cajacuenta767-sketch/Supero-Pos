@@ -32,10 +32,20 @@ export const CashShiftModal: React.FC<CashShiftModalProps> = ({ isOpen, onClose 
   const difference = counted - expected;
   const isBalanced = Math.abs(difference) < 0.01;
 
-  const handleOpenShift = (e: React.FormEvent) => {
+  /* La apertura consulta al servidor: mientras viaja, el botón no puede
+     aceptar un segundo envío ni quedarse mudo. */
+  const [opening, setOpening] = useState(false);
+
+  const handleOpenShift = async (e: React.FormEvent) => {
     e.preventDefault();
-    openCashShift(parseFloat(openingAmount) || 200.0);
-    onClose();
+    if (opening) return;
+    setOpening(true);
+    try {
+      await openCashShift(parseFloat(openingAmount) || 200.0);
+      onClose();
+    } finally {
+      setOpening(false);
+    }
   };
 
   const handleCloseShift = (e: React.FormEvent) => {
@@ -58,8 +68,14 @@ export const CashShiftModal: React.FC<CashShiftModalProps> = ({ isOpen, onClose 
       onClose={onClose}
       icon={<Clock className="w-4 h-4" />}
       title="Turno y arqueo de caja"
-      /* Con el turno cerrado el modal es un bloqueo, no un aviso. */
-      dismissable={isShiftOpen}
+      /* Se puede cerrar siempre. Antes, sin turno, el modal era intraspasable
+         y cubría la pantalla entera: un almacenero o un administrador que solo
+         quería mirar el inventario o los ajustes quedaba atrapado pidiéndole
+         que abriera caja.
+
+         Lo que impide vender sin turno no es este modal, sino el propio punto
+         de venta: no deja añadir nada al ticket y vuelve a abrirlo. */
+      dismissable
       size="md"
       footer={
         isShiftOpen ? (
@@ -79,8 +95,9 @@ export const CashShiftModal: React.FC<CashShiftModalProps> = ({ isOpen, onClose 
             variant="success"
             size="lg"
             icon={<CheckCircle2 className="w-4 h-4" />}
+            disabled={opening}
           >
-            Abrir turno
+            {opening ? 'Abriendo…' : 'Abrir turno'}
           </Button>
         )
       }
