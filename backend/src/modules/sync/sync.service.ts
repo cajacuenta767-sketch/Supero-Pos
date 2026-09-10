@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BatchSyncDto, TransactionDto } from './dto/batch-sync.dto';
@@ -62,6 +62,56 @@ export class SyncService {
     };
   }
 
+  /**
+   * Comprueba que los importes de la venta cuadren entre sí.
+   *
+   * El servidor no puede volver a tarifar: la terminal fija el precio sin
+   * conexión, con sus descuentos y sus precios mayoristas, y esa es la premisa
+   * de todo el sistema. Pero sí puede exigir que las cuentas cierren, que es
+   * aritmética y no depende de ningún catálogo.
+   *
+   * Antes guardaba `subtotal` y `grand_total` tal como venían: una venta cuya
+   * cabecera dijera 5 Bs y cuyas líneas sumaran 500 entraba en los libros sin
+   * que nada la mirara. Sea manipulación o un fallo del cliente, una venta que
+   * no cuadra consigo misma no se registra en silencio: se rechaza y se queda
+   * en la cola de la terminal, que es donde se puede investigar.
+   */
+  private assertAmountsAddUp(tx: TransactionDto): void {
+    /* Los importes llegan con hasta cuatro decimales y el dinero tiene dos:
+       un céntimo de holgura por línea absorbe el redondeo sin dejar pasar una
+       diferencia real. */
+    const holgura = Math.max(0.01, tx.items.length * 0.01);
+
+    const sumaLineas = tx.items.reduce((sum, item) => sum + item.line_subtotal, 0);
+    if (Math.abs(sumaLineas - tx.subtotal) > holgura) {
+      throw new BadRequestException(
+        `Las líneas suman ${sumaLineas.toFixed(2)} y el subtotal declarado es ` +
+          `${tx.subtotal.toFixed(2)}.`,
+      );
+    }
+
+    const esperado = tx.subtotal - tx.total_discount;
+    if (Math.abs(esperado - tx.grand_total) > holgura) {
+      throw new BadRequestException(
+        `El total declarado (${tx.grand_total.toFixed(2)}) no es el subtotal menos ` +
+          `el descuento (${esperado.toFixed(2)}).`,
+      );
+    }
+
+    /* Lo cobrado, descontado el cambio, tiene que cubrir el total. Por debajo
+       es una venta regalada; muy por encima, un error de captura. */
+    const cobradoNeto = tx.payment_breakdown.reduce(
+      (sum, p) => sum + p.amount_received - p.change_given,
+      0,
+    );
+    if (cobradoNeto - tx.grand_total < -holgura) {
+      throw new BadRequestException(
+        `Lo cobrado (${cobradoNeto.toFixed(2)}) no cubre el total ` +
+          `(${tx.grand_total.toFixed(2)}).`,
+      );
+    }
+  }
+
   private async persistTransaction(tx: TransactionDto): Promise<void> {
     /* Idempotencia por el UUID completo. Antes el número de ticket se formaba
        con los 8 primeros caracteres del UUID —32 bits—: hacia los 77.000
@@ -72,6 +122,8 @@ export class SyncService {
       this.logger.log(`Transacción ${tx.transaction_id} ya registrada; no se duplica.`);
       return;
     }
+
+    this.assertAmountsAddUp(tx);
 
     const keys = await this.resolveForeignKeys(tx);
     const taxable = this.taxFromGrossTotal(tx.grand_total);

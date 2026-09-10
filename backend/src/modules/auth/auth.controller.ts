@@ -11,8 +11,15 @@ export class AuthController {
 
   @Public()
   /* Más estricto que el límite global: 10 intentos por minuto y por IP. El
-     bloqueo por usuario no frena a quien recorre una lista de usuarios. */
-  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+     bloqueo por usuario no frena a quien recorre una lista de usuarios.
+
+     La clave debe ser la de un limitador configurado —aquí `medium`, el de
+     ventana de un minuto—. Decía `default`, que no existe en esta
+     configuración, así que la anulación no se aplicaba a nada: el login
+     admitía los 120 intentos por minuto del límite global, doce veces más de
+     los que este comentario prometía. Comprobado contra la API: quince
+     intentos seguidos y ningún 429. */
+  @Throttle({ medium: { ttl: 60_000, limit: 10 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto) {
@@ -27,8 +34,10 @@ export class AuthController {
    * en sí nunca sale del servidor; la terminal recibe un sí o un no.
    */
   /* Cuatro dígitos son diez mil combinaciones: sin freno, un script las recorre
-     en segundos. Cinco por minuto y por IP, además del bloqueo por terminal. */
-  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+     en segundos. Cinco por minuto y por IP, además del bloqueo por terminal.
+     La clave nombra al limitador de ventana de un minuto; con `default` esta
+     anulación no se aplicaba a ninguno. */
+  @Throttle({ medium: { ttl: 60_000, limit: 5 } })
   @Post('verify-pin')
   @HttpCode(HttpStatus.OK)
   async verifyPin(@Body() dto: VerifyPinDto) {
