@@ -121,5 +121,9 @@ de prueba con acentos en el nombre de la empresa y compruébelo en el papel.
 - [ ] `VITE_DEMO_MODE=false` en el empaquetado que se instala.
 - [ ] `CORS_ORIGINS` con el dominio real de la terminal.
 - [ ] Un ticket de prueba impreso y leído en papel.
+- [ ] El catálogo del negocio cargado en la central. La caja se pone al día
+      sola al iniciar sesión; un producto dado de alta solo en la caja no
+      existe todavía en el servidor y sus ventas se rechazan al sincronizar
+      —visiblemente: la cabecera lo anuncia—.
 - [ ] Una venta, un arqueo y una anulación hechos de principio a fin en la
       terminal que se va a usar.
