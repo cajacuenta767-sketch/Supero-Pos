@@ -186,3 +186,59 @@ describe('SalesService · corte Z', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 });
+
+/**
+ * Anular devuelve mercancía al estante y descuadra una caja. Sin acotar por
+ * sucursal, un supervisor anulaba ventas de otra tienda y el ajuste de
+ * existencias caía en un almacén que no es el suyo.
+ */
+describe('SalesService · anular una venta', () => {
+  let service: SalesService;
+  let prisma: Record<string, any>;
+
+  const venta = {
+    id: 'venta-1',
+    branchId: 'b-central',
+    ticketNumber: 'TK-1',
+    status: 'COMPLETED',
+    items: [],
+  };
+
+  beforeEach(async () => {
+    const tx = {
+      sale: { findUnique: jest.fn().mockResolvedValue(venta), update: jest.fn() },
+      stock: { update: jest.fn() },
+      product: { findUnique: jest.fn() },
+      kardexMovement: { create: jest.fn() },
+      productSerial: { update: jest.fn() },
+    };
+    prisma = {
+      $transaction: jest.fn((fn: (c: unknown) => unknown) => fn(tx)),
+      _tx: tx,
+    };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [SalesService, { provide: PrismaService, useValue: prisma }],
+    }).compile();
+    service = module.get(SalesService);
+  });
+
+  it('anula una venta de la propia sucursal', async () => {
+    await expect(
+      service.cancelSale('venta-1', 'u-jefe', 'Cliente devolvió el artículo', 'b-central'),
+    ).resolves.toMatchObject({ success: true });
+    expect(prisma._tx.sale.update).toHaveBeenCalled();
+  });
+
+  it('no anula una venta de otra sucursal', async () => {
+    await expect(
+      service.cancelSale('venta-1', 'u-jefe', 'Cliente devolvió el artículo', 'b-otra'),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma._tx.sale.update).not.toHaveBeenCalled();
+  });
+
+  it('sigue exigiendo una justificación', async () => {
+    await expect(service.cancelSale('venta-1', 'u-jefe', 'no', 'b-central')).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+});

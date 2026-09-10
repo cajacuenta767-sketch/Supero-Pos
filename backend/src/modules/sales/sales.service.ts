@@ -248,7 +248,12 @@ export class SalesService {
   }
 
   // 2. Void Sale Flow with Audit Logging
-  async cancelSale(ticketId: string, adminUserId: string, reason: string) {
+  async cancelSale(
+    ticketId: string,
+    adminUserId: string,
+    reason: string,
+    branchIdDelSolicitante?: string,
+  ) {
     if (!reason || reason.trim().length < 5) {
       throw new BadRequestException('Debe proporcionar la justificación para anular la venta (mínimo 5 caracteres).');
     }
@@ -265,6 +270,15 @@ export class SalesService {
 
       if (sale.status === 'CANCELLED') {
         throw new BadRequestException(`La venta #${ticketId} ya se encuentra anulada.`);
+      }
+
+      /* Anular devuelve mercancía al estante y descuadra una caja: se hace en
+         la tienda donde ocurrió la venta. Sin esto, un supervisor de una
+         sucursal anulaba ventas de otra, y el ajuste de existencias caía en un
+         almacén que él no pisa. Es la misma regla que ya rige el cierre de
+         turno, el cobro y el corte de caja. */
+      if (branchIdDelSolicitante && sale.branchId !== branchIdDelSolicitante) {
+        throw new ForbiddenException('Esa venta es de otra sucursal.');
       }
 
       // Mark status as CANCELLED

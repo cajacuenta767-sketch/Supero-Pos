@@ -186,4 +186,17 @@ function encodePc858(text) {
   return Buffer.from(out);
 }
 
-module.exports = { encodePc858 };
+/**
+ * Cuántas columnas ocupa un texto al imprimirse.
+ *
+ * No es su longitud como cadena: la impresora escribe bytes, y algunos
+ * caracteres no tienen un byte propio en PC858. «…» se sustituye por tres
+ * puntos, así que ocupa tres columnas donde la cadena cuenta una. Alinear con
+ * `text.length` desplaza la columna de importes justo en las líneas con esos
+ * caracteres, que son las que llevan un nombre de producto largo recortado.
+ */
+function anchoImpreso(text) {
+  return encodePc858(String(text)).length;
+}
+
+module.exports = { encodePc858, anchoImpreso };

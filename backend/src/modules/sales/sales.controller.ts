@@ -34,7 +34,7 @@ export class SalesController {
     /* La anulación queda a nombre de quien la hace. El `userId` del cuerpo
        dejaba atribuirla a otro, que es justo lo contrario de para qué se
        registra quién anula un ticket. */
-    return this.salesService.cancelSale(ticketId, userCtx.id, reason);
+    return this.salesService.cancelSale(ticketId, userCtx.id, reason, userCtx.branchId);
   }
 }
 

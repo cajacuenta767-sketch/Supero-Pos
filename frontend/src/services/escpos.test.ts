@@ -6,6 +6,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { buildTicket, buildLabels, buildDrawerKick, twoColumns, center, LINE_WIDTH } =
   require('../../electron/escposPrinter.cjs') as typeof import('../../electron/escposPrinter.cjs');
+const { encodePc858 } = require('../../electron/pc858.cjs');
 
 const TICKET = {
   companyName: 'Comercial Supero',
@@ -223,5 +224,53 @@ describe('codificación PC858', () => {
     // ESC t 19 (0x1b 0x74 0x13) = PC858.
     const head = [...buffer.subarray(0, 8)];
     expect(head).toEqual(expect.arrayContaining([0x1b, 0x74, 0x13]));
+  });
+});
+
+/**
+ * La longitud de un `GS k 67` la declara quien emite y la impresora lee
+ * exactamente esos bytes. Declararla contando caracteres en vez de bytes rompe
+ * la trama en cuanto aparece un carácter que PC858 no tiene: lo que sobra se
+ * interpreta como comandos y la etiqueta —y las copias siguientes— salen mal.
+ */
+describe('etiquetas · la longitud del código de barras se cuenta en bytes', () => {
+  const ETIQUETA = {
+    productName: 'Audífonos Bluetooth',
+    sku: 'ELEC-0031',
+    barcode: '7501234567890',
+    price: 35,
+    copies: 1,
+    labelSize: '50x25' as const,
+  };
+
+  const bytesTrasGsK = (buf: Buffer) => {
+    const i = buf.indexOf(Buffer.from([0x1d, 0x6b, 0x43]));
+    return { indice: i, declarada: i < 0 ? -1 : buf[i + 3] };
+  };
+
+  it('declara tantos bytes como manda', () => {
+    const salida = buildLabels(ETIQUETA);
+    const { indice, declarada } = bytesTrasGsK(salida);
+    expect(indice).toBeGreaterThan(-1);
+    expect(declarada).toBe(13);
+
+    // Y los trece bytes siguientes son, en efecto, el código.
+    const datos = salida.subarray(indice + 4, indice + 4 + declarada);
+    expect(datos.toString('latin1')).toBe('7501234567890');
+  });
+
+  it('no emite una trama de barras con un código que no es EAN', () => {
+    const salida = buildLabels({ ...ETIQUETA, barcode: 'SIN-CÓDIGO…' });
+    expect(bytesTrasGsK(salida).indice).toBe(-1);
+    // Se imprime como texto, para que quien mira la etiqueta lo vea.
+    expect(salida.toString('latin1')).toContain('(SIN-C');
+  });
+
+  it('alinea las columnas por lo que se imprime, no por la cadena', () => {
+    // «…» no existe en PC858 y sale como tres puntos: ocupa tres columnas.
+    const linea = twoColumns('Café…', '9.90', 20);
+    const impreso = encodePc858(linea).toString('latin1');
+    expect(impreso).toHaveLength(20);
+    expect(impreso.endsWith('9.90')).toBe(true);
   });
 });

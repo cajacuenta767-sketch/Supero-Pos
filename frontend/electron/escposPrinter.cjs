@@ -1,4 +1,4 @@
-const { encodePc858 } = require('./pc858.cjs');
+const { encodePc858, anchoImpreso } = require('./pc858.cjs');
 // Composición de tramas ESC/POS para impresora térmica y cajón portamonedas.
 
 const ESC_POS = {
@@ -34,17 +34,27 @@ const LINE_WIDTH = { '80mm': 48, '58mm': 32 };
 
 const money = (value) => Number(value ?? 0).toFixed(2);
 
-/** Recorta y rellena para que importes y conceptos queden en columnas. */
+/**
+ * Recorta y rellena para que importes y conceptos queden en columnas.
+ *
+ * El relleno se mide en columnas impresas, no en caracteres de la cadena: hay
+ * caracteres que no existen en PC858 y se sustituyen por varios —«…» por tres
+ * puntos—, así que contar la cadena descuadra la columna de importes en
+ * justamente las líneas con nombres largos.
+ */
 function twoColumns(left, right, width) {
   const rightText = String(right);
-  const room = Math.max(0, width - rightText.length - 1);
-  const leftText = String(left).slice(0, room);
-  return `${leftText}${' '.repeat(Math.max(1, width - leftText.length - rightText.length))}${rightText}`;
+  const room = Math.max(0, width - anchoImpreso(rightText) - 1);
+  let leftText = String(left);
+  while (anchoImpreso(leftText) > room) leftText = leftText.slice(0, -1);
+  const hueco = width - anchoImpreso(leftText) - anchoImpreso(rightText);
+  return `${leftText}${' '.repeat(Math.max(1, hueco))}${rightText}`;
 }
 
 function center(text, width) {
-  const value = String(text).slice(0, width);
-  const pad = Math.max(0, Math.floor((width - value.length) / 2));
+  let value = String(text);
+  while (anchoImpreso(value) > width) value = value.slice(0, -1);
+  const pad = Math.max(0, Math.floor((width - anchoImpreso(value)) / 2));
   return `${' '.repeat(pad)}${value}`;
 }
 
@@ -131,6 +141,31 @@ function buildTicket(ticket) {
  * código pintado como texto o como barras aproximadas no lo lee ningún escáner,
  * que es justo para lo que sirve la etiqueta.
  */
+/**
+ * Bloque `GS k 67` con la longitud contada en bytes, no en caracteres.
+ *
+ * La longitud la declara el emisor y la impresora lee exactamente esos bytes.
+ * Si se declaran menos de los que se mandan, los sobrantes se interpretan como
+ * comandos: el resto de la etiqueta —y todas las copias siguientes del mismo
+ * envío— salen corruptas. Se declaraba `job.barcode.length`, la longitud de la
+ * cadena, que no coincide con la de los bytes en cuanto aparece un carácter
+ * fuera de PC858.
+ *
+ * Un EAN-13 son trece dígitos. Si lo que llega no lo es, se imprime como texto
+ * en vez de emitir una trama que la impresora no puede dibujar: una etiqueta
+ * sin barras se ve y se corrige; una trama rota estropea el lote entero.
+ */
+function codigoDeBarras(codigo) {
+  const valor = String(codigo ?? '');
+  const datos = encodePc858(valor);
+
+  if (!/^[0-9]{12,13}$/.test(valor)) {
+    return [encodePc858(`(${valor})`)];
+  }
+
+  return [Buffer.from([0x1d, 0x6b, 0x43, datos.length]), datos];
+}
+
 function buildLabels(job) {
   const width = job.labelSize === '40x20' ? 24 : 32;
   const blocks = [ESC_POS.INIT, ESC_POS.CODEPAGE_PC858];
@@ -147,8 +182,7 @@ function buildLabels(job) {
       Buffer.from([0x1d, 0x77, 0x02]),
       Buffer.from([0x1d, 0x48, 0x02]),
       // GS k 67 <len> <datos>: EAN-13 en el modo con longitud explícita.
-      Buffer.from([0x1d, 0x6b, 0x43, job.barcode.length]),
-      encodePc858(job.barcode),
+      ...codigoDeBarras(job.barcode),
       encodePc858('\n'),
       ESC_POS.BOLD_ON,
       encodePc858(price),
