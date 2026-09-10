@@ -184,7 +184,9 @@ describe('duplicateOf', () => {
   });
 
   it('detecta el código de barras repetido: el escáner cobraría el otro producto', () => {
-    const clash = useCatalogStore.getState().duplicateOf({ sku: 'NUEVO', barcode: '7770000000001' });
+    const clash = useCatalogStore
+      .getState()
+      .duplicateOf({ sku: 'NUEVO', barcode: '7770000000001' });
     expect(clash?.field).toBe('barcode');
     expect(clash?.product.name).toBe('Leche entera');
   });
