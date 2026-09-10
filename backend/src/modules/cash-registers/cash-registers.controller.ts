@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
-import { CashRegistersService, OpenShiftDto, CloseShiftDto } from './cash-registers.service';
+import { CashRegistersService } from './cash-registers.service';
+import { OpenShiftDto, CloseShiftDto } from './dto/shift.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser, UserContext } from '../../common/decorators/current-user.decorator';
 
@@ -14,14 +15,19 @@ export class CashRegistersController {
     return this.cashRegistersService.listByBranch(userCtx.branchId);
   }
 
+  /* Quién abre y en qué sucursal lo dice la sesión, nunca el cuerpo de la
+     petición. Antes era `dto.userId || userCtx.id`: bastaba con mandar el
+     identificador de otro empleado para que el turno —su fondo, su conteo y su
+     descuadre— quedara registrado a su nombre. */
   @Post('open')
   @HttpCode(HttpStatus.CREATED)
   @Roles('ADMIN', 'SUPERVISOR', 'CAJERO')
   async openShift(@Body() dto: OpenShiftDto, @CurrentUser() userCtx: UserContext) {
     return this.cashRegistersService.openShift({
-      ...dto,
-      userId: dto.userId || userCtx.id,
-      branchId: dto.branchId || userCtx.branchId,
+      registerId: dto.registerId,
+      initialFloat: dto.initialFloat,
+      userId: userCtx.id,
+      branchId: userCtx.branchId,
     });
   }
 
@@ -30,9 +36,12 @@ export class CashRegistersController {
   @Roles('ADMIN', 'SUPERVISOR', 'CAJERO')
   async closeShift(@Body() dto: CloseShiftDto, @CurrentUser() userCtx: UserContext) {
     return this.cashRegistersService.closeShift({
-      ...dto,
-      userId: dto.userId || userCtx.id,
-      branchId: dto.branchId || userCtx.branchId,
+      shiftId: dto.shiftId,
+      countedCash: dto.countedCash,
+      notes: dto.notes,
+      userId: userCtx.id,
+      branchId: userCtx.branchId,
+      role: userCtx.role,
     });
   }
 

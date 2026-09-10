@@ -1,18 +1,27 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
-export interface OpenShiftDto {
+/* Lo que el servicio necesita para abrir o cerrar. La identidad la pone el
+   controlador desde la sesión; el contrato de entrada —lo que puede mandar el
+   cliente— vive en `dto/shift.dto.ts` y ya no incluye a quién atribuirlo. */
+export interface OpenShiftInput {
   registerId: string;
   userId: string;
   branchId: string;
   initialFloat: number;
 }
 
-export interface CloseShiftDto {
+export interface CloseShiftInput {
   shiftId: string;
   userId: string;
   branchId: string;
+  role: string;
   countedCash: number;
   notes?: string;
 }
@@ -42,7 +51,19 @@ export class CashRegistersService {
     return { success: true, status_code: 200, data: registers };
   }
 
-  async openShift(dto: OpenShiftDto) {
+  async openShift(dto: OpenShiftInput) {
+    /* La caja tiene que ser de la sucursal de quien abre: sin esto, un cajero
+       abría turno en una caja de otra tienda con solo saber su identificador,
+       que además le entrega la propia lista de cajas. */
+    const register = await this.prisma.cashRegister.findUnique({
+      where: { id: dto.registerId },
+      select: { id: true, branchId: true },
+    });
+
+    if (!register || register.branchId !== dto.branchId) {
+      throw new NotFoundException('La caja no existe en esta sucursal.');
+    }
+
     // Check if user already has an active shift on this register
     const activeShift = await this.prisma.cashShift.findFirst({
       where: { registerId: dto.registerId, userId: dto.userId, status: 'ACTIVE' },
@@ -78,14 +99,26 @@ export class CashRegistersService {
     };
   }
 
-  async closeShift(dto: CloseShiftDto) {
+  async closeShift(dto: CloseShiftInput) {
     const shift = await this.prisma.cashShift.findUnique({
       where: { id: dto.shiftId },
-      include: { sales: true },
+      include: { sales: true, register: { select: { branchId: true } } },
     });
 
     if (!shift || shift.status === 'CLOSED') {
       throw new NotFoundException('El turno de caja no existe o ya fue cerrado.');
+    }
+
+    /* Un turno lo cierra quien lo abrió, o un responsable de esa misma
+       sucursal. Antes bastaba con conocer el identificador del turno: no se
+       comprobaba de quién era ni de qué tienda. */
+    const esSuyo = shift.userId === dto.userId;
+    const esResponsableDeLaSucursal =
+      (dto.role === 'ADMIN' || dto.role === 'SUPERVISOR') &&
+      shift.register?.branchId === dto.branchId;
+
+    if (!esSuyo && !esResponsableDeLaSucursal) {
+      throw new ForbiddenException('Este turno de caja no es suyo.');
     }
 
     const cashSalesTotal = shift.sales

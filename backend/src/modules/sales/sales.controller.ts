@@ -11,10 +11,13 @@ export class SalesController {
   @HttpCode(HttpStatus.CREATED)
   @Roles('ADMIN', 'SUPERVISOR', 'CAJERO')
   async checkout(@Body() payload: CheckoutPayload, @CurrentUser() userCtx: UserContext) {
+    /* Quién vende y desde qué sucursal lo dice la sesión, no el cuerpo de la
+       petición. Antes era `payload.userId || userCtx.id`: mandando el
+       identificador de otro empleado, la venta quedaba a su nombre. */
     return this.salesService.checkout({
       ...payload,
-      userId: payload.userId || userCtx.id,
-      branchId: payload.branchId || userCtx.branchId,
+      userId: userCtx.id,
+      branchId: userCtx.branchId,
     });
   }
 
@@ -23,11 +26,13 @@ export class SalesController {
   @Roles('ADMIN', 'SUPERVISOR')
   async cancelSale(
     @Param('ticketId') ticketId: string,
-    @Body('userId') userId: string,
     @Body('reason') reason: string,
     @CurrentUser() userCtx: UserContext,
   ) {
-    return this.salesService.cancelSale(ticketId, userId || userCtx.id, reason);
+    /* La anulación queda a nombre de quien la hace. El `userId` del cuerpo
+       dejaba atribuirla a otro, que es justo lo contrario de para qué se
+       registra quién anula un ticket. */
+    return this.salesService.cancelSale(ticketId, userCtx.id, reason);
   }
 }
 
